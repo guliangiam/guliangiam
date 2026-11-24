@@ -1,0 +1,26 @@
+# 路由资源派生豁免注册表
+#
+# 消费方：scripts/check-route-resource-derivation.py
+#
+# 用途：登记「路由 Permission 声明与运行期 resourceFromPath 派生不一致」的已知
+# 过渡项，避免 warn 阶段全量阻断。规则：
+#   - 每条必须包含 pattern、reason、owner、expires_on（YYYY-MM-DD）；method 可选（缺省 *）。
+#   - expires_on 过期即判红（不允许永久豁免）。
+#   - 嵌套高危路由（pattern 首段之后含 {var} 且声明资源 ≠ 派生资源）永不可豁免；
+#     为其登记条目本身会判红。典型示例：/api/v1/users/{id}/orders、/api/v1/users/{id}/payments。
+#   - 未命中任何路由的条目输出 WARN，提示清理。
+#
+# 与授权语义无关：本文件不改变任何运行时裁决，只控制静态门禁的报告口径。
+version: 1
+exemptions:
+  # 与既有 /api/v1/records 一致：策略键为 record:read，运行期按路径首段派生为 records。
+  - pattern: /api/v1/records/audit-logs
+    method: GET
+    reason: 复用 record:read 策略键，运行期路径派生为 records（与 /api/v1/records 同源）
+    owner: iam-console
+    expires_on: 2026-12-31
+  - pattern: /api/v1/records/login-logs
+    method: GET
+    reason: 复用 record:read 策略键，运行期路径派生为 records（与 /api/v1/records 同源）
+    owner: iam-console
+    expires_on: 2026-12-31

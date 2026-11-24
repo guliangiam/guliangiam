@@ -1,0 +1,118 @@
+# 00_platform.yaml — Schema Group (2 tables)
+# Generated from DDL by declarative schema builder
+# Topology: ordered so every FK target exists first
+
+table_name: guliangiam.encryption_keys
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: key_id, type: TEXT, nullable: false }
+  - { name: key_version, type: INTEGER, nullable: false, default: "1" }
+  - { name: algorithm, type: VARCHAR(64), nullable: false, default: "'AES-256-GCM'" }
+  - { name: purpose, type: VARCHAR(64), nullable: false, default: "'field-encryption'" }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'pending'" }
+  - { name: key_material_ref, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: key_fingerprint, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: tenant_scope, type: VARCHAR(64), nullable: false, default: "'global'" }
+  - { name: scope_id, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: region_code, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: sovereignty_mode, type: VARCHAR(64), nullable: false, default: "'platform-default'" }
+  - { name: activated_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: retired_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: revoked_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: rotate_after, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_encryption_keys_purpose_key_version, type: unique, columns: [purpose, key_id, key_version] }
+  - { name: ck_encryption_keys_algorithm, type: check, expr: "algorithm IN ('AES-256-GCM', 'SM4-GCM')" }
+  - { name: ck_encryption_keys_status, type: check, expr: "status IN ('pending', 'active', 'retiring', 'retired', 'revoked')" }
+  - { name: ck_encryption_keys_key_version, type: check, expr: "key_version >= 1" }
+  - { name: ck_encryption_keys_tenant_scope, type: check, expr: "tenant_scope IN ('global', 'region', 'organization')" }
+  - { name: ck_encryption_keys_sovereignty_mode, type: check, expr: "sovereignty_mode IN ('platform-default', 'byok', 'hyok')" }
+indexes:
+  - { name: idx_encryption_keys_purpose_status, columns: [purpose, status] }
+  - { name: idx_encryption_keys_rotate_after, columns: [rotate_after], predicate: "status = 'active'" }
+  - { name: idx_encryption_keys_tenant_scope, columns: [tenant_scope, scope_id] }
+revision: true
+fk_constraints: []
+
+
+---
+# Re-encryption job progress tracking (file-based is default; DB-based optional)
+table_name: guliangiam.encryption_reencrypt_progress
+comment: Re-encryption job checkpoint table (DB-based alternative to file checkpoint)
+pk: col_key
+columns:
+  - { name: col_key, type: TEXT, nullable: false }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'pending'" }
+  - { name: last_revision, type: BIGINT }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: ck_encryption_reencrypt_status, type: check, expr: "status IN ('pending', 'in_progress', 'completed', 'failed')" }
+fk_constraints: []
+
+---
+# Platform Admin — 平台级管理员（跨租户 scope 授权）
+# 设计背景：platform_admins 不受 organization_id 约束，可操作所有租户，
+# 但必须同时持有 platform_admin_scopes 赋予的跨租户作用域才生效。
+# 存在于 guliangiam.platform_admins 表 — 结构链 V6 引入（schema 补全：
+# 声明层之前遗漏此表，但 Go 代码 infra/postgres/platform_admins/ 已有
+# 完整仓储实现，seed V1 必须 INSERT 一条 admin membership）。
+table_name: guliangiam.platform_admins
+comment: Platform admin registry — cross-tenant operator credentials and scope
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false, comment: Platform admin primary key }
+- { name: user_id, type: UUID, nullable: false, comment: FK -> users.id (admin user) }
+- { name: created_by, type: UUID, comment: FK -> users.id (creating admin; nullable for bootstrap) }
+- { name: is_active, type: BOOLEAN, nullable: false, default: "true", comment: Master on/off switch for this platform admin }
+constraints:
+- { name: uq_platform_admins_user_id, type: unique, columns: [user_id] }
+fk_constraints:
+- { column: user_id, ref_table: guliangiam.users, on_delete: CASCADE }
+- { column: created_by, ref_table: guliangiam.users, on_delete: SET_NULL }
+# uq_platform_admins_user_id already provides the leftmost user_id index, so a
+# separate non-unique index on the same column was redundant (check-redundant-index).
+# No secondary indexes are declared for this table.
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin()
+
+
+---
+# Platform Admin Scope — 平台管理员的跨租户作用域授权
+# scope_type + target_tenants 共同定义作用域：
+#   'all'      → 可操作全部租户（target_tenants 必须为空数组）
+#   'targeted' → 仅可操作 target_tenants[] 列出的租户
+# 有效性（唯一口径，Gate 7 SQL / 列表查询 / ResolveAdminScope 共用）：
+#   未过期 && (is_bootstrap || approved_by 非空)
+# is_bootstrap 只允许种子/运维为 built-in 组织的种子管理员写入；应用层 CreateScope 不得创建。
+table_name: guliangiam.platform_admin_scopes
+comment: Cross-tenant scopes granted to platform admins (with expiry and approval)
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false, comment: Scope primary key }
+- { name: platform_admin_id, type: UUID, nullable: false, comment: FK -> platform_admins.id }
+- { name: scope_type, type: VARCHAR(32), nullable: false, comment: 'Scope kind: all | targeted' }
+- { name: target_tenants, type: 'UUID[]', nullable: false, default: "'{}'", comment: Tenant UUIDs — empty for scope_type='all' }
+- { name: approved_by, type: UUID, comment: FK -> users.id (approver; NULL for bootstrap) }
+- { name: approved_at, type: TIMESTAMPTZ, comment: Approval timestamp (must be set when approved_by is set) }
+- { name: is_bootstrap, type: BOOLEAN, nullable: false, default: "false", comment: 'Bootstrap exemption — seed-created built-in admin ONLY; never backfill other approved_by IS NULL rows' }
+- { name: expires_at, type: TIMESTAMPTZ, nullable: false, comment: Scope expiry (max 1 year from creation) }
+constraints:
+- { name: ck_pas_scope_type, type: check, expr: "scope_type IN ('all', 'targeted')" }
+- { name: ck_pas_all_empty_tenants, type: check, expr: "scope_type <> 'all' OR cardinality(target_tenants) = 0" }
+- { name: ck_pas_targeted_has_tenants, type: check, expr: "scope_type <> 'targeted' OR cardinality(target_tenants) > 0" }
+- { name: ck_pas_expires_within_year, type: check, expr: "expires_at <= created_at + INTERVAL '1 year'" }
+- { name: ck_pas_expires_after_created, type: check, expr: "expires_at >= created_at" }
+fk_constraints:
+- { column: platform_admin_id, ref_table: guliangiam.platform_admins, on_delete: CASCADE }
+- { column: approved_by, ref_table: guliangiam.users, on_delete: SET_NULL }
+indexes:
+- { name: idx_pas_platform_admin_id, columns: [platform_admin_id] }
+revision: false
+rls: true
+rls_predicate: guliangiam.is_super_admin()

@@ -1,0 +1,24 @@
+package fixture
+
+type cleaner struct{}
+
+func (c *cleaner) cleanup() {}
+
+type pkgT struct{}
+
+func (pkgT) Func() {}
+
+func plain() {}
+
+func cases() {
+	var c cleaner
+	go c.cleanup()            // DETECT selector (recv.method)
+	go pkg.Func()             // DETECT selector (pkg.Func)
+	go func() { plain() }()   // DETECT func
+	go plain()                // DETECT call (identifier)
+
+	defer c.cleanup()         // IGNORE defer
+	_ = "go c.cleanup()"      // IGNORE string literal
+	_ = `go plain()`          // IGNORE raw string literal
+	// go c.cleanup()         // IGNORE comment
+}

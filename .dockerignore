@@ -1,0 +1,75 @@
+# ============================================================
+# GuliangIAM Docker Ignore
+# Exclude files not needed in Docker build context
+# ============================================================
+
+# Version control
+.git/
+.gitattributes
+.github/
+
+# IDE and editor
+.idea/
+.vscode/
+.codeartsdoer/
+.arts/
+.comate/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in image)
+*.md
+docs/
+
+# Frontend artifacts (rebuilt in Docker)
+web/node_modules/
+web/dist/
+web/build/
+
+# Backend build artifacts (rebuilt in Docker)
+node_modules/
+guliangiam
+guliangiam-server
+server_linux_amd64
+server_linux_arm64
+*.test
+auth.test
+tokens.test
+users.test
+
+# Local environment and secrets
+.env
+.env.local
+.env.*.local
+.gosecrc.json
+gosec-report.json
+cred/
+
+# CI/CD and tooling
+.pre-commit-config.yaml
+.releaserc.json
+.golangci.yml
+.goreleaser.yaml
+crowdin.yml
+k8s.yaml
+Makefile
+build.sh
+
+# Docker files (avoid recursive context)
+docker-compose.yml
+docker-compose.*.yml
+Dockerfile
+Dockerfile.*
+.dockerignore
+
+# Test and coverage
+coverage/
+*.cover
+*.out
+
+# Misc
+.pnpm-store/
+openapi/
+scripts/

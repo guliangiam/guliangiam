@@ -1,0 +1,18 @@
+{
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "storybook-static/**",
+    "coverage/**",
+    "playwright-report/**",
+    "test-results/**"
+  ],
+  "printWidth": 100,
+  "semi": true,
+  "singleQuote": false,
+  "tabWidth": 2,
+  "trailingComma": "all",
+  "sortPackageJson": {
+    "sortScripts": false
+  }
+}

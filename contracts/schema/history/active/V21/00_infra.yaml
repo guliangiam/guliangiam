@@ -1,0 +1,114 @@
+# ============================================================
+# 00_infra.yaml — 数据库基础设施声明（扩展 / 函数 / 触发器 / RLS 策略模式）
+# ------------------------------------------------------------
+# 本文件不含表定义；与 db/schema/<NN>_*.yaml 的表定义一起，由
+# scripts/gen_schema.py 合并生成 db/postgresql/V1__guliangiam_schema_init.sql。
+# 生成顺序：extensions → schema → functions(pre) → tables → functions(post) → triggers
+# ============================================================
+
+schema: guliangiam
+
+# ------------------------------------------------------------
+# 扩展：required=true 缺失即失败；required=false 缺失时静默降级
+# ------------------------------------------------------------
+extensions:
+  - { name: pgcrypto, required: true }          # gen_random_bytes / digests（审计哈希、密钥材料）
+  - { name: pg_stat_statements, required: false }  # 性能观测；需 shared_preload_libraries
+
+# ------------------------------------------------------------
+# 函数：phase=pre 在表创建前输出（不依赖表结构），post 在表创建后输出
+# ------------------------------------------------------------
+functions:
+  # 租户上下文注入：应用层在每个租户作用域事务的开始处调用一次。
+  # set_config(..., is_local=true) 使设置随事务结束自动失效，杜绝连接池串租户。
+  - name: guliangiam.set_tenant_context
+    phase: pre
+    signature: "(p_organization_id uuid, p_role text) RETURNS void"
+    language: plpgsql
+    volatility: VOLATILE
+    body: |
+      BEGIN
+          PERFORM set_config('app.current_organization_id',
+                              COALESCE(p_organization_id::text, ''), true);
+          PERFORM set_config('app.current_role', COALESCE(p_role, ''), true);
+      END;
+
+  # 租户谓词：RLS 策略唯一事实来源。未设置上下文时返回 NULL（fail-closed）。
+  - name: guliangiam.current_organization_id
+    phase: pre
+    signature: "() RETURNS uuid"
+    language: sql
+    volatility: STABLE
+    body: |
+      SELECT NULLIF(current_setting('app.current_organization_id', true), '')::uuid;
+
+  # 平台超管旁路标记（ADR-016 §3）：仅由可信服务端在完成 RBAC 校验后设置。
+  - name: guliangiam.is_super_admin
+    phase: pre
+    signature: "() RETURNS boolean"
+    language: sql
+    volatility: STABLE
+    body: |
+      SELECT COALESCE(current_setting('app.current_role', true) = 'super_admin', false);
+
+  # 组织标识解析：支持 uuid 与 slug 两种入参写法（依赖 organizations 表，phase=post）
+  - name: guliangiam.resolve_org_id
+    phase: post
+    signature: "(text) RETURNS uuid"
+    language: sql
+    volatility: STABLE
+    body: |
+      SELECT CASE WHEN $1 ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        THEN $1::uuid
+        ELSE (SELECT id FROM guliangiam.organizations WHERE slug = $1 LIMIT 1)
+      END;
+
+  # users.is_deleted 为 deleted_at 的派生列，禁止应用层直接写入
+  - name: guliangiam.sync_users_is_deleted
+    phase: post
+    signature: "() RETURNS trigger"
+    language: plpgsql
+    volatility: VOLATILE
+    body: |
+      BEGIN
+          NEW.is_deleted := (NEW.deleted_at IS NOT NULL);
+          RETURN NEW;
+      END;
+
+triggers:
+  - name: trg_users_sync_is_deleted
+    table: guliangiam.users
+    timing: BEFORE
+    events: [INSERT, UPDATE]
+    for_each: ROW
+    function: guliangiam.sync_users_is_deleted
+
+# ------------------------------------------------------------
+# 角色与权限（RLS 强制隔离的配套）
+#   guliangiam_app：应用运行时角色，非 schema 属主，受 RLS 约束。
+#   迁移脚本以 schema 属主（BYPASSRLS）执行；应用连接池使用 guliangiam_app。
+#   GRANT 仅授予 DML 权限（SELECT/INSERT/UPDATE/DELETE），不授予 DDL。
+# ------------------------------------------------------------
+roles:
+  - name: guliangiam_app
+    login: true
+    grants:
+      - { privilege: USAGE, object: SCHEMA, target: guliangiam }
+      - { privilege: SELECT, object: ALL_TABLES, target: guliangiam }
+      - { privilege: INSERT, object: ALL_TABLES, target: guliangiam }
+      - { privilege: UPDATE, object: ALL_TABLES, target: guliangiam }
+      - { privilege: DELETE, object: ALL_TABLES, target: guliangiam }
+      - { privilege: EXECUTE, object: ALL_FUNCTIONS, target: guliangiam }
+
+# ------------------------------------------------------------
+# RLS 策略模式
+#   force=true（已启用）：追加 FORCE ROW LEVEL SECURITY，使属主同样受策略约束。
+#     前置条件已满足：
+#     1. 应用层在全部租户作用域事务内调用 guliangiam.set_tenant_context()
+#        （internal/infra/postgres/uow.WithinTransaction 注入点）；
+#     2. 迁移使用 BYPASSRLS 角色，应用使用 guliangiam_app 非属主角色；
+#     3. 未设置租户上下文时策略返回 NULL（fail-closed），不会泄露跨租户数据。
+#     平台超管（app.current_role='super_admin'）通过 guliangiam.is_super_admin() 旁路。
+# ------------------------------------------------------------
+rls:
+  force: true

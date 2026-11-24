@@ -1,0 +1,164 @@
+# ============================================================================
+# AlertManager Rules — non-functional.md §1 性能阈值 + §3 可用性阈值
+# ============================================================================
+#
+# 每个 rule 名称、表达式和阈值直接映射 non-functional.md 的量化承诺。
+# 所有阈值冻结后变更需通过变更审批（§1.1 "冻结后变更需通过变更审批"）。
+#
+# 指标命名唯一口径：prometheus.go / query_monitor.go 中的 guliangiam_*
+#
+# 放置路径：deploy/alertmanager-rules.yml（K8s ConfigMap 挂载到 AlertManager
+# 的 rule_files 字段）。
+# ============================================================================
+
+groups:
+  # ---------------------------------------------------------------------------
+  # §1.1 性能阈值
+  # ---------------------------------------------------------------------------
+  - name: guliangiam_performance
+    rules:
+      # Auth API P99 < 100ms（含 Argon2id + Casbin Enforce + JWT 签发）
+      - alert: AuthAPIP99High
+        expr: histogram_quantile(0.99, sum by (le) (rate(guliangiam_http_request_duration_seconds_bucket{surface="authentication"}[5m]))) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          nfr: "1.1"
+          threshold: "P99<100ms"
+        annotations:
+          summary: "Auth API P99 latency > 100ms"
+          description: "Auth surface P99 took {{ $value | humanizeDuration }} (threshold: 100ms). Check Argon2id, Casbin Enforce, JWT signing."
+
+      # Auth API P50 < 30ms
+      - alert: AuthAPIP50High
+        expr: histogram_quantile(0.5, sum by (le) (rate(guliangiam_http_request_duration_seconds_bucket{surface="authentication"}[5m]))) > 0.03
+        for: 10m
+        labels:
+          severity: info
+          nfr: "1.1"
+        annotations:
+          summary: "Auth API P50 latency > 30ms"
+
+      # Admin API P99 < 500ms
+      - alert: AdminAPIP99High
+        expr: histogram_quantile(0.99, sum by (le) (rate(guliangiam_http_request_duration_seconds_bucket{surface="management"}[5m]))) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          nfr: "1.1"
+          threshold: "P99<500ms"
+        annotations:
+          summary: "Admin API P99 latency > 500ms"
+
+      # DB P99 < 30ms
+      - alert: DBP99High
+        expr: histogram_quantile(0.99, sum by (le) (rate(guliangiam_db_query_duration_seconds_bucket[5m]))) > 0.03
+        for: 5m
+        labels:
+          severity: warning
+          nfr: "1.1"
+          threshold: "P99<30ms"
+        annotations:
+          summary: "PostgreSQL P99 query > 30ms"
+          description: "DB P99 query took {{ $value | humanizeDuration }}. Check indexes and slow queries."
+
+      # 全平台吞吐 ≥ 1000 req/s（反向阈值——低于触发）
+      - alert: ThroughputBelowThreshold
+        expr: sum(rate(guliangiam_http_requests_total[1m])) < 1000
+        for: 5m
+        labels:
+          severity: warning
+          nfr: "1.1"
+          threshold: "≥1000 req/s"
+        annotations:
+          summary: "Platform throughput below 1000 req/s"
+          description: "Current rate: {{ $value | humanize }} req/s for 5m window."
+
+  # ---------------------------------------------------------------------------
+  # §3 可用性阈值
+  # ---------------------------------------------------------------------------
+  - name: guliangiam_availability
+    rules:
+      # MTTD < 5min — Pod down 持续 5min
+      - alert: PodDownMTTD
+        expr: kube_pod_container_status_ready{ready="false"} == 1
+        for: 5m
+        labels:
+          severity: critical
+          nfr: "3.1"
+          threshold: "MTTD<5min"
+        annotations:
+          summary: "Pod not ready for > 5 minutes"
+
+      # MTTR < 15min — Container restart 环比上升
+      - alert: PodRestartSpike
+        expr: increase(kube_pod_container_status_restarts_total[15m]) > 3
+        for: 15m
+        labels:
+          severity: critical
+          nfr: "3.1"
+          threshold: "MTTR<15min"
+        annotations:
+          summary: "Container restart spike (>3 in 15m)"
+
+      # SLA ≥ 99.9% — HTTP 5xx ratio 过高
+      - alert: SLAErrorRatio
+        expr: sum(rate(guliangiam_http_requests_total{status=~"5.."}[5m])) / sum(rate(guliangiam_http_requests_total[5m])) > 0.001
+        for: 10m
+        labels:
+          severity: critical
+          nfr: "3.1"
+          threshold: "SLA≥99.9%"
+        annotations:
+          summary: "HTTP 5xx ratio > 0.1% (SLA 99.9% breach)"
+          description: "5xx ratio: {{ $value | humanizePercentage }}"
+
+  # ---------------------------------------------------------------------------
+  # §SLO 错误预算多窗口燃尽率（ADR-020；阈值与 contracts/registries/slo.yaml 一致）
+  # 99.9% 面：1h 燃烧 > 14.4x（1h 消耗 2%）+ 5m 短窗复核；99.5% 面：1h > 14.4x。
+  # ---------------------------------------------------------------------------
+  - name: guliangiam_slo_budget
+    rules:
+      - record: guliangiam:slo_error_ratio_5m
+        expr: sum by (surface) (rate(guliangiam_http_requests_total{status=~"5.."}[5m])) / sum by (surface) (rate(guliangiam_http_requests_total[5m]))
+      - record: guliangiam:slo_error_ratio_1h
+        expr: sum by (surface) (rate(guliangiam_http_requests_total{status=~"5.."}[1h])) / sum by (surface) (rate(guliangiam_http_requests_total[1h]))
+      - record: guliangiam:slo_error_ratio_28d
+        expr: sum by (surface) (rate(guliangiam_http_requests_total{status=~"5.."}[28d])) / sum by (surface) (rate(guliangiam_http_requests_total[28d]))
+
+      - alert: SLOCriticalBurnRate
+        expr: |
+          (guliangiam:slo_error_ratio_1h{surface=~"authentication|protocol"} > 0.001 * 14.4)
+          and
+          (guliangiam:slo_error_ratio_5m{surface=~"authentication|protocol"} > 0.001 * 14.4)
+        for: 2m
+        labels:
+          severity: critical
+          nfr: "11.7"
+          slo: "99.9"
+        annotations:
+          summary: "SLO 99.9% surface {{ $labels.surface }} burns budget at >14.4x"
+          description: "1h error ratio {{ $value | humanizePercentage }} exceeds 14.4x budget; 2% of 28d budget consumed in 1h."
+
+      - alert: SLOWarningBurnRate
+        expr: |
+          (guliangiam:slo_error_ratio_1h{surface="management"} > 0.005 * 14.4)
+          and
+          (guliangiam:slo_error_ratio_5m{surface="management"} > 0.005 * 14.4)
+        for: 10m
+        labels:
+          severity: warning
+          nfr: "11.7"
+          slo: "99.5"
+        annotations:
+          summary: "SLO 99.5% management surface burn rate >14.4x"
+
+      - alert: SLOBudgetExhausted
+        expr: guliangiam:slo_error_ratio_28d{surface="authentication"} > 0.001
+        for: 30m
+        labels:
+          severity: critical
+          nfr: "11.7"
+        annotations:
+          summary: "Authentication SLO 99.9% budget exhausted over 28d"
+          description: "Release gate must block non-security changes; run make slo-budget."

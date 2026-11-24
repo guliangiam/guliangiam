@@ -1,0 +1,165 @@
+# ──────────────────────────────────────────────────────────────────────────
+# notification-events.yaml — 站内通知与多渠道触达事件目录
+#
+# 唯一事实源：本文件（YAML）
+# 消费方：
+#   1. scripts/check-registry-sync.py（事件必须同时在 events.yaml 登记）
+#
+# 运行时口径：生产端（internal/app/auth、tickets、risk、idv 与
+# usernotifications 的 outbox handler 等）直接传入 title/content 并指定
+# category；本目录登记事件的治理元数据（分类、收件人角色、默认渠道、是否允许
+# 回复）与规范文案，供评审、注册表门禁与前端文案核对。外部渠道是否投递由
+# 「用户偏好 × 组织已启用的通知提供商」在 usernotifications.Publish 中决定；
+# default_channels 记录产品默认意图，不是绕过偏好的投递开关。
+#
+# 登记口径：
+#   event_type         必须已在 contracts/registries/events.yaml 登记
+#   category           system | security | business | feedback | announcement
+#   default_channels   inapp | email | sms | wecom_app | wechat_official
+#   recipients         user | actor | org_admins | ticket_assignee |
+#                      ticket_requester | audience
+#   title/content      规范文案；生产端实际文案应与此一致，{{variable}} 为占位说明
+#   allow_reply        是否允许在个人收件箱内回复
+#
+# 生产端约束：本表只登记当前代码存在发射点的事件。forms 域目前仅有表单定义
+# CRUD（forms.create/update/delete），没有提交/回复通路，因此不登记
+# forms.submitted / forms.replied；表单式反馈走 tickets.created（工单）与
+# user.registered（注册表单），两者均已登记。
+# ──────────────────────────────────────────────────────────────────────────
+version: 1
+categories: [system, security, business, feedback, announcement]
+channels: [inapp, email, sms, wecom_app, wechat_official]
+events:
+  - event_type: user.registered
+    category: system
+    title_template: "欢迎加入 {{organizationName}}"
+    content_template: "你的账号 {{username}} 已注册成功，请尽快完成安全设置。"
+    default_channels: [inapp, email]
+    recipients: [user]
+    allow_reply: false
+
+  - event_type: user.password.reset
+    category: security
+    title_template: "密码已重置"
+    content_template: "你的账号 {{username}} 密码已于 {{occurredAt}} 重置。如非本人操作，请立即联系管理员。"
+    default_channels: [inapp, email]
+    recipients: [user]
+    allow_reply: false
+
+  - event_type: auth.password.changed
+    category: security
+    title_template: "密码已修改"
+    content_template: "你的账号 {{username}} 密码已通过「修改密码」更新，其他设备的登录会话已失效。如非本人操作，请立即联系管理员。"
+    default_channels: [inapp, email]
+    recipients: [user]
+    allow_reply: false
+
+  - event_type: auth.login.failed
+    category: security
+    title_template: "账号已被临时锁定"
+    content_template: "账号 {{username}} 因连续多次登录失败已被临时锁定至 {{lockedUntil}}。如非本人操作，请立即重置密码并联系管理员。"
+    default_channels: [inapp, email]
+    # 只在本次失败触发锁定（而非每次失败）时通知本人，避免攻击者用错误口令
+    # 反复轰炸受害者收件箱；管理员侧的高信号告警走 risk.critical_alert.dispatched。
+    recipients: [user]
+    allow_reply: false
+
+  - event_type: idv.verification.completed
+    category: security
+    title_template: "身份认证{{statusText}}"
+    content_template: "你的身份认证状态已更新：{{statusText}}。"
+    default_channels: [inapp, email]
+    recipients: [user]
+    allow_reply: false
+
+  - event_type: tickets.created
+    category: feedback
+    title_template: "工单已创建"
+    content_template: "你的工单「{{ticketTitle}}」已提交，我们会尽快处理，进展会同步到通知中心。"
+    default_channels: [inapp, email]
+    # 创建者收到回执确认；若创建时已指定受理人，另发 tickets.assigned 待办提醒。
+    recipients: [user]
+    allow_reply: true
+
+  - event_type: tickets.assigned
+    category: feedback
+    title_template: "工单已分配给你"
+    content_template: "工单「{{ticketTitle}}」已分配给你，请及时跟进处理。"
+    default_channels: [inapp, email]
+    # 创建时指定受理人、或后续改派给新受理人时发送；受理人等于创建者时不发。
+    recipients: [ticket_assignee]
+    allow_reply: true
+
+  - event_type: tickets.status_changed
+    category: feedback
+    title_template: "工单状态已更新"
+    content_template: "工单「{{ticketTitle}}」状态已变更为「{{status}}」，点击查看详情。"
+    default_channels: [inapp, email]
+    # 状态流转提醒创建者（open/pending/resolved/closed）。
+    recipients: [ticket_requester]
+    allow_reply: true
+
+  - event_type: tickets.replied
+    category: feedback
+    title_template: "工单有新回复"
+    content_template: "工单「{{ticketTitle}}」有新的回复，点击查看详情。"
+    default_channels: [inapp, email]
+    # 动态对手方：客服回复提醒创建者，创建者补充提醒受理人。
+    recipients: [ticket_requester, ticket_assignee]
+    allow_reply: true
+
+  - event_type: risk.critical_alert.dispatched
+    category: security
+    title_template: "安全告警：{{alertTitle}}"
+    content_template: "{{alertDescription}}"
+    default_channels: [inapp, email, sms]
+    recipients: [org_admins]
+    allow_reply: false
+
+  - event_type: ai.quota.exceeded
+    category: system
+    title_template: "AI 用量配额已用尽"
+    content_template: "组织 {{organizationName}} 的 AI 配额已用尽，请调整配额或套餐。"
+    default_channels: [inapp, email]
+    recipients: [org_admins]
+    allow_reply: false
+
+  - event_type: ai.provider.circuit_opened
+    category: system
+    title_template: "AI 提供商熔断"
+    content_template: "提供商 {{providerName}} 已触发熔断，请检查可用性。"
+    default_channels: [inapp, email]
+    recipients: [org_admins]
+    allow_reply: false
+
+  - event_type: invitation.expiring
+    category: business
+    title_template: "邀请码即将过期"
+    content_template: "邀请码 {{invitationCode}} 将于 {{expiresAt}} 过期。"
+    default_channels: [inapp, email]
+    recipients: [org_admins]
+    allow_reply: false
+
+  - event_type: credential.expiring
+    category: security
+    title_template: "凭据即将过期"
+    content_template: "凭据 {{credentialName}} 将于 {{expiresAt}} 过期，请及时轮换。"
+    default_channels: [inapp, email]
+    recipients: [org_admins]
+    allow_reply: false
+
+  - event_type: application.client_certificate.expiring
+    category: business
+    title_template: "应用证书即将过期"
+    content_template: "应用 {{applicationName}} 的证书将于 {{expiresAt}} 过期。"
+    default_channels: [inapp, email]
+    recipients: [org_admins]
+    allow_reply: false
+
+  - event_type: notifications.broadcast.sent
+    category: announcement
+    title_template: "{{title}}"
+    content_template: "{{content}}"
+    default_channels: [inapp]
+    recipients: [audience]
+    allow_reply: true

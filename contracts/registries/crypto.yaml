@@ -1,0 +1,75 @@
+# ──────────────────────────────────────────────────────────────────────────
+# crypto.yaml — 加密能力位机器可读注册表
+#
+# 唯一事实源：本文件（YAML）
+# 渲染层：docs/generated/crypto-registry.md
+# 消费方：
+#   1. internal/platform/crypto/suite.go — 档位裁决与启动探测
+#   2. scripts/check-registry-sync.py — 能力位 ID / failure_mode / 档位一致性
+#
+# 语义：
+#   - 能力位 ID 是代码与运维的唯一键；
+#   - failure_mode=refuse：CRYPTO_PROFILE=gm 时缺失即拒绝启动，禁止静默降级；
+#   - failure_mode=degrade：缺失只把 /healthz 标记为 degraded，不阻断启动；
+#   - gm_tls 是部署层能力位：本仓库只做双证书/私钥/受信 CA 材料自检，不实现
+#     TLCP 握手；GM_TLS_ENABLED=true 本身不计为 available。
+# ──────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+profile:
+  env: CRYPTO_PROFILE
+  default: default
+  values: [default, gm]
+  descriptions:
+    default: 国际算法基线：AES-256-GCM 字段加密 + SHA-256 审计链
+    gm: 国密基线；必需能力缺失时拒绝启动，gm_tls 缺失只降级
+
+capabilities:
+  - id: sm2_sign
+    algorithm: SM2
+    standard: GB/T 32918.2-2016
+    library: github.com/emmansun/gmsm/sm2
+    failure_mode: refuse
+    probe: 生成密钥 + 签名/验签闭环
+    description: SM2 数字签名与验签
+
+  - id: sm2_encrypt
+    algorithm: SM2
+    standard: GB/T 32918.4-2016
+    library: github.com/emmansun/gmsm/sm2
+    failure_mode: refuse
+    probe: 生成密钥 + 公钥加密/私钥解密闭环
+    description: SM2 公钥加密与解密
+
+  - id: sm3
+    algorithm: SM3
+    standard: GB/T 32905-2016
+    library: github.com/emmansun/gmsm/sm3
+    failure_mode: refuse
+    probe: GB/T 32905 标准向量（abc）
+    description: SM3 杂凑算法
+
+  - id: sm4
+    algorithm: SM4
+    standard: GB/T 32907-2016
+    library: github.com/emmansun/gmsm/sm4
+    failure_mode: refuse
+    probe: SM4-GCM 加解密闭环
+    description: SM4 分组密码（当前用于字段加密的可选算法）
+
+  - id: gm_tls
+    algorithm: GM/T 0024
+    standard: GM/T 0024-2014
+    library: 部署层 TLS 终端（P4 落地）；材料自检使用 github.com/emmansun/gmsm/smx509
+    failure_mode: degrade
+    env_toggle: GM_TLS_ENABLED
+    env_material:
+      - GM_TLS_SIGN_CERT_FILE
+      - GM_TLS_SIGN_KEY_FILE
+      - GM_TLS_ENC_CERT_FILE
+      - GM_TLS_ENC_KEY_FILE
+      - GM_TLS_CA_FILE
+    probe: 读取签名证书、加密证书、对应私钥与受信 CA；SM2 公钥、SM2-SM3 签名、私钥匹配、证书有效期与双证书链验证全部通过才计为 available
+    degrade_reason: GM_TLS_ENABLED 非 true、材料缺失、证书/私钥非法或不匹配、证书过期、CA 链校验失败；只影响传输层，不阻断 gm 档启动，不影响 sm2_sign/sm2_encrypt/sm3/sm4 业务密码学
+    description: 国密 TLS 终止能力位；部署层能力，未通过材料自检只降级

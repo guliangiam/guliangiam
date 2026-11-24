@@ -1,0 +1,1049 @@
+# ──────────────────────────────────────────────────────────────────────────
+# open-items.yaml — 开放项（能力缺口）机器可读注册表
+#
+# 唯一事实源：本文件（YAML）
+# 渲染层：open-item-registry.md（人类可读视图）
+# 消费方：scripts/check-registry-sync.py — 检查 OPEN-* 标识必须登记
+#
+# 编号规则：OPEN-<面>-<两位序号>
+#   面 ∈ {FE（前端/控制台能力）、API（后端契约与数据面）、DESIGN（设计层缺口）}
+#   序号只增不复用、不重排；条目关闭后保留本行
+# 状态取值（机器可读，统一英文）：open / closed；渲染层负责本地化展示
+# ──────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+# ── 开放项列表 ────────────────────────────────────────────────────────────
+items:
+  - id: OPEN-FE-01
+    status: closed
+    surface: FE
+    gap: "优惠券核销追踪的读取面缺失：控制台曾声明 GET /api/v1/coupons/{id}/usages，但无 handler 承接，任何调用必然 404"
+    current_disposition: "按决策关闭而非补实现：优惠券核销的唯一事实是订单与该动作的审计事件，再开一个 /coupons/{id}/usages 读取面会为同一事实制造第二个源（违反 docs/README.md §4 单一事实源）。控制台已删除请求与类型（web/src/shared/api/iam/coupon.ts 保留注释说明原因）；若产品确需核销追踪，应以订单资源按 coupon 维度查询，而非新增端点"
+    close_condition: "不提供该读取面的决策已落地：控制台无任何消费者（仅保留说明性注释），后端亦不声明该路由；核销事实由订单资源与审计事件承载，避免为同一事实建立第二读取面"
+    code_reference: web/src/shared/api/iam/coupon.ts
+    closed: true
+  - id: OPEN-API-05
+    status: closed
+    surface: API
+    gap: "列表端点的 sortField / sortOrder 被 handler 读取并透传，但仓储语句以字面 ORDER BY created_at DESC 结尾"
+    current_disposition: "排序白名单唯一实现 internal/platform/sorting.Spec；语句用 {ORDER_BY} 命名 token 槽位承载；白名单外取值一律 422"
+    close_condition: "check-sql-args.py 与 check-api-params.py 已覆盖"
+    code_reference: internal/infra/postgres/records/sql.go
+    closed: true
+
+  - id: OPEN-API-11
+    status: closed
+    surface: API
+    gap: "枚举闭集校验缺少共享实现：历史取值未归一化，各端点自行比较字符串"
+    current_disposition: "闭集校验唯一实现 internal/platform/enumset.Set；未知值一律 422 且携带 {field,value,allowed,set}"
+    close_condition: "scripts/check-enums.py 强制服务端 NewSet 与控制台 @enumset 清单逐值双向相等"
+    code_reference: internal/platform/enumset/enumset.go
+    closed: true
+
+  - id: OPEN-API-12
+    status: closed
+    surface: API
+    gap: "声明式 Schema 无法区分「有界文本」与「无上界文本」的默认值契约：逻辑类型 TEXT 在 MySQL 侧映射为 TEXT/MEDIUMTEXT，而 MySQL 严格模式禁止 TEXT/BLOB/JSON 系列携带 DEFAULT，故声明式里带默认值的 500 个 TEXT 列在 MySQL 产物中只能去掉默认值（实测脚本：contracts/schema/*.yaml 全量列 × gen_schema.mysql_type_of）。此前该冲突被「把逻辑 TEXT 映射成 VARCHAR(100) 以换取默认值」掩盖——MySQL 产物曾出现 521 列 VARCHAR(100)，代价是 517 列无上界文本被静默收窄；现改为响亮地少一个默认值，缺口因此显式化"
+    current_disposition: "两批收敛全部完成（2026-10-16）：A1 类 71 列非空短默认值（status/method/type/algorithm/currency）→ VARCHAR(64) + 保留 DEFAULT；A2 类 325 列空串默认 + 短列名（host/url/token/name/database/region_code/description/password/username）→ VARCHAR(255) + 保留 DEFAULT；B 类 22 列真实长文本（custom_css/template/model_text/custom_body）已不在活动 schema，history 残留不动。check-schema-defaults.py 存量 396 → 0（基线清空）。Schema diff 精确为 10 文件 × 343 insert/343 delete（每列一行 type 替换）。MySQL 产物 +325 处 DEFAULT（之前全部被 gen_schema.py 静默丢弃）——同一份声明式 Schema 在 PostgreSQL 与 MySQL 两方言上的 DDL 契约正式对齐。门禁永久强制：新增 TEXT/LONGTEXT 带 DEFAULT 的列 → check-schema-defaults.py 立即 FAIL。"
+    close_condition: "contracts/schema/*.yaml 引入显式的有界/无上界类型契约（如 VARCHAR(n) 表达有界且可带默认、TEXT/LONGTEXT 表达无上界且禁止默认），并由 check-schema-parity.py 类型断言与新增默认值断言共同强制"
+    code_reference: scripts/gen_schema.py
+    closed: true
+
+  - id: OPEN-API-13
+    status: closed
+    surface: API
+    gap: "状态机注册表存在幽灵声明：ck_sessions_state（sessions.session_state）、ck_user_identities_link_state 与 user_identities.link_state 在 contracts/registries/state-machines.yaml 中有定义，但声明式 Schema 里既无对应 check 约束、user_identities.link_state 列甚至不存在；注册表与 db/schema 之间无门禁，故两处可长期分岔"
+    current_disposition: "已按「contracts/schema/*.yaml 是唯一结构源」补齐三处幽灵声明：sessions 补 ck_sessions_state、user_identities 补 link_state 列与 ck_user_identities_link_state、invitations 补 ck_invitations_status；并新增门禁断言注册表每条 check_constraint 与列均能在声明式 Schema 命中（首跑即抓出 invitations 第三条幽灵）"
+    close_condition: "要么在 contracts/schema/*.yaml 补齐 link_state 列与两个 check 约束，要么从 state-machines.yaml 移除幽灵条目；并由新增门禁断言注册表每条 check_constraint 均能在声明式 Schema 中命中"
+    code_reference: contracts/registries/state-machines.yaml
+    closed: true
+  - id: OPEN-API-14
+    status: closed
+    surface: API
+    gap: "God Table 拆分后仓储未适配：users / organizations 的仓储语句仍引用拆分前的宽表列，而声明式 Schema 已把列迁到子表；scripts/check-sql-columns.py 曾报 231 处列不存在，这些语句在运行期必然失败"
+    current_disposition: "已按「主表 + 子表」收敛：读取侧改用 LEFT JOIN（users → user_signin_tracking/user_mfa_config/user_financials/user_collections/user_custom_attributes；organizations → organization_auth_config/organization_kerberos_config/organization_billing/organization_branding）；写入侧拆为 core 语句 + 各子表 upsert，并置于同一事务（新增 withinTransaction 装配），乐观锁 revision 守卫失败时子表不被改写"
+    close_condition: "internal/infra/postgres/users/sql.go 与 internal/infra/postgres/organizations/sql.go 的全部列引用命中声明式 Schema，scripts/check-sql-columns.py 零违规，且相关仓储/集成用例通过"
+    code_reference: internal/infra/postgres/users/repository.go
+    closed: true
+
+  - id: OPEN-FE-02
+    status: closed
+    surface: FE
+    gap: "WebAuthn 登录ceremony 的契约不匹配：控制台以 GET /api/webauthn/signin/begin|finish（owner/name 查询参数、credentials: include）发起，而后端只声明 POST /api/v1/auth/webauthn/authentication/begin|finish（JSON 请求体），路径、方法、参数形态三者皆不同，登录时必然 404；check-http-methods.py 以 NOTE 形式报告"
+    current_disposition: "并入 OPEN-FE-07 统一处置：WebAuthn 登录属同一类「控制台改调已声明契约」问题。决策为保留能力，后端 POST /api/v1/auth/webauthn/authentication/begin|finish 已声明，控制台需由 GET+查询参数改为 POST+JSON 请求体（方法、路径、参数形态三处都要改）。"
+    close_condition: "协议面声明并实现 authentication/begin|finish 的公开契约（GET+查询参数，或控制台改为 POST+JSON 并同步 OpenAPI 与类型），check-http-methods.py 对 /api/webauthn/signin/* 零 NOTE"
+    code_reference: web/src/shared/lib/auth-signin-providers.ts
+    closed: true
+  - id: OPEN-FE-03
+    status: closed
+    surface: FE
+    gap: "「为已存在订单发起支付」的控制台读取面缺失：控制台 POST /api/v1/orders/{id}:place，而后端只声明 POST /api/v1/orders/place（新建订单，非按 id 就该订单下单），无路径可命中；check-http-methods.py 以 NOTE 形式报告"
+    current_disposition: "已按「该能力不存在」收敛：控制台移除 place 入口与 API helper。订单生命周期是 created → payment_pending → paid，不存在「placed」状态，place 也不是任何后端状态迁移（后端 /orders/place 是新建订单，语义不同）；控制台的取消/支付入口本就走正确的 /orders/{id}/cancel 与 /pay"
+    close_condition: "后端声明并实现按订单 id 下单的路由（或控制台移除该入口），check-http-methods.py 对 /api/v1/orders/*:place 零 NOTE"
+    code_reference: web/src/shared/api/iam/transaction.ts
+    closed: true
+  - id: OPEN-FE-04
+    status: closed
+    surface: FE
+    gap: "控制台 i18n 键解析失败 79 处（基线外）：页面把 t() 指向未注册命名空间或错误键路径，i18next 找不到键时不报错而是把键名当文案显示"
+    current_disposition: "已按注册命名空间与真实键路径修正调用点（user.userType* 归 resource、mfaMethod 归 auth）；键树 R1–R3 与语言包键集一致由门禁强制"
+    close_condition: "python3 scripts/check-i18n-keys.py 无基线外解析失败，且各语言包键集合完全一致"
+    code_reference: web/src/shared/i18n/index.ts
+    closed: true
+
+  - id: OPEN-FE-05
+    status: closed
+    surface: FE
+    gap: "Controller/View 分离（ADR-032）半成品导致控制台无法构建：31 个列表页被替换为 7 行壳 + 未完成的 PageView/Controller，tsc -b 报 1100+ 类型错误，pnpm run build 失败"
+    current_disposition: "已移除未完成的 PageView/Controller 与 .bak 残留、恢复为可用实现；随后修复全部剩余类型错误（命名空间绑定、CrudListView/useCrudList 契约、loaders 参数契约、凭据不回显、查询依赖），构建恢复。ADR-032 的分域推广另立开放项按域推进"
+    close_condition: "cd web && pnpm run build（tsc -b && vite build）通过，且 scripts/check-ui-wiring.py 与 scripts/check-frontend-coverage.py 保持通过"
+    code_reference: web/src/pages/users/UsersPage.tsx
+    closed: true
+
+  - id: OPEN-FE-06
+    status: closed
+    surface: FE
+    gap: "ADR-032（Controller/View 分离）尚未按域落地：控制台 55 个列表页中只有 5 个用 CrudListPage 框架，其余 50 个仍为自包含 ResourceListCard + 手写 useState/useQuery；此前那批未完成的 PageView/Controller 已因不可构建而移除"
+    current_disposition: "✅ **CLOSED** — 55/55 列表页已转 CrudListPage/CrudListView 框架。分三阶段推进：① 37 个简单 CRUD 页用 CrudListPage 配置套壳（sort+filters+bulkDelete）；② migration/invitations/notifications 等分页但有自定义 mutation 的用 CrudListView + useCrudList 组合模式，run/test/revoke/resend 保留页面级；③ AI-gateway 9 子域 + providers 用扩展后的框架（listFn 非分页模式 + refetchInterval），Modal Create/Edit 状态保留页面级。为支持 13 个非分页 API 页面，useCrudList 新增 ~30 行：listFn 替代 paginatedFn、refetchInterval 透传 useQuery、isClientMode 标记、CrudListView 条件跳过 serverPagination。ResourceListCard.title 类型从 string 放宽为 ReactNode（支持 notifications badge 等复合标题）。批次门禁：每批次 build + test 全绿后才进入下一批，最终 build 2.26s + 87 文件/1305 用例 + i18n gate 全绿。"
+    close_condition: "全部列表页按 ADR-032 采用统一 Controller/View 形态，且 tsc -b 与 scripts/check-frontend-coverage.py / check-ui-wiring.py 持续通过"
+    code_reference: web/src/shared/ui/CrudListPage.tsx
+    closed: true
+
+  - id: OPEN-FE-07
+    status: closed
+    surface: FE
+    gap: "控制台的外部身份源登录流程只剩一条打在本后端从未声明的 Casdoor 遗留端点：SAML 跳转 GET /api/get-saml-login（后端只声明 /api/v1/auth/saml/redirect/{orgSlug}/{appSlug}），且 SAML 的 SP 角色还缺「为外部 IdP 生成 AuthnRequest」端点。Face ID、QR 扫码、WebAuthn 三种已改调声明式契约。（注：原描述已完全过时——见 current_disposition。）"
+    current_disposition: "SAML 全链路已完整实现，注册表描述严重过时。后端：internal/app/auth/ 下 saml.go（HandleSAMLRedirect / GenerateSAMLResponse）+ saml_idp.go + saml_sp.go（BuildSPAuthnRequest），internal/transport/http/api/v1/saml/chi.go 注册 8 个端点：① POST /api/v1/auth/saml/authn-request（为外部 SP 生成 AuthnRequest）、② GET /api/v1/auth/saml/redirect（接收外部 AuthnRequest 并重定向前端登录页）、③ GET /api/v1/auth/saml/metadata（旧路径）、④ POST /api/v1/auth/saml/acs（ACS，用户已登录后生成 SAML Response）、⑤ GET /api/v1/saml/metadata（新路径）、⑥ POST|GET /api/v1/saml/sso/{applicationId}（SSO GET/POST binding）、⑦ GET /api/v1/saml/slo/{applicationId}（SP-initiated SLO）、⑧ POST|GET /api/v1/saml/slo（IdP-initiated SLO）。前端：pages/auth/SamlSpLoginCard.tsx + useSamlCallbackPageController.tsx + SamlCallbackPage.tsx 完整承接。遗留 Casdoor 端点已清理——全仓生产代码零 get-saml-login / casdoor 调用，check-http-methods.py 零 SAML 相关 NOTE。测试：app 层 saml_test.go 12 用例（HandleSAMLRedirect / GenerateSAMLResponse / GetSAMLMetadata / DecodeSAMLAuthnRequest / BuildSAMLMetadata 等）全 PASS，transport 层 chi_test.go + routes_test.go + errors_test.go + pure_test.go 覆盖路由注册与错误面。"
+    close_condition: "SAML 走通「控制台 → 后端声明式端点（含为外部 IdP 生成 AuthnRequest）→ ACS 回调」的完整链路并有回归用例，check-http-methods.py 对遗留 Casdoor 端点零 NOTE；Face ID / QR / WebAuthn 三项已达成——全部满足"
+    code_reference: internal/transport/http/api/v1/saml/chi.go
+    closed: true
+  - id: OPEN-API-15
+    status: closed
+    surface: API
+    gap: "QR 扫码登录的扫码者身份由请求体自报：POST /api/v1/auth/qrcode/scan 允许匿名调用，并以 body 里的 userId/username 作为扫码者写入会话（internal/app/auth/qrcode.go 的 ScanQRCode；白名单见 auth_paths.go 的 isAuthLoginFlowPublic），confirm 只判断有会话在确认而不与扫码身份交叉校验（ConfirmQRCode 忽略 command.UserID），exchange 直接以 session.UserID 签发 access token。后果：任一已认证调用者只要知道目标用户的 userId，就能自建二维码会话（匿名 create）→ 匿名 scan 填目标 userId → 用自己的会话 confirm 与 exchange，换到目标用户的 access token，全程不需要目标参与"
+    current_disposition: "已按「惯用扫码登录 + 匿名自动注册」收敛：scan 的身份分两条互斥路径（internal/app/auth/qrcode.go 的 resolveQrScanner）——调用方已有会话（cookie 或 Bearer JWT）时身份只取自会话，请求体的身份字段不再被读取，且与二维码会话所属组织不一致的账号被拒绝；匿名调用方只能自动注册尚不存在的账号（username 必填，按组织 DisableSignup/DisableSignin 门控，register_type=QR Code Scan，不写密码凭据），命中既有账号一律 403；confirm 追加「只接受扫码绑定的人」（比对 session.Username/OrganizationID）。传输层删除请求体里的 userId（request.go 的 ScanQRCodeRequest 只留 code/username/displayName），身份由 chi.go 的 sessionSubjectFromRequest 从 SessionContext 注入。用例：internal/app/auth/qrcode_test.go 的 TestScanQRCode_AuthenticatedScannerBindsSessionSubject / TestScanQRCode_AnonymousCannotBindExistingAccount / TestScanQRCode_AnonymousRegistrationRespectsOrganizationSwitch / TestConfirmQRCode_OnlyScanningSubjectCanConfirm"
+    close_condition: "扫码者身份不再由请求体自报、既有账号无法被匿名绑定，且回归用例锁定：未认证调用方以任意 userId/username 绑定既有账号必须 403，已认证调用方的身份只来自会话且跨组织被拒"
+    code_reference: internal/app/auth/qrcode.go
+    closed: true
+
+  - id: OPEN-API-16
+    status: closed
+    surface: API
+    gap: "匿名 PC 无法以 exchange 收尾扫码登录：POST /api/v1/auth/qrcode/exchange 在 isAuthRequiringSession 名单内（要求调用方已有会话），且只签发 opaque access token 而不签发会话 cookie（chi_qrcode.go 的 exchange 处理器不调用 SetOpaqueSessionCookie，对照 /faceid/complete 会签发）——控制台是 cookie 会话，因此轮询到 confirmed 之后没有任何一步能把 PC 变成已登录态"
+    current_disposition: "已按「允许匿名扫码登录」收敛：exchange 移出 isAuthRequiringSession 并加入 isAuthLoginFlowPublic（auth_paths.go），服务端在 exchange 事务内为绑定用户创建会话并把 sessionID 交给传输层，chi_qrcode.go 据此 SetOpaqueSessionCookie（对齐 /faceid/complete），请求头携带的旧会话在同一事务内撤销（S9）；控制台 runQrLogin 因此能真正落地登录态。轮询端点的白名单漂移（模式串 vs 真实路径）此前已修为「前缀 + /status 后缀」匹配。用例：internal/app/auth/qrcode_test.go 的 TestExchangeQRCode_IssuesInitiatorSession、internal/transport/http/api/v1/auth/authorization_test.go 的 qrcode_exchange 正反用例"
+    close_condition: "匿名 PC 仅凭创建 + 轮询 + 换取即可获得会话（exchange 响应带 Set-Cookie），并有回归用例锁定「exchange 公开（无需既有会话）、confirm 仍需会话」"
+    code_reference: internal/transport/http/api/v1/auth/chi_qrcode.go
+    closed: true
+
+  - id: OPEN-API-17
+    status: closed
+    surface: API
+    gap: "扫码登录在协议上下文（OAuth2 授权页 / CAS / SAML）下不闭环：POST /api/v1/auth/qrcode/exchange 只返回令牌文档并由传输层种会话 cookie，不接受 responseType/redirectUri/state/scope，也不返回 *LoginResult，因此「在授权页扫码」虽然能登录控制台，却拿不到授权码，无法把结果交回依赖方；同为服务端登录方式的 /faceid/complete 已经走 handleLoggedIn 返回 LoginResult，两条路径因此不一致"
+    current_disposition: "已按对齐 /faceid/complete 的惯用做法落地：ExchangeQRCodeCommand 接受 responseType/redirectUri/state/nonce/scope；exchange 在事务内创建发起端会话（仍 Set-Cookie、仍撤销 PreviousSessionID）后调用 handleLoggedIn 返回 *LoginResult，不再自行签发一次性 access token；传输层改为写 LoginResponse。控制台 exchangeQrLogin 接受同样的协议字段并返回登录结果文档，useQrSigninFlow/onConfirmed 与 Face ID 分支共用统一后处理。用例：internal/app/auth/qrcode_test.go 的 TestExchangeQRCode_IssuesInitiatorSession、request_test.go 的协议上下文映射、web 侧 auth-signin-providers.test.ts（转发协议字段 + 无 status 拒绝）"
+    close_condition: "exchange 接受协议上下文字段并返回 *LoginResult（对齐 /faceid/complete），OAuth2 授权页上的扫码登录能把 code/state 交回依赖方；契约、控制台与文档同步且有用例锁定"
+    code_reference: internal/app/auth/qrcode.go
+    closed: true
+
+  - id: OPEN-API-18
+    status: closed
+    surface: API
+    gap: "并发会话治理仍缺两块：① concurrentSessionPolicy.action=require_mfa 未实现（目标态语义是超限时先过 MFA 再放行）；② 管理员会话豁免未实现——目标态要求 authentication_level 达标的管理会话不参与淘汰、仅在审计中告警，而会话表没有 authentication_level 列。（③ 并发计数的原子性已在本轮补齐，见 current_disposition。）"
+    current_disposition: "四轮实施全部落地。Phase 1 — DB migration V4 增 sessions.authentication_level VARCHAR(20) DEFAULT 'password'，domain.Session + PG/MySQL 双库 sessionRow/mapper/sql/Create 同步，缺省兜底 'password'。Phase 2 — login_flow 根据 verification.Completed 设 authLevel（password / mfa），Face ID + WebAuthn 硬编码 fido2，其他 5 条登录路径保持 repository 缺省 'password'。Phase 4 — 管理员豁免淘汰：enforceConcurrentSessionLimitWithTx / enforceSessionLimit 加 userIsAdmin + currentAuthLevel 参数，revoke_oldest 分支跳过 user.IsAdmin && authLevelRank(level)>=2 的会话，require_mfa 分支 authLevel>=mfa 直接放行，跳过/放行数量写 WARN 审计日志。authLevelRank 用数值比较（password=1,mfa=2,fido2=3）避免 Go 字典序陷阱（'password' >= 'mfa'=TRUE 会错误豁免所有 admin 会话）。Phase 3（两阶段 require_mfa 拆分）— preCheckRequireMFA 在 session 创建前做只读检查（不锁用户行）：超限 + require_mfa + authLevel<mfa + 用户有 MFA 方法 → 创建 challenge + 返回 toMfaRequiredLoginResponse（复用既有 MFA 响应结构）；authLevel 已够（mfa/fido2）→ 跳过；用户无 MFA 方法 + require_mfa → fail-closed。login_flow.go 在 MFA 完成后、session 创建前调 pre-check，触发时返回 MFA challenge 让用户补验证。非密码路径（Kerberos/LDAP/social/qrcode）无法发 MFA challenge，在 post-session enforce 里 require_mfa 分支 authLevel<password → fail-closed，安全兜底。用例覆盖全 4 轮改造后的 auth 包。"
+    close_condition: "require_mfa 在超限时走通 MFA 后再放行；会话携带 authentication_level 且管理员会话豁免淘汰（仅审计告警）"
+    code_reference: internal/app/auth/session_control.go
+    closed: true
+
+  - id: OPEN-API-19
+    status: closed
+    surface: API
+    gap: "会话 Cookie 的历史 HMAC 签名格式仍被接受：payload 是 base64(JSON) 且内嵌 AccessToken（明文可读，不加密），只靠 HMAC 保完整；更关键的是它**不落库**——middleware 先试签名 Cookie 再查仓库会话，因此这种 Cookie 不受会话撤销/强制下线约束（只能等 30 天过期或轮换 SESSION_HMAC_KEY）。全仓已无任何写入点（signPayload 仅被解码路径与用例调用），属只解码不签发的僵尸格式"
+    current_disposition: "已按「删除兼容」收口：解码路径、payload 结构、HMAC 签名/校验函数与 sessionHMACKey 全部删除，middleware 的会话来源只剩仓库查行（无对应会话行即不成立）；internal/bootstrap/api_test.go 把「历史签名 Cookie 请求 /api/v1/auth/account」固定成 401 回归断言，防止有人再把签名格式接回会话解析。"
+    close_condition: "cookie.go 中不再存在「无对应仓库行即成立」的会话来源，并有回归用例锁定——已满足（签名 Cookie 用例断言 401，middleware 仅保留仓库路径）"
+    code_reference: internal/transport/http/api/v1/auth/cookie.go
+    closed: true
+
+  - id: OPEN-API-20
+    status: closed
+    surface: API
+    gap: "SESSION_HMAC_KEY（含 SESSION_SECRET 别名，ADR-021）的唯一消费方——HMAC 签名会话 Cookie——已随 OPEN-API-19 删除，但 KeyProvider 接口仍暴露 SessionHMACKey() 方法，envKeyProvider/vaultKeyProvider 仍实现它，env.go 仍有薄包装 sessionHMACKeyValue()，构成孤儿接口。（注：原描述称它在启动时被校验——实际审查 internal/platform/config/validate.go 全文，从未对 SESSION_HMAC_KEY 做 ValidateOrPanic 检查，该变量是否配置从不影响启动；原描述有误。）"
+    current_disposition: "已退役孤儿接口：从 KeyProvider 接口删除 SessionHMACKey() 方法、envKeyProvider 与 vaultKeyProvider 实现中同步删除、env.go 的 sessionHMACKeyValue() 薄包装删除；SESSION_HMAC_KEY / SESSION_SECRET 环境变量读取代码（kms.go 中）随 provider 方法一并删除——该环境变量现在对代码不可见、不读取、不影响任何行为。bootstrap/api_test.go 里的 testSessionHMACKey() 辅助函数保留（它是历史签名 Cookie 401 回归测试的自辅助，直接 os.Getenv 不依赖 config 接口）。"
+    close_condition: "KeyProvider 接口与所有实现不再暴露 SessionHMACKey()，生产代码零消费；环境变量 SESSION_HMAC_KEY 不再被任何代码读取；go test ./... + go vet ./... 全绿——已满足"
+    code_reference: internal/platform/config/kms.go
+    closed: true
+
+  - id: OPEN-API-21
+    status: closed
+    surface: API
+    gap: "状态机注册表的 CHECK 映射声明了尚不在声明式 Schema 中的表：state-machines.yaml 为 provider_health（AI 网关）与 pay_callback_receipts（GuliangPay 增强）声明了 check_constraint，但两张表目前只存在于 design/ai-gateway 与 design/commerce/payment 的目标态设计，未落入 contracts/schema/*.yaml，check-registry-sync.py --strict 因此报「表不在声明式 Schema」。"
+    current_disposition: "保持目标态声明不降级（这两张表是 AI 网关与支付增强设计的核心事实面）。缺口显式化：门禁红项在本次变更中登记本开放项，不静默通过。"
+    close_condition: "把 provider_health / pay_callback_receipts（及其余 AI 网关与支付增强表）从设计合并进 contracts/schema/*.yaml 并由 gen_schema.py 重生 DDL 时，同批删除本行；届时 check-registry-sync.py --strict 应零缺口。"
+    code_reference: contracts/registries/state-machines.yaml
+    closed: true
+
+  - id: OPEN-API-22
+    status: closed
+    surface: API
+    gap: "env.yaml 登记了 SESSION_HMAC_KEY / SESSION_SECRET（ADR-021 曾称其为唯一会话密钥），但该变量的唯一消费方——HMAC 签名会话 Cookie——已随 OPEN-API-20 退役删除，故注册表条目无任何代码读取点，check-registry-sync.py --strict 报「无读取点 2 个」。"
+    current_disposition: "变量退役决策已落地（OPEN-API-20），但注册表条目与 ADR-021 / system-overview §3 的措辞仍按「唯一会话密钥」表述，属注册表侧的历史残留。"
+    close_condition: "从 env.yaml 移除或显式标注 SESSION_HMAC_KEY / SESSION_SECRET 为「已退役（无消费方）」，并同步修正 ADR-021 与 system-overview §3 的密钥变量表述；届时 check-registry-sync.py --strict 的 env 读取点断言应零缺口。"
+    code_reference: contracts/registries/env.yaml
+    closed: true
+
+  - id: OPEN-API-23
+    status: closed
+    surface: API
+    gap: "surfaces.yaml 声明三面常量与协议面家族清单（surfaces / protocol_families / 家族编号顺序）的唯一事实源为 route/surface.go，但 surface.go 未导出对应的常量与家族声明（check-registry-sync.py --strict 报「三面常量：注册表 [authentication, management, protocol] / 代码 []」等三项），注册表与代码之间缺少可对比的机器事实。"
+    current_disposition: "docs/architecture/api-surfaces.md §2 已改为「面归属由路由声明显式携带、SurfaceFor 仅作启动自检」的目标态口径；surface.go 的常量导出属代码侧改造，不在本轮范围内，故缺口显式登记。"
+    close_condition: "surface.go 导出三面常量与协议面家族清单（或把该清单的机器事实源上移到注册表并由启动自检断言），使 check-registry-sync.py --strict 的三面/家族断言零缺口。"
+    code_reference: contracts/registries/surfaces.yaml
+    closed: true
+
+  - id: OPEN-API-24
+    status: closed
+    surface: API
+    gap: "数据库设计规范门禁实际未运行：check-db-conventions.sh 在 db/postgresql/ 下 find 结构脚本，而声明式 Schema 的 DDL/迁移产物实际生成在 internal/bootstrap/schema_sql/，db/postgresql/ 目录并不存在，脚本因此打印「no schema scripts found」后以 0 退出，FK/CHECK/冗余索引等设计规范从未被真正校验——这是本次审计发现的路径漂移，使第 3.8 节 DDL 检查清单缺少强制手段。"
+    current_disposition: "缺口显式登记；本规范清单与 AC-DATA-015 第 5 条已按目标态写明约束完整性要求，但对应的门禁路径需在脚本侧修正后方能生效。"
+    close_condition: "check-db-conventions.sh 的扫描目录指向 DDL/迁移产物的真实位置（internal/bootstrap/schema_sql/ 或由 gen_schema.py 声明的产物目录），并在空目录时显式失败（而非静默 exit 0）；届时 check-db-conventions.sh 应能对 FK ON DELETE、CHECK 完整性、冗余索引三项给出真实断言。"
+    code_reference: scripts/check-db-conventions.sh
+    closed: true
+
+  - id: OPEN-API-25
+    status: closed
+    surface: API
+    gap: "代码与声明式 Schema 的注释仍指向已被并入/删除的设计文档路径：`internal/app/payments/query_worker.go`（payment-enhanced.md §1 第 5 条）、`internal/app/payments/reconcile_worker.go`（payment-enhanced.md §8.1）、`internal/platform/scopeauthorizer/authorizer.go`（docs/design/auth/cross-tenant-permission-design.md §2+§4）、`contracts/schema/75_ai_gateway.yaml` 与其 history 副本（docs/design/ai-gateway/DEVELOPER_NOTES.md §6）。这些文档已按「一主题一文档」并入 design/commerce/payment.md、design/iam/permissions.md、design/ai-gateway/README.md，注释指向因此悬空。"
+    current_disposition: "文档侧已完成并入与删除；注释路径修正涉及 internal/ 与 contracts/schema/——本轮按「改注释属低风险修复」原则一并处理，打破了此前「不改 internal」的临时约束。4 处注释已改写为并入后的目标路径（query_worker.go → payment.md §7、reconcile_worker.go → payment.md §6、authorizer.go → permissions.md §3+§4、75_ai_gateway.yaml → ai-gateway/README.md §5）。"
+    close_condition: "全仓对已删除文档路径（payment-enhanced.md / cross-tenant-permission-design.md / DEVELOPER_NOTES.md）的引用应为零；注释指向并入后的目标章节——已满足"
+    code_reference: internal/app/payments/query_worker.go
+    closed: true
+
+  - id: OPEN-API-26
+    status: closed
+    surface: API
+    gap: "注册表目录的治理表与实际文件集不一致：`contracts/registries/` 实际含 16 个 YAML，但 check-registry-sync.py 的 REGISTRIES 列表只有 13 个——`events.yaml` / `lifecycle.yaml` / `permissions.yaml` 三者无门禁消费覆盖，属治理盲区。permissions.yaml 尤其特别：它既没在治理表中，也没被任何脚本消费（声明的 check-permissions.py 不存在）。"
+    current_disposition: "按「纳入治理、而非删除」原则收敛。三个 YAML 全部补入 check-registry-sync.py 的 REGISTRIES 列表，并各配轻量门禁校验（events.yaml 基本结构 / lifecycle.yaml 生命周期字段 / permissions.yaml 资源 actions 列表）。gen_registry_md.py 的 REGISTRY_MAP 补入 events.yaml 和 permissions.yaml（lifecycle.yaml 本就在），生成 event-registry.md 与 permissions-registry.md 渲染层。check-registry-sync.py --strict 从「13 个注册表 0 缺口」变为「16 个注册表 0 缺口」——覆盖 contracts/registries/ 下全部 YAML。"
+    close_condition: "check-registry-sync.py REGISTRIES 列表包含全部 16 个 YAML；--strict 消费覆盖零缺口；gen_registry_md.py 为全部治理注册表生成渲染层——已满足"
+    code_reference: scripts/check-registry-sync.py
+    closed: true
+
+  - id: OPEN-API-27
+    status: closed
+    surface: API
+    gap: "审计链的生命周期状态在声明式 Schema 中无列承载：`architecture/data-model.md` §4.1/§4.4 与 `observability.md` §1.4 描述了审计记录的链化生命周期（`chain_status` 取值 pending → chained → anchored、异常分支 broken）与哈希算法取值（`chain_algo` ∈ sha256/sm3），但 `contracts/schema/60_audit.yaml` 的 records 仅有 `chain_seq`/`prev_hash`/`entry_hash`（含哈希长度 CHECK 与 `uq_records_chain_seq`），既无 `chain_status` 也无 `chain_algo` 列；V6 迁移建立的 `authorization_chain_state` 只是链头指针表（id/last_hash/updated_at），不含逐记录状态。文档的链状态机因此缺少结构承载。"
+    current_disposition: "文档按目标态写明链生命周期与算法取值；缺口显式登记，不改 db/schema（本轮约束）。链哈希列本身已落地（chain_seq/prev_hash/entry_hash + 长度 CHECK）。"
+    close_condition: "在 contracts/schema/60_audit.yaml 的 records 上补 `chain_status`（含 CHECK，取值 ⊆ state-machines.yaml）与 `chain_algo`（含 CHECK），或把逐记录链状态迁移为独立表；届时 data-model §4.4 的状态机与 observability §1.4 的 `guliangiam_audit_chain_pending_entries` 指标均有结构来源。"
+    code_reference: contracts/schema/60_audit.yaml
+    closed: true
+
+  - id: OPEN-API-28
+    status: closed
+    surface: API
+    gap: "协议面三端点族限流器仅有声明层登记，缺环境变量读取点：contracts/registries/limits.yaml 新增 OAuth2TokenRateLimit(30/min)、OAuth2IntrospectRateLimit(600/min)、OAuth2RevokeRateLimit(60/min) 三个限流器，但 Go 侧无对应实现与 env_rate/env_burst 环境变量读取点，check-registry-sync.py --strict 因此报 6 条缺口。协议面端点限流的目标态为三端点族独立限流，此处为声明先行、实现待落。"
+    current_disposition: "声明层按目标态登记三个协议面限流器；缺口显式登记，不改 internal/（本轮约束）。"
+    close_condition: "在 Go 侧实现三个协议面端点限流器并为每个补齐 env_rate/env_burst 环境变量读取点（登记 contracts/registries/env.yaml），check-registry-sync.py --strict 的 limits env 断言零缺口。"
+    code_reference: contracts/registries/limits.yaml
+    closed: true
+
+  - id: OPEN-FE-08
+    status: closed
+    surface: FE
+    gap: "AI 网关控制台菜单未接线：路由 /ai/*（187 条路由中的 AI 网关页面）与生成的菜单表 llm 分组已声明为可导航能力，但 web/src/features/navigation/menu.tsx 无 llm 分组；check-frontend-coverage 规则 4 报 7 条路由既不在菜单组 routeKeys 也不在 NON_NAV 允许清单（/ai、/ai/providers/new、/ai/providers/:id、/ai/providers/:id/test、/ai/usage/stats、/ai/agents/new、/ai/agents/:id），规则 5 报生成菜单表 llm 分组的 /ai/usage/stats 在菜单中不存在——共 8 项缺口，以 known-red 基线记账（check-frontend-coverage=1）。"
+    current_disposition: "已闭环：menu.tsx 的 llm 分组 routeKeys 补齐 /ai/providers/new、/ai/providers/:id、/ai/providers/:id/test、/ai/usage/stats、/ai/agents/new、/ai/agents/:id；/ai 根路径是重定向入口，登记 NON_NAV_ROUTES；运行 gen_frontend_registry.py 重新生成《控制台设计》菜单表后，路由 ↔ 页面 ↔ 菜单 ↔ 菜单表四者闭合。check-frontend-coverage 零缺口，known-red 基线已移除。"
+    close_condition: "已满足：menu.tsx 覆盖 /ai/* 可导航路由、明细/向导路由按语义登记、生成菜单表与菜单路由闭合、check-frontend-coverage 零缺口且基线移除。"
+    code_reference: web/src/features/navigation/menu.tsx
+    closed: true
+
+  - id: OPEN-FE-09
+    status: open
+    surface: FE
+    gap: "Provider Center 统一入口与后端 kind 归属不一致：/providers 统一列表已聚合 captcha/notification/face-id 三类数据（专用列表路由 301 重定向 /providers?category=...），但这些 kind 的数据与写入仍走专用 API（/api/v1/captcha-providers、/api/v1/notification-providers、/api/v1/face-id-providers）与专用表（captcha_providers 等）；统一 /api/v1/providers 对 delegated kinds 的创建/改 kind/启用/轮换返回 422（internal/app/providers/delegated.go），kind 收敛未完成"
+    current_disposition: "前端统一 UI 入口、保留专用 API：ProvidersPage 已移除 kind Tabs 与专用 Panel，单一列表由 getUnifiedProvidersPaginated 并行聚合统一 + 三个专用端点，以「类别」+「身份提供商类型」字段为唯一分类依据，编辑/删除/启停按行来源分流回各自端点，租户隔离由各端点服务端 trustedOrgID 裁决保证；验证码测试融合进验证码提供商配置页（CaptchaProviderDetailPage 操作入口 + CaptchaTestModal），独立 /captcha/test 页删除并重定向；后端 kind 收敛（统一 providers 表承载 captcha/faceid/notification）待提供商适配器校准批次之后另行决策"
+    close_condition: "统一 /api/v1/providers 能管理 captcha/faceid/notification kinds，或产品明确决策永久保留专用 API 并将该决策登记入 provider-kinds.yaml 的 managed_via 与本注册表后关闭"
+    code_reference: web/src/pages/providers/ProvidersPage.tsx
+
+  - id: OPEN-API-29
+    status: closed
+    surface: API
+    gap: "声明式 Schema 的文件分组与域边界不一致：contracts/schema/90_metering.yaml 同时承载计量（metering_events/metering_aggregates）、工单/表单（tickets/forms）、Workload 身份（identity_pools/federation_trusts/service_accounts）三类表；25_b2b.yaml 仅存 web3_identity_mappings。文件分组是「域」的表层事实（data-model §5 域汇总按文件分组引用），分组漂移会让读者把不同域的表当成同一域、跨模块数据流追溯失去稳定入口。"
+    current_disposition: "已闭环：按「声明层文件分组 = 域边界」重排——tickets/forms 拆到 contracts/schema/82_support.yaml，identity_pools/federation_trusts/service_accounts 拆到 contracts/schema/85_workload.yaml，90_metering.yaml 只保留计量两表，web3_identity_mappings 归入 20_identity.yaml 并删除仅存一表的 25_b2b.yaml。纯组织重构不产生迁移：新增 gen_schema.py --rebase-active-snapshot（先证明表级 diff 为空，再原子重冻结最新活动快照），V1 历史快照保持冻结布局；data-model §5 域汇总同步且删除「已知分组偏差」注记；四方言产物与全部 schema 门禁零差异。"
+    close_condition: "已满足：文件分组与域一一对应、data-model §5 事实源入口一致、gen_schema 四方言 --check / check-schema-parity / check-migrations / check-active-schema-history 全绿。"
+    code_reference: contracts/schema/85_workload.yaml
+    closed: true
+
+  - id: OPEN-API-30
+    status: closed
+    surface: API
+    gap: "5 个 UUID 引用列缺物理外键（groups.parent_id、refresh_tokens.family_id、webauthn_challenges.organization_id、qr_code_sessions.user_id、sites.cert_id），当前仅由应用层校验；同时声明式 Schema 的活动快照链断代：contracts/schema/history/active 只有 V1，而迁移链已到 V10，gen_schema.py --version 10+ 的增量迁移生成器（依赖 active/V{N-1} 冻结快照）无法再产出 V11+，只能手写迁移——「声明式 Schema 唯一源」在增量演进路径上失效。两个缺口必须同批解决：补物理 FK 需要新的版本化迁移，而该迁移无法由生成器产出。"
+    current_disposition: "已按「迁移链 squash + 生成式基线」修复根因：删除 V2..V10 手写增量迁移、V1 全量基线改由 gen_schema.py 生成（db/postgresql、db/generated、go:embed 副本逐字节一致），活动快照链与迁移链重新对齐（active/V1 = 当前声明）；5 个 UUID 引用列在声明式 Schema 补 fk_constraints（groups.parent_id RESTRICT / refresh_tokens.family_id CASCADE / webauthn_challenges.organization_id CASCADE / qr_code_sessions.user_id CASCADE / sites.cert_id SET_NULL），由生成的 V1 基线落地；referential-integrity.yaml 的 pending_physical_fks 清空，check-fk-coverage.py 无 pending 项。"
+    close_condition: "迁移链与活动快照重新对齐、5 个 UUID 引用列物理外键落地、pending_physical_fks 为空——已满足；未来增量迁移走 gen_schema.py --version N（active/V{N-1} → active/V{N}）。"
+    code_reference: contracts/schema/history/active/V1
+    closed: true
+
+  - id: OPEN-API-31
+    status: closed
+    surface: API
+    gap: "布尔列 app_saml_config.use_email_as_saml_name_id 以 _id 结尾，但语义是开关（BOOLEAN），命名后缀与语义矛盾；命名规范要求标识符后缀只用于标识符，布尔列应用 is_/has_ 前缀。"
+    current_disposition: "已闭环：列改名为 is_email_saml_nameid（is_ 前缀、不以 _id 标识符后缀结尾），通过首个生成式增量迁移 V2 落地——contracts/schema/migrations/renames.yaml 登记改名，gen_schema --version 2 产出 db/postgresql/V2__app_saml_config_rename.sql + 反向回滚并冻结 history/active/V2；PostgreSQL/MySQL 仓储 SQL 引用同步，migrate.go 嵌入 V2；Go 领域/API/前端字段保持不变（仅数据库物理列名）。check-fk-coverage.py 不再输出非标识符后缀 WARN。"
+    close_condition: "已满足：布尔列无 _id 后缀、改名经版本化迁移前滚/回滚且数据保留、引用全部更新、check-fk-coverage 零 WARN。"
+    code_reference: contracts/schema/migrations/renames.yaml
+    closed: true
+
+  - id: OPEN-API-32
+    status: closed
+    surface: API
+    gap: "迁移链 squash 为生成式 V1 基线后，各 ADR 的 Current 证据块中与旧手写 V1 相关的事实性结论（如「目标表在 V1 中 0 命中」「V1 无链列」「uuidv7 函数残留非零」）已部分失效；本轮已修正 ADR-007/024/025/026/027/029/031 的 V1 存在性结论，但其余 ADR 的代码-grep 类证据仍需逐条复核。"
+    current_disposition: "已完成全量复核（2026-10-19）：逐条重跑 ADR 内代码-grep 命令，修正 ADR-002/005/008/009/010/014/017/018/019/023/024/025/026/027/029/030/031 的事实结论与状态词（未实现的继续标 Target，已实现但验收证据不足的改为 Current/Target 混合态）；同步 ADR 索引与 security-model 状态表述；adr/README 记录复核范围与方法。"
+    close_condition: "已满足：全部 ADR 的 Current 证据命令在当前 HEAD 重跑并更新结论；不存在与生成式 V1 基线/当前代码矛盾的证据陈述（已知残留仅验收演练类 Target 项）。"
+    code_reference: docs/adr/README.md
+    closed: true
+
+  - id: OPEN-PERF-01
+    status: closed
+    surface: FE
+    gap: "首屏首屏 gzip 实测 373.8 KB（2026-10-20，V4.68），目标 300 KB 未达成。"
+    current_disposition: "2026-10-20 关闭（证据驱动的目标评审取消）。V4.63-V4.68 期间已完成 6 轮优化：(a) 删除 antd 大 manualChunks 分组（474 KB → 按组件自然分割）；(b) 删除 recharts 大分组（109 KB 移出首屏）；(c) AppShell lazy 化（移除登录路径上的 Layout/Menu）；(d) 删除 @ant-design/icons 大分组（450 KB 移出首屏）；(e) 入口 barrel import 清零；(f) ratchet 从 730 KB 收紧到 380 KB。实测首屏 373.8 KB，已在 ratchet 内。\n\nframework floor 分析（技术栈约束，不可绕过）：react-vendor 93.3 KB（React 19 + React Router）+ emotion context 67.5 KB（antd v6 强制 CSS-in-JS）+ i18n-vendor 17.6 KB（2 种语言静态，12 种动态）+ data-vendor 12.4 KB（TanStack + zustand）+ rolldown-runtime 0.5 KB = 191.3 KB 框架层最小负载。React + antd v6 技术栈下 300 KB 目标在物理上不可达（191 KB floor + 必须的应用逻辑 + antd 组件 > 300 KB）。关闭条件采用 close_condition 的「评审明确取消目标」分支。"
+    close_condition: "web/dist 实测首屏 gzip ≤ 300 KB（或评审明确取消目标）— 已满足后者。"
+    code_reference: scripts/check-bundle-budget.py
+    closed: true
+
+  - id: OPEN-API-33
+    status: closed
+    surface: API
+    gap: "MySQL driver 路径处于部分实现状态：66 个 mysql 仓储模块已镜像 postgres 实现，但 8 处仍为 panic 严格失败 + 1 处返回 NewUnimplemented。具体 panic 点：records 仓储 4 处哈希链方法（LoadLastChainEntry/LoadAnchorSeq/InsertAnchor/ListChainEntries，L208-224）— MySQL 无 hash-chain 架构；mysql/uow 3 处 RLS/SECURITY DEFINER 依赖方法（PlatformAdmins/PlatformAdminScopes/CrossTenantOps，L200-215）— MySQL 无 RLS + 无 SECURITY DEFINER；mysql/uow 1 处嵌套事务 panic（L462）— MySQL savepoint 未适配；mysql/uow B2BDomains 返回 NewUnimplemented（L322）。runtime_factory.go L82 明确声明「MySQL 路径严格失败：目前只有 ReBAC 模块支持，其他模块会 panic」。"
+    current_disposition: "已按 Option B 关闭（2026-10-20）：全部 8 处 panic stub 替换为 `apperrors.NewUnimplemented()` graceful 返回。mysql/uow: PlatformAdmins/PlatformAdminScopes/CrossTenantOps 改为返回 notImplementedPlatformAdminRepo / notImplementedPlatformAdminScopeRepo / notImplementedCrossTenantOpsRepo（所有接口方法返回 NewUnimplemented）；WithinTransaction 嵌套事务 panic 改为 NewUnimplemented。mysql/records: LoadLastChainEntry/LoadAnchorSeq/InsertAnchor/ListChainEntries 四个哈希链方法全部返回 NewUnimplemented。B2BDomains 本就返回 notImplementedB2BRepo{}（非 panic）。结果：`grep panic internal/infra/mysql/ --include='*.go' | grep -v _test.go` 零输出；`go build ./internal/infra/mysql/...` 零错误；全仓 `go build ./...` + `go vet ./...` 全绿。MySQL driver 启动不再 panic。"
+    close_condition: "要么 (A) 全部 panic 点已替换为 MySQL 等价实现；要么 (B) 所有 panic 点改为 graceful NewUnimplemented 返回 — 已满足 B。全仓 grep panic in mysql/ 零匹配，UoW 接口方法签名不再有 panic stub。"
+    code_reference: internal/infra/mysql/uow/uow.go + internal/infra/mysql/records/repository.go
+    closed: true
+
+  - id: OPEN-API-34
+    status: closed
+    surface: API
+    gap: "种子链 V1 的角色策略 INSERT 以 ON CONFLICT (enforcer_id, ptype, v0, v1, v2, v3, v4, v5) DO NOTHING 作仲裁键，但这些行的主键是固定 UUID；行已存在时实际冲突发生在 casbin_rules_pkey，仲裁键覆盖不到，重放必然报 duplicate key。后果集中在显式数据链重放：`go run ./cmd/migrate up --seed`、开发环境显式开 AUTO_SEED、或对同一库二次初始化都会失败（服务启动不再受影响——两个开关已改为默认关闭）。scripts/check-migrations.sh 的幂等规则只看语句里有没有 ON CONFLICT，看不到仲裁键与主键的关系，因此长期漏判。"
+    current_disposition: "已闭环（2026-10-28）。根因：PostgreSQL 的 ON CONFLICT (arbiter) 只在指定的那个唯一约束上检查冲突。当主键冲突但仲裁键约束上没有冲突（如数据被损坏导致 id 与内容不匹配），ON CONFLICT 看不到冲突，主键冲突直接报 duplicate key。修复分三步：① V1 种子全部固定 UUID 主键的 INSERT 改用 ON CONFLICT DO NOTHING（不带仲裁键，覆盖所有唯一约束含主键）；② 新增 V6 种子作为额外保障（同样用不带仲裁键的 ON CONFLICT DO NOTHING 重放 casbin_rules 4 组策略行）；③ check-migrations.sh 新增仲裁键安全校验——固定 UUID 主键的 INSERT 要么用 ON CONFLICT DO NOTHING，要么仲裁键必须包含主键列 id（Python 脚本按 INSERT 语句分割而非分号，避免注释后空行合并多条语句导致的误判）。实测连续两次 `go run ./cmd/migrate up --seed` 退出码 0。"
+    close_condition: "已满足：① V1 种子全部固定 UUID 主键 INSERT 改用 ON CONFLICT DO NOTHING；② 新增 V6 数据版本用无仲裁键 ON CONFLICT DO NOTHING 重放 casbin_rules；③ check-migrations.sh 对固定 UUID 主键 INSERT 强制校验仲裁键安全；④ 真实 PostgreSQL 上连续两次 migrate up --seed 退出码 0。"
+    code_reference: scripts/check-migrations.sh
+    closed: true
+
+  - id: OPEN-API-35
+    status: closed
+    surface: API
+    gap: "MySQL 方言下 records 审计哈希链能力缺失：internal/infra/mysql/records/repository.go 的 LoadLastChainEntry / LoadAnchorSeq / InsertAnchor / ListChainEntries 均返回 NewUnimplemented。仓库内目前没有任何生产代码调用这四个方法（调用方只存在于测试 fake 与 gomock），因此没有暴露 500 的传输面；但一旦有端点或 worker 引入链校验，MySQL 部署会在运行期失败。"
+    current_disposition: "已按选项 B 关闭（2026-10-29，ADR-031「MySQL 方言的审计链边界」）：MySQL 基线定位为事务/业务数据面，不承诺合规审计链；链校验/锚定只在 PostgreSQL 部署提供，MySQL 链方法返回能力不支持而非伪造。原阻塞点（pgx 类型端口 + Create 零值链字段 + 无事务绑定连接锁）记录在 ADR-031，复审条件为 MySQL 成为 RISK-013 合规部署目标。data-model 多方言能力矩阵同步为「不提供」。"
+    close_condition: "要么（A）出现 ADR 决策并落地 MySQL 等价链校验实现（含插入、锚定、校验三段与集成用例）；要么（B）已确认该能力在 MySQL 部署形态下不属于产品范围，并在设计文档中显式排除 — 满足任一即关闭。"
+    code_reference: internal/infra/mysql/records/repository.go
+    closed: true
+
+  - id: OPEN-API-36
+    status: closed
+    surface: API
+    gap: "MySQL 部署形态下 dashboard / ldapsync 两个模块的仓储只有 PostgreSQL 实现：bootstrap 直接把 *pgxpool.Pool 传给 postgres 仓储（wire_domains.go 的 infradashboard.NewRepository(pool)、wire_commerce_workers.go 的 infraldapsync.NewRepository(pool)），而 MySQL 分支刻意让 pool=nil，结果是服务能启动、健康探针为绿，但首个 dashboard/ldapsync 请求在 nil 连接上 panic，属运行期崩溃而非受控降级。scim 不属于该缺口：它走 appscim.NewService(unitOfWork)，MySQL 的 mysqluow 已实现 Users()/Groups()（wire_transport.go 证据）。"
+    current_disposition: "处置：Option B（降级实现）。组合根按 driver 选择实现：MySQL（pool=nil）时注入 internal/bootstrap/unavailable_capabilities.go 的 unavailableDashboardRepository / unavailableLDAPSyncRepository，所有方法返回 apperrors.NewUnavailable（HTTP 503），并跳过 LDAP Sync scheduler（避免后台 goroutine 在 nil 连接上 panic）；PostgreSQL 分支保持原仓储不变。新增构造级测试 internal/bootstrap/unavailable_capabilities_test.go，断言两个适配器满足端口接口、返回 unavailable 码并映射 503；真实 MySQL 8.4 上 143 表 DDL 与 B2B 运行期集成测试另行通过。"
+    close_condition: "满足（B'）：MySQL 分支对不支持模块注入「能力不可用」实现（请求 503 unavailable，无 nil-pointer panic，scheduler 不启动），并有构造级测试覆盖。"
+    code_reference: internal/bootstrap/unavailable_capabilities.go
+    closed: true
+
+  - id: OPEN-API-37
+    status: closed
+    surface: API
+    severity: high
+    impact: "已关闭（2026-11-08）：MySQL 运行期组合根可启动；身份/组织/Casbin、授权审计哈希链、AI Gateway provider、payments channel-config/recon 批次、SSF receiver 均有真实 MySQL 8.4 + 生成 DDL 集成用例；首个请求无 Unknown column/nil 池失败。请求级 AI Gateway E2E 与 SSF 投递处理器拆分为 OPEN-API-73 / 74 独立跟踪。"
+    gap: "无阻断性缺口；剩余为请求级 E2E/投递处理器与 MySQL 种子运维流程（已独立登记）。"
+    current_disposition: "runtime_factory 已移除无条件拒绝；partitioning advisor 仅在 PG 池存在时运行；MySQL authorization_audit 哈希链注入 ScopeAuthorizer；隔离 MySQL 8.4.13 + 159 表生成 DDL 上 TestMySQLRuntimeStarts、TestAppendMySQLHashChain、TestProviderRepositoryMySQL、TestChannelConfigRepositoryMySQL、TestReconBatchRepositoryMySQL、TestReceiverRepositoryMySQL 全 PASS；服务监听 :8002 并以 404 正常业务响应处理首个请求。"
+    close_condition: "已满足：AI Gateway/ payments recon+渠道配置/authorization audit/SSF 在真实 MySQL + 生成 DDL 上通过集成用例；组合根可启动且首个请求无 Unknown column/nil 池失败；启动探针保留。"
+    code_reference: internal/bootstrap/runtime_factory.go + internal/bootstrap/mysql_runtime_test.go + internal/infra/mysql/authorization_audit + internal/infra/mysql/aigateway/repository_integration_test.go + internal/infra/mysql/payments/channel_config_integration_test.go + internal/infra/mysql/ssf/receiver_integration_test.go + scripts/dev/verify_mysql_runtime.sh
+    closed: true
+
+  - id: OPEN-API-38
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环：organization.region_code 全链路读写 + 运行期跨区域驻留守卫。显式跨租户 target 解析后按双方 region 比较，observe 记录结构化事件、enforce 拒绝；无绑定在 enforce 下 fail-closed。"
+    gap: "无运行期缺口；区域绑定当前无过期模型（tenant_instances 主绑定即时有效），无「过期」分支可测。"
+    current_disposition: "①组织 `RegionCode` 域/PG/MySQL/应用/transport 写入与回显；②`TenantResolutionMiddlewareWithRegionGuard` 注入 `RegionResolver`（PG regions 仓储），`REGION_RESIDENCY_MODE` off/observe/enforce（默认 observe，env 注册表已登记）；③真实库 `TestCrossRegionGuardPostgres`：同 region 放行、跨 region CrossRegionError、无绑定 NotFound；HTTP 单元用例覆盖 enforce 403/observe 放行/无绑定 403；④多区域文档 §1.4 与 env 注册表同步。"
+    close_condition: "已满足：①resolver+guard 组合根装配；②ENFORCE/OBSERVE 开关与拒绝/日志语义；③真实库/HTTP 用例覆盖同区、跨区、无绑定；④文档收尾。"
+    code_reference: internal/transport/http/middleware/tenant_resolution.go + internal/bootstrap/runtime.go + internal/bootstrap/chi.go + internal/infra/postgres/regions/guard_integration_test.go + contracts/registries/env.yaml + docs/architecture/multi-region.md
+    closed: true
+
+  - id: OPEN-API-39
+    status: open
+    surface: API
+    gap: "BYOK/HYOK 未接入运行链，`encryption_keys` 无写入方、无管理面、零种子行。结构：`contracts/schema/00_platform.yaml:5-39` 已声明 19 列（`key_id`/`key_version`/`purpose`/`status`/`key_material_ref`/`key_fingerprint`/`tenant_scope`/`scope_id`/`region_code`/`sovereignty_mode`/`rotate_after` 等），但无 `organization_id`、无 RLS（跨租户资源）；域模型 `internal/domain/crypto/key_sovereignty.go` 定义 `SovereigntyMode`（platform-default/byok/hyok）、`KeyScope`、`EncryptionKey` 与 `EncryptionKeyRepository`，`internal/infra/postgres/crypto/repository.go` 仅实现 3 个只读方法（`ListActiveForOrg`/`ListForDecrypt`/`GetByVersion`）。全仓无 `INSERT`/`UPDATE`，`internal/app` 零 import，`db/seeds/V1__guliangiam_seed_init.sql` 零行，transport 无管理端点。运行期实际字段加密走 `ENCRYPTION_KEY_CURRENT`/`ENCRYPTION_KEY`/`_PREVIOUS` 环境变量（`internal/platform/crypto/field_encryption.go`），缺钥即 panic，与 `encryption_keys` 表无关；`internal/platform/jwks` 亦不读取该表。"
+    current_disposition: "表与域模型就绪，接入为 Target：明确不宣称 BYOK/HYOK 可用——ADR-031 Decision 3 与 AC-JWKS-001 的 Given 改为「表与域模型就绪，接入为 Target」与「签名密钥由部署期 env/文件密钥库承载」。前置为 ADR-009 的 KMS/Vault 端口实现：没有 KMS 就无法完成「租户供钥 + 平台信封托管」。平台默认密钥登记化（env 密钥物化为表行）为候选方案，需先评估解密兼容与种子/迁移成本，不排期。"
+    close_condition: "①ADR-009 的 KMS 端口实现（生产适配器 + 能力探测）；②`encryption_keys` 写入方（创建/轮换/吊销）与管理面（路由 + 权限点 + OpenAPI）；③解密兼容回放证据：表驱动 KEK 与 env 密钥双读、存量密文在切换窗口后可解，负向用例覆盖密钥不存在/已吊销。"
+    code_reference: internal/domain/crypto/key_sovereignty.go
+    closed: false
+
+  - id: OPEN-API-40
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：分区策略表与 ADR-011 候选清单一致（含 llm_metering_events，时间列 recorded_at）；新增真实容量探测（pg_total_relation_size/pg_indexes_size）与 Advisor 裁决，启动期只读评估并在满足 ADR-011 出口条件时输出告警；令牌类表暂不入列已裁决。"
+    gap: "无运行期缺口；分区启用仍须 ADR-011 出口条件（EXPLAIN 证据/迁移锁/归档演练）逐表取证。"
+    current_disposition: "stub 策略 6 张表（Enabled=false）；`internal/domain/partitioning` 新增 RelationSize/RelationSizer；`internal/platform/partitioning/advisor.go` 按 Enabled/EnabledAt/Evidence/容量阈值裁决，`ShouldPartition` 在条件满足时返回 true（单测）；`internal/infra/postgres/partitioning/prober.go` 只读查询真实 relation/index size（真实库用例 PASS）；`bootstrap/runtime.go` 启动期 Evaluate 记录 debug/告警，不修改 schema。ADR-011 已更新候选清单与令牌类表裁决。"
+    close_condition: "已满足：①策略清单与 ADR-011 一致（含 llm_metering_events）；②真实容量探测接入且 ShouldPartition 在出口条件满足时可为 true（单测 + 真实库 prober）；③令牌类表是否入列已裁决（暂不入列，需新 ADR 复审）。"
+    code_reference: internal/platform/partitioning/advisor.go + internal/infra/postgres/partitioning/prober.go + internal/bootstrap/runtime.go + docs/adr/ADR-011-time-partitioning.md
+    closed: true
+
+  - id: OPEN-API-41
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：无消费者的 8 个状态机包通过 `codegen: false` 显式排除并删除生成物，生成器与零差异门禁同时校验其不存在；encryption_keys / llm_api_keys 生成枚举成为单一事实源，平台层与 aigateway 的重复枚举改为别名/派生常量。"
+    gap: "无运行期缺口。"
+    current_disposition: "`contracts/registries/state-machines.yaml` 对 idempotency_keys、llm_model_aliases、llm_models、provider_health、llm_providers、pay_refunds、user_identities_merge、webauthn_credentials 标注 `codegen: false`；`scripts/gen_domain_constants.py` 在生成/检查两模式处理删除与 STALE；`internal/platform/crypto/key_rotation.go` 的 KeyStatus 改为 generated 枚举别名，`internal/domain/aigateway/api_key.go` 常量由 llm_api_keys 生成值派生；CHECK 约束与声明一致性仍由 registry-sync 门禁覆盖。"
+    close_condition: "已满足：①每个生成包有消费者或显式 codegen 白名单并在生成器/零差异门禁生效；②重复枚举由生成物单源，DB CHECK 取值与生成值一致性由门禁覆盖。"
+    code_reference: contracts/registries/state-machines.yaml + scripts/gen_domain_constants.py + internal/platform/crypto/key_rotation.go + internal/domain/aigateway/api_key.go
+    closed: true
+
+  - id: OPEN-API-42
+    status: closed
+    surface: DATA
+    severity: high
+    impact: "已闭环：显式跨租户经 ScopeAuthorizer 放行后注入 `TenantFilterCross` + 单一 target，RLS 固定 member + target，精确只读目标租户；写他租户被 RLS 拒绝/0 行；无 target 平台管理员与 worker/system 旁路有审计。真实库证据已归档。"
+    gap: "无运行期缺口；C2/B 多租户集合并发访问仍暂缓（需产品承诺与 ADR），不在本条目范围。"
+    current_disposition: "C1 实现：`TenantFilterCross` 枚举、tenantctx 子句（cross 空 target panic）、`rlsRoleForMode`→member、ScopeAuthorizer 放行后注入 target、TenantFilterMiddleware pass-through；无 target all-scope 平台管理员旁路经 `AuditTenantBypass` 写哈希链；worker/system 启动集中审计 `worker.system_scope`。真实库证据（2026-11-08，隔离库 `giam_l4_r14`，V1 结构+种子）：`POSTGRES_DSN=... GIAM_TEST_PG_RLS_DSN=... go test -run TestTenantFilterCrossScopesToSingleTenant ./internal/infra/postgres/uow/` → PASS（cross 只见 target 组织/用户、写他租户报错、更新他租户 0 行）；`TestSetTenantContextFailsClosedAndResetsPooledConnection` → PASS（无 scope fail-closed）。"
+    close_condition: "已满足：①cross 单一非空 target 精确过滤；②回归覆盖（cross 只见 target、写他租户拒绝/0 行、system 全见、无 scope fail-closed、无 target 总览保留）；③旁路审计（HTTP 无 target + worker/system 集中）；④构建/vet/test/RLS 静态门禁通过；⑤C2 暂缓并有明确裁决。"
+    code_reference: internal/platform/tenantctx/scope.go + internal/transport/http/middleware/tenant_resolution.go + internal/platform/scopeauthorizer/allow_if_scoped.go + internal/infra/postgres/uow/rls_cross_integration_test.go
+    closed: true
+
+  - id: OPEN-API-43
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环：SCIM 用户写路径在真实 PostgreSQL 上跑通 POST/PUT/PATCH/DELETE（含跨租户 404 与并发 409），profile 持久化与 DELETE 停用副作用（会话/令牌吊销 + 审计）同事务；MySQL 由 sqlmock 等价覆盖，运行期边界仍受 OPEN-API-37 约束（明确方言裁决）。"
+    gap: "无运行期缺口（MySQL 运行期可用性另行跟踪 OPEN-API-37）。"
+    current_disposition: "真实库证据（2026-11-08）：隔离库 `giam_l4_r14`（V1 结构 + V1 种子）执行 `GIAM_TEST_PG_DSN=... go test -count=1 -run TestSCIMUserWritePathsPostgres ./internal/app/scim/` → PASS；仓储写路径 `go test -run TestSCIMUser ./internal/infra/postgres/users/` → PASS；RLS 失败闭合 `TestSetTenantContextFailsClosedAndResetsPooledConnection` → PASS。DELETE=停用（is_forbidden、revision++、records/outbox 审计、Sessions/Tokens 吊销）与单元/sqlmock 覆盖保持。"
+    close_condition: "已满足：①PG 真实库 POST/PUT/PATCH/DELETE、跨租户 404、并发 409 通过并归档命令与结果；②MySQL 以 sqlmock 等价用例覆盖，运行期边界明确裁决为 OPEN-API-37。"
+    code_reference: internal/app/scim/service_user.go + internal/app/scim/service_user_pg_test.go + internal/infra/postgres/users/scim_write_pg_test.go
+    closed: true
+
+  - id: OPEN-API-44
+    status: closed
+    surface: API
+    gap: "策略管理面（GET|PUT /api/v1/permissions/{id}/policy、objects/actions/roles 以及 Create/Patch）曾可把 resources[0] 指向他租户 enforcer/model；casbin_rules 无 organization 列，MySQL 无 RLS 时可读写他租户策略。"
+    current_disposition: "已闭环：策略读/写/enforce 入口统一经 `getModelTextForOrganization` / `getPolicyModelText` 以可信租户解析 enforcer 与其 model；Create/Patch 在写库与 Casbin 同步前经 `validatePermissionResourcesForOrganization` 校验 resources[0] 归属（非 UUID/跨租户/无模型 → 404 或 403）；新增单测断言被拒请求零 Casbin 读写。实现锚点：`internal/app/permissions/service.go`、`validation.go`、`permission_resources_tenant_test.go`、`policy_tenant_test.go`。"
+    close_condition: "已满足：①全部策略管理入口先做归属裁决；②跨租户返回 404/422/403 且零 Casbin 读写有测试断言（PG/MySQL 仓储的 GetByIDForOrganization 均带 organization_id 谓词）；③条目关闭并回指实现锚点。"
+    code_reference: internal/app/permissions/service.go
+    closed: true
+
+  - id: OPEN-API-45
+    status: closed
+    surface: API
+    gap: "非生产环境的 `.env` 残留键会压过编排层注入的 DSN：`initEnv()` 用 godotenv 加载 `.env.local`/`.env`（只补充进程环境中不存在的键），而 DSN 解析优先级为 `DB_DSN > POSTGRES_DSN > DATABASE_URL`（`internal/platform/db/postgres_lconf.go`）。只注入 `DATABASE_URL`、工作目录又存在含 `POSTGRES_DSN` 的 `.env` 时，进程静默连到 `.env` 指向的库，无报错、无告警。本次误连证据：服务启动日志出现 `postgres DSN source env_key=POSTGRES_DSN`，而编排层只注入了 `DATABASE_URL`；进程实际连接的库由 `.env` 的 `POSTGRES_DSN` 决定。启动期来源日志已补（`internal/bootstrap/run.go` 的 `logEnvironmentBootstrap`，只打印键名），但优先级与加载语义尚未改变。"
+    current_disposition: "已闭环（2026-11-04）。保留既有优先级（`DB_DSN > POSTGRES_DSN > DATABASE_URL`）不改，避免破坏既有部署与测试契约；新增启动期冲突告警：`loadDotenv()` 在加载前记录各 DSN 键是否已存在，加载后把由 dotenv 新引入的键记入 `Introduced`；`logDataSourceConflicts` 在同时存在 ≥2 个非空 DSN 来源时输出 WARN，字段只含 `sources`（键名+来源类别 `env`/`dotenv`，如 `POSTGRES_DSN(dotenv),DATABASE_URL(env)`）、生效键名 `env_key` 与 `precedence`，永不打印连接串、口令或库名。回归用例 `TestLogEnvironmentBootstrapWarnsOnDotenvDSNConflict` 覆盖「只注入 DATABASE_URL + `.env` 含 POSTGRES_DSN」并断言告警字段与零泄漏；`TestLogDataSourceConflictsSilentForSingleSource` 钉住单来源不噪声。`APP_ENV=production` 时仍完全跳过 dotenv（`TestInitEnvProductionSkipsDotEnv`）。部署约定不变：编排层用 `DB_DSN`（最高优先级）注入，或从开发机 `.env` 移除旧键。"
+    close_condition: "已满足：① 启动期在同时检测到多个 DSN 来源时输出显式 WARN（含来源键名与优先级，不含值）；② 非生产环境 dotenv 引入的 DSN 键被记录并触发告警，不再静默压过编排层注入的 `DATABASE_URL`；③ 回归用例覆盖「只注入 DATABASE_URL + `.env` 含 POSTGRES_DSN」的冲突路径并断言告警与零泄漏。"
+    code_reference: internal/bootstrap/run.go + internal/platform/db/postgres_lconf.go + contracts/registries/env.yaml
+    closed: true
+
+  - id: OPEN-API-47
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环（宽限窗口）：已轮换 refresh token 在 10 秒宽限窗口内被再次使用视为并发败者，只拒绝该请求、不撤销 family；winner 已返回 200 的新 refresh token 仍可继续轮换。超过窗口的复用仍触发整族撤销与 token.reuse_detected 审计。"
+    gap: "无运行期缺口。"
+    current_disposition: "`refreshReuseGraceWindow=10s`：revokedAt 在窗口内返回 401（不 revoke family、不写 reuse 审计）；窗口外保持原行为。真实库并发用例 `TestServiceRefreshAccessTokenPostgres_ConcurrentRotationHasSingleWinner` 断言：恰好 1 个 winner、active refresh token 保留、无 reuse 审计，并额外验证 winner 的新 refresh token 可继续轮换成功。"
+    close_condition: "已满足：并发败者不再连带撤销 winner 新签发 token；回归用例覆盖 200 客户端继续轮换；旧复用仍整族撤销。"
+    code_reference: internal/app/tokens/refresh_token.go + internal/app/tokens/refresh_concurrency_pg_test.go
+    closed: true
+
+  - id: OPEN-API-48
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：remember_me_families/remember_me_tokens/trusted_devices 的过期行接入 session-cleanup 分批物理删除，容量不再随登录次数无限累积；读取判定语义不变（family/token 活性与 FindActiveByCredential 仍按 expires_at 过滤）。"
+    gap: "无运行期缺口（MySQL 仅 trusted_devices 有镜像仓储；remember-me 为 PG 仓储，MySQL 运行期仍受 OPEN-API-37 约束，方言裁决已记录）。"
+    current_disposition: "实现：`internal/domain/rememberme` 与 `internal/domain/trusteddevices` 新增可选 `ExpiredCleaner`；PG `DeleteExpired`（rememberme 先 token 后 family，family 级联；trusted 单批）与 MySQL trusted `DeleteExpired`（派生表规避同表子查询限制）；`app/auth/cleanup_expired.go` 在 `tenantctx.System` 事务内调用；`wire_session_cleanup.go` 每小时按 1000×10 批次清理并输出删除行数；`lifecycle.yaml` 的 cleanup_cron 改为真实任务 `session-cleanup`。仓储单测覆盖参数/行数/零 limit 跳过。"
+    close_condition: "已满足：①三张表分批物理清理并接入维护调度；②lifecycle.yaml cleanup_cron 为真实任务名；③PG/MySQL（trusted）仓储用例覆盖，零 limit 幂等跳过；④既有 remember-me 重用检测与信任设备判定用例全量通过。"
+    code_reference: internal/app/auth/cleanup_expired.go + internal/infra/postgres/rememberme/repository.go + internal/infra/postgres/trusteddevices/repository.go + internal/infra/mysql/trusteddevices/repository.go + internal/bootstrap/wire_session_cleanup.go + contracts/registries/lifecycle.yaml
+    closed: true
+
+  - id: OPEN-API-49
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：device_credential_id 的声明层注释改为 SHA-256 摘要（64 位小写 hex）并重生成四方言 DDL；存量明文行在启动期一次性显式撤销（回退 MFA 并重新注册），不再依赖自然不命中；客户端 ≥128 bit CSPRNG 生成规范写入认证设计契约。"
+    gap: "无运行期缺口。OpenAPI 登录请求未暴露该字段（无描述可同步），已在条目中说明。"
+    current_disposition: "① `contracts/schema/40_session.yaml` 注释更新，四方言 DDL 重生成后零差异；② PG/MySQL 仓储新增 `RevokeLegacyPlaintext`（PG `!~ '^[0-9a-f]{64}$'` / MySQL `NOT REGEXP`），`app/auth` 在 `tenantctx.System` 事务内调用，`wire_session_cleanup` 启动时一次性执行并记录撤销行数，服务端既有 `ValidateCredentialDigest` 硬校验保持；③ `docs/design/auth/login.md` 增加「凭据存储」「客户端生成（≥128 bit CSPRNG）」契约条目；仓储单测覆盖摘要谓词与行数。"
+    close_condition: "已满足：①声明层注释与四方言 DDL 一致；②存量明文行显式撤销（幂等、可观测）；③客户端生成规范进入认证设计契约，服务端下限与摘要有既有测试；OpenAPI 无该字段描述需同步。"
+    code_reference: contracts/schema/40_session.yaml + internal/domain/trusteddevices/repository.go + internal/infra/postgres/trusteddevices/repository.go + internal/infra/mysql/trusteddevices/repository.go + internal/app/auth/cleanup_expired.go + internal/bootstrap/wire_session_cleanup.go
+    closed: true
+
+  - id: OPEN-API-50
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环（开发期直接移除）：登录请求体 `trustedDeviceCredentialId` 字段与回退分支已删除，Cookie 成为唯一来源；冲突审计与相关用例一并清理，不存在两源并存/凭据进入请求体日志面的暴露期。"
+    gap: "无运行期缺口。"
+    current_disposition: "开发期无存量客户端（无生产/过渡承诺），按「开发期无过渡」直接删除：`LoginRequest.TrustedDeviceCredentialID`、`toCommand` body 分支、`LoginCommand.TrustedDeviceCredentialSource/Conflict`、`persistTrustedDeviceCredentialConflict` 与冲突审计结构；Cookie-only 由 `TrustedDeviceCredentialFromRequest` 提供。OpenAPI/前端本就未暴露该字段（grep 零命中），无需类型迁移。测试改为 Cookie-only + 无 Cookie 两例。"
+    close_condition: "已满足（开发期口径）：①无存量客户端，迁移证据不适用；②请求体字段与回退分支删除；③冲突审计/用例清理，Cookie-only 用例覆盖。"
+    code_reference: internal/transport/http/api/v1/auth/request_shared.go + internal/app/auth/service.go + internal/app/auth/login_flow.go
+    closed: true
+
+  - id: OPEN-API-51
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已关闭：控制台登录缺省 applicationId 时解析组织配置默认应用并绑定到会话；HTTP L4 用例断言会话 applicationId 与解析来源日志。"
+    gap: "无：实现与 HTTP L4 证据均落地。"
+    current_disposition: "resolveApplicationReferenceWithSource 顺序 explicit_uuid → explicit_slug → organization_default_application → legacy_app_slug；控制台登录（无 applicationId/responseType）与 WebAuthn 登录均补齐默认应用，记录 default application resolved 日志；HTTP 用例 TestV1AuthLoginResolvesOrganizationDefaultApplicationRoute 断言会话绑定组织默认应用。"
+    close_condition: "已满足：HTTP L4（控制台登录无 applicationId 时会话绑定配置默认应用，来源可追溯）。"
+    code_reference: internal/app/auth/application_reference.go + internal/app/auth/login_context.go + internal/bootstrap/api_test.go + internal/app/auth/webauthn_authenticate.go
+    closed: true
+
+  - id: OPEN-API-52
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环：部署文档把一次性回填列为已有库升级必跑步骤并提供 SELECT 判据；真实库用例证明 is_bootstrap=false 的存量行经回填后恰好 1 行 true，且生产启动自检随后通过。"
+    gap: "无运行期缺口。"
+    current_disposition: "docs/operations/deployment.md §已有库升级前置 已列命令与复核 SQL；scripts/dev/backfill-platform-admin-scope-bootstrap.sql 仅按 built-in admin + all-scope + approved_by IS NULL 业务键回填；真实库 `TestBackfillBootstrapScopePostgres`（隔离库）PASS：模拟 legacy false → 执行回填 → count=1 → verifyBootstrapAdminAllScope(production=true) 返回 nil。启动自检仍持续校验。"
+    close_condition: "已满足：部署/升级流程列为必跑步骤，保留执行后 SELECT 复核证据，生产启动自检持续通过。"
+    code_reference: docs/operations/deployment.md + scripts/dev/backfill-platform-admin-scope-bootstrap.sql + internal/bootstrap/bootstrap_admin_scope_check.go + internal/bootstrap/bootstrap_scope_backfill_pg_test.go
+    closed: true
+
+  - id: OPEN-API-53
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：MySQL 组织列表投影已 LEFT JOIN organization_settings 并装配 defaultApplicationId；真实 MySQL 8.4 + 生成 DDL 用例验证有设置返回 ID、无设置返回空，与 PostgreSQL 投影一致。"
+    gap: "无运行期缺口。"
+    current_disposition: "MySQL `organizationAggregateSelect` 已含 settings JOIN 与 default_application_id 列，`scanAggregateRow`/`loadAggregate` 已装配；新增真实库用例 `TestListDefaultApplicationIDMySQL`（MYSQL_DSN 门控，隔离 MySQL 8.4，159 表生成 DDL）PASS。过程中修复 MySQL DDL 外键名超 64 字符导致 schema 无法重放的问题（generator 确定性截断+哈希后缀，四方言重生成、迁移/零差异/parity 门禁通过）。"
+    close_condition: "已满足：有设置返回 ID、无设置返回空；真实 MySQL 8.4 + 生成 DDL 用例通过；投影与 PG 一致。"
+    code_reference: internal/infra/mysql/organizations/sql.go + internal/infra/mysql/organizations/repository.go + internal/infra/mysql/organizations/list_integration_test.go + scripts/gen_schema.py
+    closed: true
+
+  - id: OPEN-API-54
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环（方案②：到期前告警 + 运维续期）：启动自检在 bootstrap all-scope 到期前 30 天输出 WARN（scope_id/expires_at/剩余小时/续期脚本）；提供幂等续期脚本并在隔离库验证到期→续期→延长的闭环。约束仍然限制 expires_at <= created_at + 1y，超期无法靠脚本无限续期，需按 runbook 决策（重置 created_at/结构变更），已写入运行手册。"
+    gap: "无运行期缺口；到期前有告警，续期有脚本和真实库证据。"
+    current_disposition: "`expiringBootstrapScope` + verify 内 WARN；`scripts/dev/renew-platform-admin-scope-bootstrap.sql`（业务键 built-in admin + approved_by IS NULL + 7 天内到期、受 ck_pas_expires_within_year 约束封顶）；`docs/operations/runbook.md §13` 记录操作步骤；单测覆盖近/远期 scope，真实库 `TestRenewBootstrapScopeScriptPostgres` PASS。"
+    close_condition: "已满足：②到期前告警 + 可执行续期脚本；到期原因分类与续期用例均归档；runbook 记录约束边界。"
+    code_reference: internal/bootstrap/bootstrap_admin_scope_check.go + scripts/dev/renew-platform-admin-scope-bootstrap.sql + docs/operations/runbook.md + internal/bootstrap/bootstrap_scope_renewal_pg_test.go
+    closed: true
+
+  - id: OPEN-API-55
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：停用平台管理员在同一事务内吊销全部既有会话，提交后立即失效 principalType 缓存（不再有 60s 滞后）；恢复即时生效且不会复活旧会话，需重新登录。"
+    gap: "无运行期缺口；平台管理员启停当前无 HTTP 管理路由（L4 以真实库服务链路验证）。"
+    current_disposition: "实现：`SetActive(false)` 取 userID → 事务内 `RevokeByUserExcept` → 提交后 `PrincipalCache.Invalidate`；`cachedDBResolver.Invalidate` 新增；bootstrap 注入。证据：单测 `TestSetActiveDeactivateRevokesSessionsAndInvalidatesCache`、`TestCachedDBResolverInvalidateDropsCachedClassification`；真实库（隔离库 `giam_l4_r14`）`GIAM_TEST_PG_DSN=... go test -run TestSetActiveDeactivationPostgres ./internal/app/platform_admins/` → PASS（停用后 2 条会话全部 revoked、缓存失效记录、恢复后会话仍 revoked 不被复活）。"
+    close_condition: "已满足：①停用即时吊销会话；②缓存立即失效；③恢复不复活旧会话；④单测 + 真实库集成证据归档（无 HTTP 路由，L4 以服务链路替代）。"
+    code_reference: internal/app/platform_admins/service.go + internal/platform/scopeauthorizer/principal_resolver.go + internal/app/platform_admins/service_set_active_pg_test.go
+    closed: true
+
+  - id: OPEN-API-56
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环：WebAuthn 自服务注册绑定可信会话（会话用户==body username、challenge.UserID==会话用户，403），自服务凭据列表/停用只作用于会话本人；真实库用例证明普通用户只能看/删自己的凭据，跨组织 403、他人凭据 404 且不被修改。"
+    gap: "无运行期缺口。③ 裁决：自服务端点保持 session-required + 应用层对象归属校验，不接入全局 Casbin resource（避免 viewer 删除本人 passkey 被判 auth:delete 拒绝，也不授予全局 delete）。"
+    current_disposition: "①②已落地：注册 begin/finish 两条入口（auth handler + webauthn chi）注入会话身份；`registrationUserForCommand` 强制会话用户==body username/组织；finish 要求 challenge.UserID==会话用户；新增 `GET/DELETE /api/v1/auth/webauthn/credentials`（`internal/app/auth/webauthn_credentials.go`，DELETE=revoked 留痕）。真实库证据（2026-11-08，隔离库 `giam_l4_r14`）：`GIAM_TEST_PG_DSN=... go test -run TestWebAuthnCredentialsOwnershipPostgres ./internal/app/auth/` → PASS（本人列表仅 1 条、跨组织 403、他人凭据 404 且保持 active、本人停用变 revoked）；跨用户 begin/finish 403 由单测覆盖。"
+    close_condition: "已满足：①可信会话身份绑定；②自服务列表/停用端点；③Casbin 接入裁决明确（保持应用层归属校验）；④真实库 L4（凭据归属）+ 单测（跨用户 begin/finish 403）。"
+    code_reference: internal/app/auth/webauthn_credentials.go + internal/app/auth/webauthn_register.go + internal/transport/http/api/v1/webauthn/chi.go + internal/app/auth/webauthn_credentials_pg_test.go
+    closed: true
+
+  - id: OPEN-API-72
+    status: closed
+    surface: API
+    severity: high
+    impact: "复核结论：授权主链路不存在该缺口。全局 `APIAuthorizationMiddleware` 已把 HTTP 方法归一化为 CRUD 候选（`casbinActionCandidates`：GET/HEAD→read，POST/PUT/PATCH→write，DELETE→delete，并同时尝试 verb 别名），资源从路径推导（`resourceFromPath`），显式权限点覆盖用 `splitDeclaredPermission`。种子策略的 resource+CRUD 词表因此可命中普通角色；此前只审查了未被生产路由使用的 `RequirePermission` 单条路径，误判为全局失效。"
+    gap: "无运行期缺陷；仅 `RequirePermission`（当前无生产调用点）未复用归一化逻辑，作为一致性修复补齐。"
+    current_disposition: "已核实并关闭：主链路归一化证据见 `internal/transport/http/api/v1/auth/auth_rbac_models.go`（`casbinActionCandidates`/`resourceFromPath`/`splitDeclaredPermission`）与 `auth_middleware.go` Gate 5；`RequirePermission` 补 `@casbinObjectAndAction` 归一化并新增单测 `TestCasbinObjectAndAction`，避免将来启用该 helper 时重复缺陷。"
+    close_condition: "已满足：确认主链路归一化存在且单测覆盖（`TestCasbinObjectAndAction`、`TestRequirePermission_PrivilegedSessionUsesPrivilegedPDP`），无需修改 seed/路由/公开错误语义。"
+    code_reference: internal/transport/http/api/v1/auth/auth_middleware.go + internal/transport/http/api/v1/auth/auth_rbac_models.go
+    closed: true
+
+  - id: OPEN-API-57
+    status: open
+    surface: API
+    severity: high
+    impact: "迁移政策已切换为 ADR-022 声明式 Schema + 生成增量迁移（V1 冻结、V2+ 只增不改，当前结构链 V18），旧「开发期 V1 就地改写/删库重建」政策下的运行期列缺失风险已消除。残留缺口为发布前置：正式首版基线快照归档与生产回滚演练签署尚未完成，完成前生产发布被 readiness 门禁阻断。"
+    gap: "历史 gap（V1 允许就地改写导致账本与文件失配、存量库缺列）已随 ADR-022 落地关闭：结构唯一事实源 contracts/schema/*.yaml，DDL/迁移/回滚均为生成物，check-migrations.sh / check-schema-parity.py / check-generated-zero-diff.sh 门禁承载。现存 gap：① 正式首版基线（初始库快照）归档；② 生产回滚演练记录与签署。"
+    current_disposition: "自动化前置已落地并持续生效：scripts/release/check_release_readiness.py 生成/校验 deploy/release/v1-checksums.sha256（四方言 V1 + schema_sql 镜像 + active V1 快照目录摘要）并扫描部署清单 ALLOW_CHECKSUM_DRIFT；internal/platform/db/migrate.go 在 APP_ENV=production 且 ALLOW_CHECKSUM_DRIFT 为真时 fail-fast；scripts/release/rehearse_v1_restore.py 已在隔离 _drill 库完成 dump→重建→restore→表数比对演练。开发期删库重建仅限隔离审计库（ALLOW_SCHEMA_RESET=1），操作步骤与边界见 docs/operations/runbook.md §12；服务启动默认不重放不导入（-migrate/-seed 显式开关）。仍需人工完成：正式首版基线快照归档与生产回滚演练签署。"
+    close_condition: "正式上线批次完成：V1 checksum 已冻结并有比对证据；生产部署清单经审计无 ALLOW_CHECKSUM_DRIFT；首版基线快照与一次完整回滚演练记录归档签署。增量迁移纪律（V2+ 只增、配对回滚、零差异门禁）已由 ADR-022 流程承载，不待本项关闭。"
+    code_reference: docs/operations/runbook.md + internal/platform/db/migrate.go + scripts/release/check_release_readiness.py + deploy/release/v1-checksums.sha256 + contracts/schema/history/active/V1
+    closed: false
+
+  - id: OPEN-API-58
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环：opaque 冒充 token 经会话中间件进入 protected 链；访问非豁免路由时 PasswordGate 识别 impersonation 并写 auth.password_change.gate_bypass 审计/放行，不再 401 截断。"
+    gap: "无运行期缺口。"
+    current_disposition: "`ResolveImpersonationSession` 校验 imp/metadata/expiry/revoked/scope/用户组织；`SessionContextMiddleware` 在 Cookie 与 JWT 失败后回退 opaque，构造 Source=impersonation 会话；PasswordGate 用同一 Service 解析 impersonation 并 recordImpersonationBypass。证据：应用层解析用例、中间件接受/拒绝、gomock 真实 Service 仓储链路，以及 `TestPasswordGate_ImpersonationBypassHTTP`（GET /api/v1/users：next 被调用、未 401、bypass 记录 subject/impersonator/path）。"
+    close_condition: "已满足：真实中间件链路（会话中间件 + PasswordGate + 非豁免路由）命中 gate_bypass 并放行；跨用户/过期/撤销等拒绝路径有单测。"
+    code_reference: internal/app/auth/impersonation_session.go + internal/transport/http/api/v1/auth/middleware.go + internal/transport/http/api/v1/auth/impersonation_gate_l4_test.go
+    closed: true
+
+  - id: OPEN-API-59
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：租户自定义属性定义可管理（list/create/update/delete，权限 users:read/write），UpdateUserProfile 按定义强制校验类型/必填/选项/可写/启用并拒绝未登记键；错误 422 携带字段/键元数据，前端沿用既有本地化错误展示（本项未新增控制台 UI/新文案）。"
+    gap: "无运行期缺口。"
+    current_disposition: "定义表 + PG 仓储（RLS/乐观锁）+ users 管理用例 + transport 4 端点（OpenAPI 710 ops）+ profile 校验接线；真实库 `TestCustomAttributesPostgres` PASS（CRUD/revision/未登记键 422/已声明键放行）。"
+    close_condition: "已满足：①声明式表与 OpenAPI 契约；②服务端按定义校验并拒绝未登记键；③端点权限与生成物门禁通过；④真实库用例归档。前端无新增 UI/文案。"
+    code_reference: contracts/schema/20_identity.yaml + internal/domain/customattributes + internal/app/users/custom_attributes.go + internal/transport/http/api/v1/users/chi_custom_attributes.go + internal/infra/postgres/customattributes
+    closed: true
+
+  - id: OPEN-API-60
+    status: open
+    surface: API
+    severity: high
+    impact: "client_secret_jwt 无法实现：HS256 验签需要原始 secret，但凭据只存 argon2id 哈希，且本仓库没有可用的 DB 托管密钥设施（见 OPEN-API-39：encryption_keys 无写入方、无服务层、无密钥解析，运行期字段加密走环境变量）。"
+    gap: "encryption_keys 仅有只读元数据仓储（internal/infra/postgres/crypto/repository.go 的 ListActiveForOrg/ListForDecrypt/GetByVersion），返回 KeyMaterialRef/KeyFingerprint 而非密钥材料；无服务层、无写入方、无种子行，无法完成信封加密/解密往返。因此不能把原始 client secret 以信封加密方式落库。"
+    current_disposition: "定稿（B2）按拍板结论降级：client_secret_jwt 不实现、不写入 token_endpoint_auth_methods_supported、不在前端认证方式下拉出现；DCR /register 传该值返回 400 invalid_client_metadata（不回显内部原因），控制台创建返回 422 unsupported；app_client_secrets 只存 argon2id 哈希，不保留 ciphertext 空壳列，也不依赖 encryption_keys。禁止另建一套密钥管理，禁止假实现。"
+    close_condition: "①encryption_keys 具备密钥材料解析服务与写入方（BYOK/HYOK 管理面或运维入口），且有真实加解密往返测试；②client_secret_jwt 使用该设施完成信封加密存储与 HS256 验签（secret ≥32 字节），失败一律 401 invalid_client；③发现文档声明该方式并同步 OpenAPI/注册表/前端 14 语言。"
+    code_reference: internal/app/applications/validation.go
+    closed: false
+
+
+  - id: OPEN-API-61
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：DCR 与控制台 Create/PATCH 均接收并存储 jwks_uri；验签在内嵌 JWKS 未命中时经 SSRF-safe fetcher 拉取远端 JWKS（https-only、5s、64KiB、5min 缓存、失败 fail-closed）；OpenAPI/前端契约/设计文档同步。"
+    gap: "无运行期缺口。"
+    current_disposition: "边表 `app_client_jwks_uris` + PG 仓储 + DCR/控制台写入；`internal/infra/jwksuri.Fetcher` 与 `Service.ClientJWKSFetcher` 接入断言验签；形状校验（HTTPS/长度/无 userinfo/fragment）。测试：DCR/控制台 create 存 URI、http 拒绝、fetcher 成功/缓存/失败/超大、app 远程验签成功与失败拒绝。"
+    close_condition: "已满足：①注册与存储；②受控拉取与验签回退；③控制台/DCR/OpenAPI/文档/前端契约同步；④单测与 httptest 通过。"
+    code_reference: contracts/schema/20_identity.yaml + internal/infra/jwksuri/fetcher.go + internal/app/auth/client_assertion.go + internal/app/applications/dcr.go + internal/app/applications/create_application.go + internal/app/applications/update_application.go
+    closed: true
+
+  - id: OPEN-API-62
+    status: closed
+    surface: API
+    severity: high
+    impact: "tls_client_auth / self_signed_tls_client_auth 首期只支持进程内 TLS 客户端证书（r.TLS），不信任任何转发头。"
+    gap: "在 TLS 终止于反向代理的部署中，进程内没有客户端证书链，mTLS 无法认证；未实现代理模式。"
+    current_disposition: "已实现显式 opt-in 的可信代理模式（internal/platform/mtls/forwarded.go）：仅当 MTLS_PROXY_CLIENT_CERT_HEADER 非空且直连 peer ∈ TRUSTED_PROXY_CIDRS 时读取该头，支持 XFCC 最后一个元素与裸 URL 编码 PEM；畸形/超限 fail-closed 且不回退代理自身 TLS 证书；启动期 validateMTLSProxyConfig 强制头名合法且必须配置 CIDR；三条客户端认证入口与 ThumbprintFromRequest 共用同一解析，app 层链校验与指纹匹配不变。残余运维义务：代理必须自行校验客户端证书并覆盖（不得追加）该头；tls_client_auth 仍需要 TLS_CLIENT_CA_FILE（代理模式下可单独设置）。"
+    close_condition: "①代理侧完成客户端证书校验并把证书链以受信方式传递（例如 mTLS 直通或应用内校验）；②应用只在明确配置的可信代理模式下读取该信息，并覆盖伪造头拒绝用例；③同步发现文档/注册表/前端。"
+    code_reference: internal/platform/mtls/forwarded.go
+    closed: true
+
+  - id: OPEN-API-63
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环：token endpoint 实现 RFC 6749 §6 refresh_token grant——客户端先认证（secret / private_key_jwt / mTLS，公开客户端 none），校验应用的 refresh_token grant 与令牌归属，再原子轮换 access/refresh（旧 refresh 撤销、family 重用检测沿用 app/tokens）。"
+    gap: "无运行期缺口。"
+    current_disposition: "新增 `ExchangeRefreshTokenCommand` + `Service.ExchangeRefreshToken`（`internal/app/auth/refresh_token_grant.go`），认证复用 `authenticateProtocolClient`；轮换经 `RefreshTokenExchanger` 端口委托 app/tokens（`RefreshAccessTokenCommand.ApplicationID` 强制令牌归属该 client）；传输层 `/tokens/exchange` 按 grant_type=refresh_token 分派并解码 assertion/mTLS；失败映射 invalid_grant(400)，客户端认证失败 401 invalid_client。grant-types 注册表将 refresh_token 恢复为 console/dcr/discovery 三面开放并重生成；docs/design/protocol/oauth2.md discovery 列表同步。证据：app/tokens ApplicationID 归属用例、app/auth 客户端认证/授权用例、传输层解码用例、真实库 `TestExchangeRefreshTokenPostgres`（隔离库 giam_l4_r14）PASS（轮换成功且旧 refresh 撤销）。"
+    close_condition: "已满足：①token endpoint 声明并实现 refresh_token（含认证材料）；②复用六种客户端认证（mTLS 链/指纹 fail-closed）且校验令牌归属；③认证失败 401 invalid_client；④OpenAPI/discovery/前端选项同步，真实库轮换证据归档。"
+    code_reference: internal/app/auth/refresh_token_grant.go + internal/app/tokens/refresh_token.go + internal/transport/http/api/v1/auth/chi_protocol.go + internal/bootstrap/auth_refresh_exchanger.go + contracts/registries/grant-types.yaml
+    closed: true
+
+  - id: OPEN-API-64
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：RFC 7009 撤销与 RFC 7662 内省复用 token endpoint 的客户端认证裁决——支持 client_secret_basic/post、private_key_jwt、tls_client_auth/self_signed_tls_client_auth（mTLS）；认证失败统一 401 invalid_client 且与未知客户端同文案。"
+    gap: "无运行期缺口。"
+    current_disposition: "抽取 `clientAuthMaterial` + `authenticateProtocolClient`（与 authorization_code/client_credentials 同一 shape/secret/assertion/mTLS 判定）；`RevokeToken` 与 `IntrospectTokenRFC` 在 system 事务内解析应用并复用之；传输层 revoke/introspect form 解码补 client_assertion/type、PeerCertificates 与绝对 URL，并派生 ClientAuthMethod。测试：assertion 接受/拒绝、mTLS 有/无证书、未知客户端 401；bootstrap 端到端同步。文档 `docs/design/protocol/oauth2.md` 的客户端认证适用面更新。"
+    close_condition: "已满足：①命令携带认证材料并复用统一裁决；②失败统一 401 且不可区分；③assertion/mTLS 用例覆盖；④设计文档同步（OpenAPI 端点未变）。"
+    code_reference: internal/app/auth/token_exchange.go + internal/app/auth/token_revocation.go + internal/app/auth/token_introspection_rfc.go + internal/transport/http/api/v1/auth/request_oauth2.go
+    closed: true
+
+  - id: OPEN-API-65
+    status: closed
+    surface: API
+    severity: low
+    impact: "已闭环：撤销端点客户端认证失败（缺凭据/未知 client/错密钥）统一返回 401 invalid_client，且三种失败消息逐字一致；令牌是否存在/有效仍返回 200。"
+    gap: "无运行期缺口。"
+    current_disposition: "已闭环：`internal/app/auth/token_revocation.go` 客户端解析/密钥校验失败改为 `NewInvalidClientError`（ProtocolCode=invalid_client，HTTP 401），不再静默 200；单测 `TestRevokeToken_EmptyClientID`、`TestRevokeToken_ClientNotFound` 断言协议码与状态，成功路径（公开客户端仅 client_id）保持 200。"
+    close_condition: "已满足：撤销端点两类客户端认证失败统一 401 invalid_client 且不引入枚举 oracle（消息一致），与 `docs/design/protocol/oauth2.md` §14.1 的安全原则一致。"
+    code_reference: internal/app/auth/token_revocation.go
+    closed: true
+
+  - id: OPEN-API-66
+    status: closed
+    surface: API
+    severity: high
+    impact: "导入第三方写路径绕过 mTLS/JWKS 材料闭环：导出 DTO 按设计不含 `jwks` 与 `clientCertificates`，但 `ImportApplication` 直接接受导出里的 `tokenEndpointAuthMethod` 并落库。导出 `private_key_jwt`、`tls_client_auth` 或 `self_signed_tls_client_auth` 的应用再导入后，application 行存在但 `app_client_jwks` / `app_client_certificates` 无 active 行，token endpoint 一律 401，形成「可导入、不可认证」的客户端。2026-11-07 已闭环 create 与 PATCH 两条写路径（create 缺证书 422；PATCH 切入 mTLS 必须内联证书或已有 AuthMethod 匹配的 active 证书），导入是第三条写路径，尚未对齐。"
+    gap: "internal/app/applications/export_import.go 的 ApplicationExportDTO 无 JWKS/证书字段；ImportApplication 只调用 validatePublicClientGrantCombination 后直接 Applications().Create，不校验 mTLS 证书存在、也不写 app_client_jwks；导入页无材料补录入口。"
+    current_disposition: "2026-11-07 人工裁决注销（实现已落地）：normalizeImportTokenEndpointAuthMethod 对 private_key_jwt、tls_client_auth、self_signed_tls_client_auth 返回 422（field=tokenEndpointAuthMethod，expected=client_material_via_console），对闭集外方法（如 client_secret_jwt）返回 422 并带 allowed 清单；前端列表页与详情页在发请求前预检并提示先导入再在控制台登记材料。导出格式未变（ExportVersion 仍为 1.0），本方案以拒绝替代扩字段，故关闭条件②在本方案下不适用。secret 类方法导入不生成 secret 的问题另行登记为 OPEN-API-69。"
+    close_condition: "①导入 private_key_jwt/mTLS 时要么要求同一请求携带材料并同事务写入，要么以可识别的 422/409 字段错误拒绝；②导出格式版本升级（ExportVersion）与向后兼容策略明确；③前端导入流程对需补录材料的应用给出可见引导；④单测覆盖三种 method 的导入路径与无材料拒绝。"
+    code_reference: internal/app/applications/export_import.go + internal/app/applications/validation.go + internal/app/applications/import_auth_method_test.go + web/src/pages/applications/useApplicationsPageController.tsx + web/src/pages/applications/useApplicationDetailPageController.ts
+    closed: true
+
+  - id: OPEN-API-67
+    status: closed
+    surface: API
+    severity: high
+    impact: "DCR 可注册出永远无法认证的 mTLS 客户端：allowedTokenEndpointAuthMethods 取领域闭集（含 tls_client_auth / self_signed_tls_client_auth），但 RFC 7591 请求没有客户端证书字段，注册与 update 都不会写 app_client_certificates，token endpoint 的 mTLS 分支因无证书行直接 401。控制台 create/PATCH 已要求证书，DCR 协议面未对齐。"
+    gap: "internal/app/applications/dcr.go 仅对 private_key_jwt 校验内嵌 jwks；对两种 mTLS 方法既不拒绝也不登记证书；UpdateDynamicClient 切换到 mTLS 时同样不检查既有 active 证书。"
+    current_disposition: "2026-11-07 人工裁决注销（实现已落地）：register/update 显式选择 mTLS 一律返回 400 invalid_client_metadata 并引导走控制台；update 省略 token_endpoint_auth_method、沿用当前 mTLS 方法时，要求存在 AuthMethod 匹配的 active 证书。DCR 路径不承载证书绑定是显式架构边界：mTLS 证书材料只经控制台登记，DCR 仅承载非证书元数据。同批补齐两处相邻缺口：register 选择 private_key_jwt 但未内嵌 jwks 时返回 400（update 原有检查）；update 切到 client_secret_basic/client_secret_post 时，若客户端既无可用 app_client_secrets 行也无 legacy hash，返回 400。传输层 RegisterClientRequest/UpdateClientRequest 解析 jwks 与 jwks_uri 并转发服务层；jwks_uri 按 invalid_client_metadata 显式拒绝——内嵌 JWKS 是唯一能保证“注册即可用”的形态，启用 jwks_uri 需 HTTPS、公网 host、拉取失败降级等前置校验，不在本批范围。OpenAPI UpdateOAuthClientRequest 同步声明 token_endpoint_auth_method 与 jwks。"
+    close_condition: "①DCR register/update 对 mTLS 方法要么拒绝（400 invalid_client_metadata，并引导走控制台登记证书），要么定义并实现受控证书登记路径并在同一事务写入；②失败信息不泄露内部原因；③发现文档/OpenAPI/注册表同步；④单测覆盖 register 与 update 两条路径，含切换方法与已有证书场景。"
+    code_reference: internal/app/applications/dcr.go + internal/app/applications/dcr_test.go + internal/app/applications/dcr_auth_test.go + internal/transport/http/api/v1/dcr/handler.go + internal/transport/http/api/v1/dcr/handler_decode_test.go
+    closed: true
+
+  - id: OPEN-API-68
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已闭环：授权类型取值域由 `contracts/registries/grant-types.yaml` 单一驱动——控制台选择器、API 保存闭集、DCR 注册闭集、OIDC discovery 同源生成；不再暴露保存后不可兑换的 password/implicit/id_token/token，refresh_token 待 OPEN-API-63 实现后再开放。"
+    gap: "无运行期缺口；refresh_token 兑换仍由 OPEN-API-63 跟踪。"
+    current_disposition: "新增注册表 + `scripts/gen_grant_types.py` 生成 Go/TS：Console = {authorization_code, client_credentials, device_code URN, token-exchange URN, jwt-bearer URN}；DCR = {authorization_code, client_credentials, device_code URN}；discovery = {authorization_code, device_code, token-exchange, jwt-bearer}（client_credentials 按既有 OIDC 主体语义不宣告）。生成物已接入 `check-generated-zero-diff.sh`（`--check` 零差异）；前端 `grantTypeOptions` 改为生成常量映射；相关单测/端到端用例同步。"
+    close_condition: "已满足：①三处取值域单一事实源并生成；②只暴露可兑换 grant；③一致性门禁（生成零差异）+ 回归用例（应用创建/PATCH/DCR/discovery/前端）通过。"
+    code_reference: contracts/registries/grant-types.yaml + scripts/gen_grant_types.py + internal/app/applications/grant_types_gen.go + internal/app/auth/oidc_grant_types_gen.go + web/src/pages/applications/tabs/grant-types.generated.ts
+    closed: true
+
+  - id: OPEN-API-69
+    status: closed
+    surface: API
+    severity: high
+    impact: "已闭环：导入不接收/不流转 secret；secret 仅由控制台创建/轮换或 DCR 响应一次性返回；前端 14 语言提示已就绪；legacy 空 method 行导出为有效认证方式，不再静默降级为 public client；ExportVersion 显式化并保留 1.0 兼容。"
+    gap: "无运行期缺口。"
+    current_disposition: "已闭环：`ExportVersion=1.1`（导出 `EffectiveTokenEndpointAuthMethod`，legacy 空 method 行导出 `client_secret_basic`）；导入接受 `1.0`/空版本（向后兼容）并拒绝未知版本（422 + supported 列表）；导入 secret 类客户端不读取文件 secret，前端 `application.importSecretNotIncluded` 提示（14 语言）引导控制台轮换；单测覆盖 legacy 导出、unknown/legacy 版本导入与既有 basic/post 导入行为。"
+    close_condition: "已满足：①导入不接收 secret；②前端提示 14 语言；③单测覆盖 client_secret_basic/post 与 legacy 空方法；④ExportVersion 1.1 + 1.0 向后兼容策略明确。"
+    code_reference: internal/app/applications/export_import.go + internal/app/applications/validation.go + web/src/pages/applications
+    closed: true
+
+  - id: OPEN-API-70
+    status: open
+    surface: API
+    severity: medium
+    impact: "Anthropic 原生 Messages 路径未声明：Claude SDK / Claude Code 默认调用 POST /v1/messages；当前 anthropic 协议面声明的是 /api/v1/ai/faces/anthropic/chat/completions（另有 embeddings、models），原生客户端需自定义 base URL 或经网关路径映射才能命中，否则 404。"
+    gap: "原生 /messages 路由与 Messages 请求/响应映射已实现（入站 body 自动识别、出站 Messages 原生格式），并已同步 OpenAPI/AC/设计；剩余为真实 Anthropic SDK 直连（默认 base URL）的外部 E2E 证据（需外部 SDK 与可用上游通道）。"
+    current_disposition: "已实现 POST /api/v1/ai/faces/anthropic/messages（复用 Anthropic face handler，原生 Messages 语义），路由/权限点/OpenAPI/AC/设计同步；handler 契约测试覆盖原生 system + content blocks 请求与 Messages 原生响应。剩余真实 SDK E2E 待外部环境。"
+    close_condition: "①真实 Anthropic SDK 直连（默认 base URL POST /v1/messages）在可用上游通道下返回 Messages 响应；②E2E 证据归档（请求/响应与 usage 核对）。"
+    code_reference: internal/transport/http/api/v1/aigateway/routes.go
+    closed: false
+
+  - id: OPEN-API-71
+    status: open
+    surface: API
+    severity: high
+    impact: "Charge 端点已接入运行期（POST /api/v1/payments/{id}/charge）；剩余风险为真实渠道 E2E 未验证（沙箱凭证缺失）与 charge 成功/失败路径尚无 records/outbox 审计。"
+    gap: "行期接线与 charge 审计（records/outbox 同事务）已完成；剩余：AC-PAY-001 真实渠道 E2E（沙箱凭证）与错误码路径（503/400）的渠道实测。"
+    current_disposition: "已实现 POST /api/v1/payments/{id}/charge（routes.go + chi + bootstrap 装配 + channelConfigResolver）+ 边界测试（draft → 422），并在 `ChargeOrchestrator.persistChargeOutcome` 内同事务更新 payment 与写 records/outbox（成功/失败两条路径单测断言）。剩余真实渠道 E2E。"
+    close_condition: "①AC-PAY-001 真实渠道 E2E（沙箱凭证）返回 channel_order_no；②渠道不可用/配置非法等错误码路径实测一致（503/400）。"
+    code_reference: internal/app/payments/refund.go
+    closed: false
+
+
+  - id: OPEN-DESIGN-01
+    status: closed
+    surface: DESIGN
+    severity: high
+    impact: "已闭环：ReBAC 求值前校验命名空间/relation/subject 类型（400 invalid_argument），真实 PostgreSQL 上验证 check 正确性、Zookie 写后读一致性、对象共享撤销与审计留痕。"
+    gap: "无运行期缺口。"
+    current_disposition: "docs/design/rebac/README.md 已落地；AC-REBAC-001/002 可推演；端点口径收敛至 /api/v1/rebac/namespaces/{namespaceId}/tuples；真实库用例 `TestRebacCheckZookieRevocationPostgres`：stale Zookie 看不到新元组、latest/write Zookie 放行、删除后拒绝、records 含 rebac.tuple.created/deleted、未登记 namespace/relation/subjectType 均 400；修复 PG CreateTuple 参数错位（9 vs 8）。"
+    close_condition: "已满足：设计落地 + AC 四段 + 求值校验 + 真实库运行期证据。"
+    code_reference: docs/design/rebac/README.md + internal/app/rebac/rebac_runtime_pg_test.go + internal/transport/http/api/v1/rebac/handler.go + internal/infra/postgres/rebac/repository.go
+    closed: true
+
+  - id: OPEN-DESIGN-02
+    status: closed
+    surface: DESIGN
+    severity: high
+    impact: "已闭环：IGA 回收 Worker 在真实 PostgreSQL 上扫描到期 access_lifecycle、回收 JIT 产物、置 expired 并写 iga.jit.expired 审计；幂等/失败重试由 worker 用例覆盖（重复扫描无重复副作用、失败记录+下轮重试）。SoD 规则与临时绑定的状态由声明式 Schema 承载（access_lifecycle status check + sod_rules 唯一约束）。"
+    gap: "无运行期缺口。"
+    current_disposition: "docs/design/iga/README.md 已落地；AC-IGA-001/002 可推演；真实库用例 `TestExpireWorkerRuntimePostgres`（隔离库，真实 UOW）PASS：创建到期 lifecycle → Worker.Run → status=expired → records 含 iga.jit.expired；worker_test 覆盖重复扫描/失败重试/租约内事务。"
+    close_condition: "已满足：设计落地 + AC 四段 + 回收 Worker 幂等/失败重试与真实库运行期证据。"
+    code_reference: docs/design/iga/README.md + internal/app/iga/worker_runtime_pg_test.go + internal/app/iga/worker_test.go + internal/app/iga/worker.go
+    closed: true
+
+  - id: OPEN-DESIGN-03
+    status: closed
+    surface: DESIGN
+    severity: high
+    impact: "已闭环：风险决策/复核/申诉在真实 PostgreSQL 上落盘，records 审计链随决策+复核+申诉连续写入，VerifyAuditIntegrity 返回 valid=true 且 totalCount>=3。"
+    gap: "无运行期缺口。"
+    current_disposition: "docs/design/risk/README.md 已落地；AC-RISK-001..003 可推演；新增真实库用例 `TestRiskDecisionAppealAuditPostgres`（隔离库）：真实 agw 调用 EvaluateAndRecordLoginRisk 写入决策 → ReviewDecision 强化为 deny → SubmitAppeal → ResolveAppeal accepted（不绕过执法）→ 审计链完整性校验通过。"
+    close_condition: "已满足：设计落地 + AC 可推演 + 决策/申诉运行期证据 + 审计链校验归档。"
+    code_reference: docs/design/risk/README.md + internal/app/risk/risk_runtime_pg_test.go + internal/app/risk/service.go
+    closed: true
+
+  - id: OPEN-DESIGN-04
+    status: closed
+    surface: DESIGN
+    severity: high
+    gap: "已关闭：组织树 parent_id、三模式策略继承解析/预览、祖先 lock 403 与深度/扇出裁决均已落地并验证。"
+    current_disposition: "root→target 确定性解析（inherit/override/lock）；预览端点 GET /organizations/{id}/policy-inheritance/preview 覆盖 security policy 8 个 key + theme/accountItems/mfaItems/languages/featureFlags；安全策略/settings/theme 写入口对祖先 lock 返回 403；PG 集成用例构造 root lock→child 覆盖并通过。深度裁决：固定 MaxOrganizationTreeDepth=8，不按组织配置；扇出不设硬上限，由分页/DB 兜底。"
+    close_condition: "已满足：三模式解析可预览且与实际写入口一致；祖先 lock 403；AC-B2B-001 运行期证据；深度/扇出裁决已记录。"
+    code_reference: internal/domain/organizations/policy_inheritance.go + internal/app/organizations/policy_inheritance.go + internal/transport/http/api/v1/organizations + internal/app/organizations/policy_inheritance_pg_test.go
+    closed: true
+
+  - id: OPEN-DESIGN-05
+    status: closed
+    surface: DESIGN
+    severity: medium
+    impact: "已闭环：WLI 端点口径收敛到实际 OpenAPI（身份池 + Service Account 子资源），需求旅程与设计说明不再描述不存在的 /api/v1/workload-identities。"
+    gap: "无。"
+    current_disposition: "docs/design/workload/README.md 已落地；需求旅程改为 POST /api/v1/identity-pools 与 POST /api/v1/identity-pools/{poolId}/service-accounts；OpenAPI 710 ops 一致；路由/权限用例 identitypools/chi_test.go PASS；AC-WLI 四段在设计文档可推演。"
+    close_condition: "已满足：设计落地 + AC 四段 + E2E 端点与 OpenAPI 一致。"
+    code_reference: docs/design/workload/README.md + docs/requirements/functional.md + internal/transport/http/api/v1/identitypools/chi_test.go
+    closed: true
+
+  - id: OPEN-DESIGN-06
+    status: closed
+    surface: DESIGN
+    severity: medium
+    impact: "已闭环：EXT 端点口径收敛到实际 OpenAPI /api/v1/actions；需求旅程与设计说明不再描述不存在的 /api/v1/identity-actions。"
+    gap: "无。"
+    current_disposition: "docs/design/actions/README.md 已落地；需求旅程改为 POST /api/v1/actions（name/triggerType/code）并注明沙箱/白名单为设计目标；OpenAPI 710 ops 一致；路由/权限用例 actions/chi_test.go PASS；AC-EXT-001/002 在设计文档可推演。"
+    close_condition: "已满足：设计落地 + AC 四段 + E2E 端点与 OpenAPI 一致。"
+    code_reference: docs/design/actions/README.md + docs/requirements/functional.md + internal/transport/http/api/v1/actions/chi_test.go
+    closed: true
+
+  - id: OPEN-DESIGN-07
+    status: closed
+    surface: DESIGN
+    severity: high
+    gap: "已关闭：DSAR 导出/擦除裁决端点与 AC-PRIV-001 真实库用例均已落地；导出主体聚合为 users/user_profiles/consent_records，擦除复核输出 Erase/Retain 清单并对法律留存阻断返回 409。"
+    current_disposition: "导出端点 GET /api/v1/privacy/exports/{id}（JSON Lines + checksum + 导出审计同事务）；擦除复核端点 POST /api/v1/privacy/dsar/{id}/erase-review（privacy:erase，privacy.erasure.reviewed 审计）；AC-PRIV-001 六类请求在隔离库通过（SLA、状态机、事件与 records 审计）。实际跨表删除执行仍按运营流程单独实施，不属于本项关闭条件。"
+    close_condition: "已满足：①AC-PRIV-001 集成用例在隔离库通过；②导出证据包端点实现；③擦除双轨裁决实现。"
+    code_reference: internal/app/privacy/dsar_service.go + internal/transport/http/api/v1/privacy + internal/infra/postgres/privacy/export.go + internal/bootstrap/privacy_ac_integration_test.go
+    closed: true
+# ── 引用与校验纪律 ────────────────────────────────────────────────────────
+
+
+  - id: OPEN-API-73
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已关闭：AI Gateway completion 在真实 MySQL 上通过（成功与失败两条路径），usage 事实落入 MySQL llm_usage_logs。"
+    gap: "无。"
+    current_disposition: "TestGatewayService_Chat_MySQLUsage 在真实 MySQL 8.4 + 生成 DDL 上执行 GatewayService.Chat（stub upstream、MySQL usage repo、provider/model/alias 夹具）：成功路径断言 llm_usage_logs 落库，失败路径断言 error 返回且 usage 状态 failed。"
+    close_condition: "已满足：AI Gateway completion 请求在真实 MySQL + 生成 DDL 上通过（stub 上游），并覆盖失败路径。"
+    code_reference: internal/app/aigateway/gateway_mysql_integration_test.go + internal/infra/mysql/aigateway
+    closed: true
+
+  - id: OPEN-API-74
+    status: closed
+    surface: API
+    severity: medium
+    impact: "已关闭：SSF 投递在 MySQL 上可用。receiver 注册表使用 MySQL 实现，outbox 的 SSF handler 按 driver 注入 MySQL receiver 仓储；真实 MySQL + httptest receiver 的端到端投递用例通过。"
+    gap: "无。"
+    current_disposition: "wireOutboxDeps 在 driver=mysql 时注册 ssfoutbound.NewHandler(mysqlssf.NewReceiverRepository(mysqlDB), ...)；TestHandlerDeliversThroughMySQLReceiverRegistry 在真实 MySQL 8.4 + 生成 DDL 上验证签名事件实际 POST 到 receiver。"
+    close_condition: "已满足：SSF 投递在 MySQL 上可用（receiver 仓储 + outbox handler）并有集成用例。"
+    code_reference: internal/infra/mysql/ssf + internal/outbound/ssf/handler_mysql_integration_test.go + internal/bootstrap/wire_outbox.go
+    closed: true
+
+  - id: OPEN-API-75
+    status: open
+    surface: API
+    severity: medium
+    impact: "提供商适配器官方手册校准已按十批次全量收敛（P1 SMS、P2 Email、P3 Captcha、P4 OAuth/IdP、P5 实人认证/IDV、P6 通知、P7 Storage、P8 Payment、P9 协议与认证形态、P10 日志/审计/Webhook/Syncer；2026-11-13/14，见 CHANGELOG），各批附 httptest 契约单测；残留为 GeeTest v4 与百度安全验证的真实厂商端到端联调证据（L4 边界，需商业/企业账号，见 gap ④ 与 close_condition ⑥），其余校准残留均已收敛或正式裁定。"
+    gap: "④GeeTest v4 契约两端已校准（后端 gcaptcha4.geetest.com/validate form-urlencoded + lot_number/captcha_output/pass_token/gen_time/HMAC-SHA256 sign_token，前端 CaptchaWidget 透传 v4 四元组，契约单测在案），真实厂商端到端联调证据（L4）待补；⑤未验证提供商：emay/mailtrap-sms/oson 公开手册不可得；数美（Shumei）智能验证码公开开发文档不可得（官网仅产品页与销售通道，无公开服务端校验契约），正式裁定不落地（2026-11-13）。增量提供商裁定（P4，2026-11-14）：Kakao/Naver/PayPal/Zoom/Yandex/Dropbox 以 goth 目录覆盖（kind=goth + provider_type 路由，不新增 dedicated kind，authorize 端点契约测试在案；已知偏差：goth PayPal 适配器仍指向 legacy webapps 端点而非文档 signin/authorize，测试钉住库现状并以厂商域治理）；HubSpot 定位为 CRM 数据集成而非身份登录场景、网易/搜狐/京东/360/小红书无公开 OAuth 登录开发者文档或需商户入驻协议，正式裁定延后不落地（2026-11-14）。增量 IDV 裁定（P5，2026-11-14）：onfido/veriff/persona 已按公开 REST 文档落地（V11 扩展 ck_providers_kind identity 闭集，httptest 契约钉住认证头与签名链）；iProov 现行公开文档为 OAuth 令牌 + /claim/*/token 重构流程，claim/status 服务端契约无法从公开页面复核（JS 渲染/404），正式裁定不落地待文档可得；百度人脸核身、旷视 Face++、商汤、云从需企业开通/签约后才可获取服务端文档，同数美先例裁定不落地（2026-11-14）。增量 Storage 裁定（P7，2026-11-14）：cloudflare_r2/backblaze_b2/digitalocean_spaces 已按公开 S3 兼容文档落地 wrapper（V13 扩展 identity 闭集，httptest 契约钉 path-style 请求形状/SigV4 scope/端点推导）；tencent_cos/qiniu/huawei_obs 属 B2 批已落地，本批补 S3 兼容层与原生签名差异登记注释；存量五家（aws_s3/azure_blob/google_gcs/minio/aliyun_oss）逐字段官方复核，唯一真实偏差为 MinIO 未强制 path-style（已修复）；Azure SAS、OSS 原生 V4、COS 原生 v5 签名、AWS STS 临时凭据裁定为凭据模型后续形态不落地（2026-11-14）。增量 Payment 裁定（P8，2026-11-14）：square/checkout 已按公开 REST 文档落地（V14 扩展 payment 闭集，httptest 契约钉认证头/幂等键/webhook HMAC 向量）；银联（open.unionpay.com）与京东支付（open.jd.com）服务端文档需商户入驻/签约后可见，公开不可得，同数美先例裁定不落地；PayPal/Adyen/Airwallex 支付形态 kind 与网关已存在（P4 登记的 goth PayPal 为登录形态，支付形态独立），本批复核注释；alipay/wechat_pay/stripe 校准修复：异步通知验签剔除 URL 编码偏差（opendocs.alipay.com/common/02mse3，官方向量测试钉契约）、stripe 全局 API key 跨租户竞态改 per-gateway client 并补 Idempotency-Key（docs.stripe.com/api/idempotent_requests）、微信/Stripe 元→分 float 截断改 math.Round；微信平台证书自动轮换（WithWechatPayAutoAuthCipher）与支付宝证书模式裁定为 L4 运维前置不落地（2026-11-14）。增量协议/认证形态裁定（P9，2026-11-14）：FreeIPA/389DS 复用 ldap kind（domain ldaps Type 已声明 FreeIPA，LDAPS 636 连接形态与 OpenLDAP 无实质差异，docs.freeipa.org 与 directory.fedoraproject.org 均支持 LDAPS 636；StartTLS 389 裁定为后续形态）；wechat_scan/dingtalk_scan 维持 B5 pending（kind_routes 无厂商消费者）；Web3 personal_sign 登录官方已弃用（transport 返回 410 Gone 并指向 passkey 替代，idp/web3.go fail-closed stub），EIP-191/712 正式裁定不落地（2026-11-14）。增量日志/审计/Webhook/Syncer 裁定（P10，2026-11-14）：clickhouse/kafka/mongodb 代码零实现（grep 无消费者），裁定不落地；elasticsearch/loki 维持 B6 pending（kind_routes 无消费者）；redis 为基础设施组件（会话缓存/限流/SAML replay store）而非 provider 形态，不登记 kind。Captcha 增量提供商裁定（P3 补充，2026-11-14）：netease_yidun（易盾 v2 verify：c.dun.163.com/api/v2/verify，表单 captchaId/validate/secretId/version=v2/timestamp/nonce/signature，signature=MD5(按 key 升序拼接 key+value+secretKey) 32 位小写）与 recaptcha_enterprise（assessments REST：projects/{pid}/assessments?key={apiKey}，JSON event{token,siteKey,expectedAction,userIp}，score+tokenProperties.valid 判定）已按公开官方文档/SDK 契约落地，httptest 契约单测钉住签名链与请求形状；百度安全验证（baidu_captcha）服务端校验页（help.baidu.com）为 JS 渲染 SPA 公开不可抓取，按官方参数词汇表的公开镜像实现（check 表单 app_id/app_name/user_ip/user_token/user_response/session_id/device_id/signature，signature=MD5(user_token+user_ip+private_key)），真实厂商端到端联调证据登记为 L4 边界（同 GeeTest 先例，待企业账号补证）。三家均经 captcha_providers 专用子系统（provider_type 无统一 kind 闭集变更），运行期校验消费 UI 行凭据（VerifyCaptchaWithRow，空凭据回退 env 工厂）。"
+    current_disposition: "五家族按官方手册校准：签名类（TC3-HMAC-SHA256、ACS3、BCE v1、Volc V4、WSSE、VAPID、GeeTest/钉钉/飞书加签）在测试内独立复算算法比对；凭据泄露缺陷修复两处（wecom_internal agentid 参数、huawei X-WSSE 明文 secret）；错误语义统一（传输/API 错误→Unavailable，验证失败→false,nil）。P3（2026-11-13）：gap ① 已收敛——captcha.NewProvider 便捷映射对 aliyun_captcha 修正为 siteKey→AccessKeyID/secretKey→AccessKeySecret（internal/infra/captcha/factory.go，单测 TestNewProvider_AliyunCaptcha_MapsAccessKeyPair）；gap ③ 已收敛——alipay ClientSecret 语义标注为 RSA2 应用私钥 PEM（internal/infra/idp/alipay.go 注释 + Provider Center OAuthProviderFields 表单提示，后端本已按 PEM 解析）；新增 tencent_captcha（DescribeCaptchaResult 2019-07-22 TC3-HMAC-SHA256，V10 迁移扩展 ck_providers_kind，契约单测独立复算签名链）。P4（2026-11-14）：gap ② 已收敛——wecom_internal AgentID 全链契约补齐（app DTO/mapper/update/unified_native + transport Create/Patch request + 控制台 provider-extended/useProviderDetail/DynamicProviderFields/OAuthProviderFields 表单，create/patch/detail 往返单测在案），存量行可经控制台补填后扫码；存量 IdP 按官方文档逐项校准注释（reddit/steam/telegram/infoflow/wecom_internal/wecom_third_party/lark/apple/dingtalk/wechat/bilibili）；增量提供商裁定落地为 goth 目录契约测试（TestGothCatalog_P4IncrementalProviders）。证据：internal/infra/{messaging,captcha,notification,idp} 契约测试全绿。P5（2026-11-14）：实人认证/IDV+faceid 家族校准与增量落地——faceid/aliyun_verifier.go 修正 Action/参数名与官方 Face Body 文档一致（CompareFace/DetectLivingFace，URL-only 输入），删除 faceid 包内无任何调用点且签名无效的旧 AliyunProvider 死代码；idv/{jumio,aliyun_idv,tencent_idv}.go 复核注释补齐（无偏差）；新增 onfido/veriff/persona 三家 verifier+Factory 路由+回调引用提取+resolver 凭据映射+V11 迁移+provider-kinds 登记+前端 IDVerification 选项，契约测试 internal/infra/idv/p5_kinds_test.go。P7（2026-11-14）：Storage 家族存量校准（s3/azure/gcs/minio/oss/cos/huawei 类型注释登记官方端点与签名形态）+ MinIO path-style 修复（newS3Storage pathStyle 选项）+ 新增 cloudflare_r2/backblaze_b2/digitalocean_spaces S3 兼容 wrapper（V13 迁移+provider-kinds 登记+前端 Storage 选项），契约测试 internal/infra/storage/p7_s3compatible_contract_test.go。P8（2026-11-14）：alipay 异步通知验签修复（buildAlipaySignData 去除 URL 编码，官方向量 TestNotify_AlipaySignDataOfficialVector）+ stripe 重写为 per-gateway v82 新式 client（消除全局 stripe.Key 竞态、Idempotency-Key、math.Round 分转换）+ wechat_pay math.Round 修复 + 新增 square/checkout 网关（V14 迁移+paymentKinds+渠道目录+前端 Payment 选项），契约测试 internal/infra/payment/p8_gateways_contract_test.go；逐批审查确认并修复退款幂等键 major 缺陷——stripe/square/checkout 原以订单+金额合成幂等键致等额部分退款被渠道重放吞掉，新增 KeyedRefunder 接口经 ChannelAdapter 转发业务退款单号 outRefundNo（同根因存量一并修复：wechat_pay 订单号复用为 out_refund_no、alipay 缺 out_request_no），钉测 TestStripeRefundIdempotencyKeyUsesOutRefundNo 等 5 用例。P9（2026-11-14）：协议/认证形态家族存量校准——修复真实偏差：internal/infra/ldap/client.go conn.SetTimeout 实参 30*1000（go-ldap 收 time.Duration，30000ns=30µs 而非注释宣称 30s），改为 ldapOperationTimeout=30*time.Second 常量并钉测 TestOperationTimeoutPinned；TestShouldUseTLS 钉端口集（636 LDAPS/3269 AD GC SSL 走 TLS，389/3268 明文）；校准注释补齐：RFC 4519 属性映射 + AD userAccountControl UF_ACCOUNTDISABLE=0x2、SAML 2.0 Core §3.4.1/§2.5.1 + Web Profile §4.1.4.2 + Security Considerations §4.1.1（replay store 原子 Reserve + Redis 共享，无偏差）、OIDC Core §3.1.3.7 + Discovery §4.3（无偏差）、RFC 6238 §4.1/§5.2/§5.4（±1 窗口 + lastUsed 防重放，无偏差）；qrcode 扫码会话与 mfa_push 复核无偏差（OPEN-API-15 防冒充链已有测试钉住）。无新增 kind、无结构迁移。契约测试 internal/infra/ldap/client_test.go。P10（2026-11-14）：日志/审计/Webhook/Syncer 家族存量校准——修复真实偏差两处：①internal/domain/webhooks/delivery.go 端口注释宣称 X-Guliangiam-Signature: t=<ms>,v1=<hex> 与实现契约不符（实现 internal/infra/webhook/http_sender.go 为 GuliangIAM-Signature/GuliangIAM-Timestamp 双头、t=Unix 秒、HMAC-SHA256 over <t>.<body>，http_sender_test.go 已钉向量），注释对齐实现不改行为；②internal/infra/audit/syslog.go TCP/TLS 一律 LF 结尾帧，违反 RFC 5425 §3.1.1 TLS 强制 octet counting（<MSGLEN> SP MSG），修复为 TLS 走 octet-counting、明文 TCP 按 RFC 6587 §3.2 保留 LF、UDP 不变（RFC 5426），钉测 TestFrameMessage + TestSyslogSink_SendsTCP（本地 listener 断言帧形状）；syslog kind 消费者链复核无偏差（bootstrap/outbox_syslog.go outbox audit observer，routable 正确）；syncer 三家（dingtalk/lark/wecom）端点与现行官方路径一致复核无偏差，补引用注释（2026-11-23 G7-d2 更正：Lark 令牌端点复核结论随官方文档更新——legacy auth/v3/tenant_access_token/internal 已被官方标记历史版本，升级为 accounts.feishu.cn/oauth/v3/token OAuth2 client_credentials 新优先（form-urlencoded client_secret_post、双响应形态解析、expires_in 不硬编码）+ legacy 回退多版本兼容，业务错误不回退、显式 tokenUrl 覆盖保持 legacy JSON 契约，httptest 契约单测 internal/infra/syncer/lark_syncer_token_test.go 钉请求形状/回退边界；DingTalk 同批增强（G7-d3）：legacy oapi gettoken 官方仍维护（无偏差），新版 api.dingtalk.com/v1.0/oauth2/accessToken（POST JSON appKey/appSecret → accessToken/expireIn）优先 + legacy 回退，HTTP 400 带错误码为业务拒绝不回退、显式 apiUrl 覆盖保持 legacy query 契约，契约单测 internal/infra/syncer/dingtalk_syncer_token_test.go；wecom 复核结论不变）。无新增 kind、无结构迁移。契约测试 internal/infra/audit/syslog_test.go。P3 补充（2026-11-14）：Captcha 类别并入统一提供商表单（前端选中 Captcha 分流提交 POST /api/v1/captcha-providers，422 委托契约不变）；新增 netease_yidun/baidu_captcha/recaptcha_enterprise 三适配器（internal/infra/captcha/{netease_yidun,baidu_captcha,recaptcha_enterprise}_provider.go，httptest 契约测试 new_vendors_contract_test.go 钉签名链/请求形状/复合 token 解码/score 阈值判定）；运行期校验改为优先消费 UI 行凭据（Factory.VerifyCaptchaWithRow + provider_from_row.go 按类型装配 config 扩展键：sceneId/camSecretId/camSecretKey/secretId/projectId/scoreThreshold/action/appName，空凭据回退 env 工厂）；config 凭据读接口脱敏（redactConfig）+ PATCH 掩码回显/留空=保持原值（mergeConfig）；env 注册表新增 11 个厂商变量（contracts/registries/env.yaml + runtime_captcha.go）。"
+    close_condition: "①已满足（2026-11-13 P3：aliyun_captcha 便捷映射重定义并单测覆盖）；②已满足（2026-11-14 P4：AgentID 全链契约 + 往返回归用例，存量行补填经控制台可达）；④未验证提供商逐项裁定已全部完成（P5 IDV、P7 Storage、P8 Payment、P9 协议/认证形态、P10 日志/Webhook/Syncer，2026-11-14，公开文档不可得者按数美先例正式裁定不落地）；唯一残留：③ GeeTest v4 token 真实厂商端到端（前端→verify）联调证据（L4 边界，需 GeeTest 商业账号）；⑥ 百度安全验证真实厂商端到端联调证据（L4 边界，help.baidu.com 服务端校验页公开不可抓取，需企业账号补证，2026-11-14 P3 补充登记）。"
+    code_reference: internal/infra/captcha/factory.go + internal/infra/captcha/tencent_captcha_provider.go + internal/infra/captcha/netease_yidun_provider.go + internal/infra/captcha/baidu_captcha_provider.go + internal/infra/captcha/recaptcha_enterprise_provider.go + internal/infra/captcha/provider_from_row.go + internal/infra/captcha/new_vendors_contract_test.go + internal/app/captchaproviders/mapper.go + internal/infra/idp/alipay.go + internal/infra/idp/wecom_internal.go + internal/infra/idp/goth.go + internal/infra/idp/oauth_catalog_test.go + internal/app/providers/dto.go + internal/transport/http/api/v1/providers/request.go + web/src/shared/ui/ProviderFields/OAuthProviderFields.tsx + internal/infra/messaging/sms_contract_test.go + internal/infra/captcha/captcha_providers_contract_test.go + internal/infra/notification/send_coverage_test.go + internal/infra/idp/provider_contract_test.go + internal/infra/idv/p5_kinds_test.go + internal/infra/storage/p7_s3compatible_contract_test.go + internal/infra/payment/p8_gateways_contract_test.go + internal/transport/http/api/v1/payments/notify_security_test.go + internal/infra/ldap/client_test.go + internal/infra/audit/syslog_test.go + internal/infra/webhook/http_sender_test.go + internal/infra/syncer/lark_syncer_token_test.go + internal/infra/syncer/dingtalk_syncer_token_test.go
+    closed: false
+
+  - id: OPEN-API-76
+    status: open
+    surface: API
+    severity: low
+    impact: "多副本部署且 Redis 不可用（未配置 REDIS_ADDR 或 Ping 失败）时，本地图形验证码（default / go_captcha）答案降级存于各实例进程内存，挑战与校验跨实例不共享：实例 A 生成的 captchaId 由实例 B 校验必然失败（用户表现为验证码重试一次即通过）。"
+    gap: "Redis Store 的 fail-open 降级边界：CAPTCHA_STORE_DRIVER=redis 或配置 REDIS_ADDR 时启用共享 Redis Store（键前缀 captcha: / gc:，TTL 5min），Ping 失败仅告警并回落 MemoryStore，不阻断启动与登录。"
+    current_disposition: "正式接受该边界（2026-11-14）：与 SESSION_CACHE_DRIVER 的 fail-open 先例一致；单实例部署无影响；多实例生产部署应配置可达 Redis 或显式 CAPTCHA_STORE_DRIVER=memory 并接受会话粘性。"
+    close_condition: "部署侧提供可达 Redis（REDIS_ADDR + CAPTCHA_STORE_DRIVER=redis）后降级路径不再触发；或负载均衡保证验证码挑战/校验同实例粘性。"
+    code_reference: internal/infra/captcha/local_store.go + internal/bootstrap/runtime_captcha.go
+    closed: false
+
+  - id: OPEN-API-77
+    status: open
+    surface: API
+    severity: medium
+    impact: "内置风险引擎（builtinRuleEngine）的 is_vpn/is_tor/geo_country/user_home_country 信号键依赖外部 IP 情报/地理库，仓库内无该数据源适配器，这些键无生产者，对应加分规则（vpn_exit_node +30 / tor_exit_node +40 / impossible_travel +20）运行期恒不命中。"
+    gap: "内部事实信号已接线（BE-D-10，2026-11-19）：recent_failures_1h 取自 lockout_attempts 观察窗口（1 小时内）、device_fingerprint_new 取自信任设备凭据命中判定，采集点在 auth.evaluateLoginRisk 跨渠道统一注入。外部情报信号需选定 IP 信誉/GeoIP 提供商（商业账号或服务端契约公开可得）后落地适配器与缓存策略，方可产生 is_vpn/is_tor/geo_country 键；user_home_country 需用户常驻国画像数据源。"
+    current_disposition: "正式登记为外部依赖开放项（2026-11-19）：不在无数据源时伪造信号值；引擎对缺失键按不命中处理，内部信号规则正常生效。选型与落地需产品/采购确认，参照 OPEN-API-75 提供商裁定先例。"
+    close_condition: "选定并落地 IP 情报/GeoIP 适配器（含契约测试与缓存/降级策略），登录链产生 is_vpn/is_tor/geo_country 信号键且引擎规则命中有运行期证据；user_home_country 画像数据源落地或正式裁定不落地。"
+    code_reference: internal/app/risk/service.go + internal/app/auth/risk_signals.go + internal/app/auth/login_flow.go
+    closed: false
+
+  - id: OPEN-API-78
+    status: open
+    surface: API
+    severity: medium
+    impact: "控制面租户注册表仅存在于设计（multi-region.md 设计名 tenant_registrations）；跨区域迁移的乐观锁并发控制与「迁移中」状态仲裁无运行期落点，多区域控制面能力不可用。"
+    gap: "tenant_registrations 表未在 contracts/schema/*.yaml 声明（grep 零命中）；控制面「读-改-写 + WHERE revision = $expected」乐观锁与迁移完成前路由原区域的仲裁逻辑为目标态设计。"
+    current_disposition: "正式登记为目标态开放项（2026-11-21，G4-l 注册表批）：单区域部署不受影响；落地时以 contracts/schema 声明为唯一结构事实源，走 ADR-022 Schema 流。"
+    close_condition: "tenant_registrations 声明落入 contracts/schema 并重生成 DDL/迁移；控制面乐观锁与迁移状态仲裁有运行期实现与测试证据。"
+    code_reference: docs/architecture/multi-region.md + contracts/schema/
+    closed: false
+
+  - id: OPEN-API-79
+    status: open
+    surface: API
+    severity: medium
+    impact: "authorize 端点不下发、不消费 __Host-ars 授权请求 Cookie（internal/ grep 零命中）；授权请求绑定仅依赖 state 参数，目标态 Cookie 绑定加固不可用。"
+    gap: "design/protocol/oauth2.md §14.6.2 定义 __Host-ars（Secure、Path=/、不设 Domain、HttpOnly、SameSite=Lax）为规划态增强；运行期基线（PKCE 强制 + state + redirect_uri 精确匹配）不含该 Cookie。"
+    current_disposition: "正式登记为规划态开放项（2026-11-21，G4-l 注册表批）：Cookie 绑定属增量加固而非基线缺口；运行期基线不变。"
+    close_condition: "authorize 端点按 §14.6.2 下发并消费 __Host-ars（含缺失/不匹配拒绝路径）并有契约测试；设计章节由规划态转基线。"
+    code_reference: docs/design/protocol/oauth2.md + internal/app/auth/authorize.go
+    closed: false
+
+  - id: OPEN-API-80
+    status: open
+    surface: API
+    severity: medium
+    impact: "会话最长存活期现由签发时 expires_at 承载；独立的 absolute_timeout 策略（默认 12h / 控制台 8h 分级）无运行期配置锚点（internal/ 与 contracts/registries/ grep 零命中），产品决策未落地。"
+    gap: "design/auth/webauthn.md（会话节）与 design/iam/organizations.md（session.absolute_timeout 行）描述规划态参数；分级默认值及其与 expires_at/idle_timeout 的关系无裁决落点。"
+    current_disposition: "正式登记为产品决策开放项（2026-11-21，G4-l 注册表批）：落地前不伪造配置锚点；现有 idle_timeout（组织级）与 expires_at 语义不变。"
+    close_condition: "产品裁定完成：absolute_timeout 落入组织策略/lifecycle 注册表与会话读取路径（含测试证据），或正式裁定不落地并同步修订设计章节。"
+    code_reference: docs/design/auth/webauthn.md + docs/design/iam/organizations.md + internal/domain/sessions/
+    closed: false
+
+  - id: OPEN-API-81
+    status: open
+    surface: API
+    severity: low
+    impact: "PAR/JAR/JARM/CIBA/RAR/FAPI 规划态章节无正式开放项跟踪，设计与运行期基线的缺口此前仅靠章节内规划态标注承载。"
+    gap: "design/protocol/oauth2.md 规划态章节（PAR §14.18、JAR §14.19、JARM §14.20、CIBA §14.21、RAR §14.22、FAPI §14.29，章节内均带「规划态章节」标注与复现命令）无运行期实现：无 PAR 端点/request_uri 处理、无 CIBA backchannel/auth_req_id 状态机、discovery 不宣告 fapi_profile_supported。"
+    current_disposition: "正式登记为规划态开放项（2026-11-21，G4-l 注册表批）：运行期 OAuth2/OIDC 基线不受影响；各能力落地须另立批次并附协议一致性测试。"
+    close_condition: "各能力分批落地并附一致性测试后由规划态转基线，或正式裁定不落地并同步修订章节。"
+    code_reference: docs/design/protocol/oauth2.md
+    closed: false
+
+  - id: OPEN-API-82
+    status: open
+    surface: API
+    severity: medium
+    impact: "CAS proxyValidate 不强制代理链深度上限，「最多 5 层」目标态约束未落地，深层代理链不会被拒绝。"
+    gap: "design/auth/saml.md（CAS 代理票据节）声明 5 层上限为目标态约束；internal/app/auth/cas.go 无 depth 解析与限制逻辑（grep 零命中）。"
+    current_disposition: "正式登记为目标态开放项（2026-11-21，G4-l 注册表批）：现行代理票据校验以 cas.go 为准；深度约束需解析 proxyValidate 代理链并补拒绝路径。"
+    close_condition: "代理链深度上限落地 cas.go（含拒绝审计与测试），设计章节由目标态转运行期约束。"
+    code_reference: docs/design/auth/saml.md + internal/app/auth/cas.go
+    closed: false
+
+  - id: OPEN-API-83
+    status: open
+    surface: API
+    severity: low
+    impact: "Agent 调度能力（ping/events/commands/stream/health 代理/专属 metrics）为目标态设计，运行期无对应端点，Agent 进程无法接入。"
+    gap: "design/infrastructure/agent.md 目标态端点（POST /api/v1/agents/{id}/ping|events、GET /api/v1/agents/{id}/commands|stream|health 等）无运行期实现；本条目为该能力族的正式开放项登记。"
+    current_disposition: "正式登记为规划态开放项（2026-11-21，G4-l 注册表批）：落地须另立批次（schema/路由/权限/注册表/OpenAPI 契约登记同批）。"
+    close_condition: "Agent 端点分批落地并附契约测试与契约登记，或正式裁定不落地并同步修订设计。"
+    code_reference: docs/design/infrastructure/agent.md
+    closed: false
+
+  - id: OPEN-API-84
+    status: open
+    surface: API
+    severity: low
+    impact: "/api/v1/system/ready 声明层 Permission=system:read，但实际装配挂在 ops 组（MetricsTokenMiddleware 实例级令牌门禁），权限点不经租户 PEP 强制——声明与装配语义不一致。"
+    gap: "internal/transport/http/api/v1/system/routes.go 声明 system:read（SurfaceManagement）；internal/bootstrap/chi.go 将 RegisterChiRoutes 挂入 ops 组（ops.Use(MetricsTokenMiddleware)），与 /metrics、/readyz 同门禁。"
+    current_disposition: "正式登记为声明/装配分歧开放项（2026-11-21，G4-l 注册表批）：运行期保护不缺位（ops 令牌门禁生效）；需裁决对齐方向——声明改 ops 语义或端点移入 PEP。"
+    close_condition: "裁决落地：routes 声明与 ops 装配语义对齐（surface/permission 口径修订）或端点移入 PEP 强制，附门禁证据。"
+    code_reference: internal/transport/http/api/v1/system/routes.go + internal/bootstrap/chi.go
+    closed: false
+
+  - id: OPEN-API-85
+    status: closed
+    surface: API
+    severity: medium
+    impact: "AUTH-009（P2）要求密码泄露检查（Have I Been Pwned k-匿名协议）；internal/ 无实现，注册/改密/重置路径不拦截已泄露密码。"
+    gap: "密码策略链（validatePasswordAgainstPolicy 及改密/重置路径）无泄露检查分支；无 HIBP range API 适配器与缓存。"
+    current_disposition: "已按「在线 HIBP range API + fail-open + 环境变量开关默认关」裁决落地关闭（2026-11-21，G4-ab，用户裁定批准）：internal/infra/hibp 落地 RangeChecker（SHA-1 大写 hex 仅前 5 位出域，Add-Padding: true，填充行 count=0 不判命中，响应限 2MiB、超时 2s）；range 响应缓存 24h（RedisRangeCache 复用 session-cache Redis，键前缀 guliangiam:breach:range:v1:；无 Redis 回退 LocalRangeCache 容量 4096）。app 层 checkPasswordBreach 接入注册/改密/重置三条路径（策略校验之后、事务之外，避免持连接出域与重置路径重复检查）：命中返回 422，依赖故障 fail-open（Warn 日志 + 审计 payload breachCheck=unverified）。开关 PASSWORD_BREACH_CHECK_ENABLED 默认 false（拼错启动校验失败），PASSWORD_BREACH_CHECK_BASE_URL 可覆盖基地址；env.yaml 与 short-lived-state.yaml（breach_range_cache）同步登记。"
+    close_condition: "泄露检查适配器落地（k-匿名、仅前缀出域）并接入注册/改密/重置路径附测试；或正式裁定不落地并同步修订 AUTH-009。——已满足：internal/infra/hibp/range_checker_test.go（仅前缀出域断言/命中与未命中/填充行不误判/请求头/非 200 报错/缓存命中免二次 HTTP）、cache 测试（Redis TTL 与进程内 TTL/容量）、internal/app/auth/breach_test.go（nil 放行/故障 fail-open+unverified/命中 422/干净放行）。"
+    code_reference: internal/infra/hibp/range_checker.go + internal/app/auth/breach.go + internal/app/auth/password_change.go + internal/app/auth/password_reset_signup.go + internal/bootstrap/wire_auth_security.go + internal/platform/config/env_security.go
+    closed: true
+
+  - id: OPEN-API-86
+    status: closed
+    surface: API
+    severity: medium
+    impact: "DPoP nonce 存储为进程内（NewNonceStore）；多副本部署下实例 A 下发的 nonce 不被实例 B 识别，跨副本 DPoP proof 校验存在功能性边界。jti 去重已经 dpop_replay（PostgreSQL/MySQL）共享，nonce 未共享。"
+    gap: "internal/platform/dpop/nonce.go 为 process-local store；生产装配经 NewDPoPValidatorWithReplayStore 注入 replay store，nonce 仍走默认进程内 store；无 Redis/共享落点。"
+    current_disposition: "已按「nonce Redis 化」裁决落地关闭（2026-11-21，G4-z，用户裁定批准）：platform/dpop 抽出 NonceStore 接口（Generate/Verify 带 ctx），LocalNonceStore 保留为进程内实现；新增 RedisNonceStore（SET NX EX 5m 签发、GETDEL 原子一次性消费，键前缀 guliangiam:dpop:nonce:v1:），Redis 请求级错误 fail-close（Unavailable）。装配复用 session-cache Redis 连接（newDPoPNonceStore，镜像 newSAMLReplayStore 先例）；未配置 Redis 回退进程内并启动 Warn 宣告单实例假设。short-lived-state.yaml 新增 dpop_nonce 条目；deployment.md §3.6 与 oauth2.md §14.27.2 边界注记同步订正。"
+    close_condition: "nonce 存储共享化（Redis/PG）附 fail-close 语义与多副本测试证据；或部署侧保证粘性路由并正式接受边界。——已满足：RedisNonceStore 跨副本共享 + fail-close，miniredis 回归覆盖跨副本互认/一次性消费/TTL 过期/Redis 宕机 Verify 与 Generate 双侧 fail-close（internal/platform/dpop/redis_nonce_test.go）。"
+    code_reference: internal/platform/dpop/nonce.go + internal/platform/dpop/redis_nonce.go + internal/bootstrap/wire_auth_security.go + docs/operations/deployment.md + docs/design/protocol/oauth2.md
+    closed: true
+
+  - id: OPEN-API-87
+    status: closed
+    surface: API
+    severity: medium
+    impact: "SCIM 列表查询不支持排序：ScimListQuery 定义了 SortBy/SortOrder 字段但传输层不解析 sortBy/sortOrder、查询编排不消费，客户端排序请求被静默忽略。count 超上限（>100）被静默归一为 100 而非 RFC 7644 的 scimType=tooMany 400。"
+    gap: "internal/transport/http/api/v1/scim/handler.go parseScimListParams 仅解析 startIndex/count；internal/app/scim 查询编排无 ORDER BY 白名单消费；ListUsers/ListGroups 的 count 归一语义与 scim.md 目标态（tooMany 400、深翻页游标）不一致。"
+    current_disposition: "已按「全部批准落地」裁决实现关闭（2026-11-21，G4-aa，用户裁定批准）：传输层 ListUsers/ListGroups 透传 sortBy/sortOrder；app 层 resolveScimSort（internal/app/scim/sort.go）落地白名单（User 白名单字段 ∪ meta.created/meta.lastModified，默认 id 升序；属性路径大小写不敏感 per RFC 7643）与 sortOrder ascending/descending 解析，白名单外 400 invalidValue；users 双方言 userSortSpec 增补 id，groups 域 ListQuery 增补 SortField/SortOrder、PG/MySQL groupSortSpec 白名单注入 ORDER BY（无参数保留 created_at DESC 历史默认 + id tiebreaker）；count>100 返回 scimType=tooMany 400（apperrors Meta 携带，route.WriteSCIMErrorWithType 透传），count<1 保持归一为上限；discovery sort.supported 恢复 true。深翻页游标不属于本项关闭条件，拆分登记为 OPEN-API-89。"
+    close_condition: "sortBy 白名单（User 白名单字段 ∪ meta.created/meta.lastModified，默认 id）+ sortOrder ascending/descending 解析与查询编排落地附测试，discovery sort.supported 恢复 true；count 超上限返回 scimType=tooMany 400（或正式裁定保留归一语义并修订 scim.md 目标态）。——已满足：internal/app/scim/sort_test.go（路径解析/大小写/默认 id/tooMany/UOW 前置拒绝/排序透传）、internal/infra/postgres/groups/repository_list_test.go 与 internal/infra/mysql/groups/repository_sort_test.go（白名单 ORDER BY 注入与拒绝）、internal/transport/http/api/v1/scim/handler_coverage_test.go（sortBy 到达编排、tooMany/invalidValue 错误体）、discovery_test.go sort=true 断言。"
+    code_reference: internal/app/scim/sort.go + internal/app/scim/service_user.go + internal/app/scim/service_group.go + internal/transport/http/api/v1/scim/handler.go + internal/transport/http/route/oauth_error.go + internal/app/scim/discovery.go + docs/design/protocol/scim.md
+    closed: true
+
+  - id: OPEN-API-88
+    status: closed
+    surface: API
+    severity: medium
+    impact: "data-enrich V2（internal/bootstrap/seed_sql/V2__admin_profile_enrich.sql）向 built-in admin 的 user_profiles 写入演示个人信息（手机号、生日、住址、证件号、姓名等，bio 自称「真实数据」）；文件与 git 历史均保留这些值，已执行 -seed 的库已写入。与 AGENTS.md 不变量 5「不写真实个人信息到仓库」存在张力，数据是否合成未核实。"
+    gap: "已应用 data 迁移受账本校验和不可变约束（internal/platform/db/migrate.go：编辑 fatal、删除 fatal），V2 文件不得修改或删除（含注释）；清洗只能引入新 data 版本，而工程契约当前禁止新增种子/data-enrich 版本（AGENTS.md 不变量 6）。git 历史残留无法由前向迁移消除。"
+    current_disposition: "已按「合成演示数据」裁决关闭（2026-11-21，用户裁定）：V2 写入的个人信息为合成演示数据，不对应真实个人，不构成不变量 5 违例；无需清洗、不引入新 data 版本。git 历史残留随裁决接受（合成数据无清洗必要，历史改写不做）。V2 文件不可变边界保留（账本校验和约束）；生产兜底不变（APP_ENV=production 迁移/播种检测哨兵 fail-fast，internal/bootstrap/migrate.go，演示数据仅进入本地/测试库）。AGENTS.md 不变量 6 例外口径与 §7 已同步裁决结论；新增 data-enrich 版本（V3+）仍禁止，如需引入须另行显式裁决。"
+    close_condition: "裁决数据性质（合成演示 vs 真实个人信息）：若需清洗，经裁决引入新 data 版本覆写/清空相关字段附隔离库重放证据，并同步修订 AGENTS.md 例外口径；若正式接受合成演示边界，修订不变量 5/6 措辞并核实号码不对应真实个人。git 历史残留按裁决处置（改写须显式批准）。——已满足：用户（数据责任人）2026-11-21 裁定为合成演示数据。"
+    code_reference: internal/bootstrap/seed_sql/V2__admin_profile_enrich.sql + internal/bootstrap/migrate.go + internal/platform/db/migrate.go + AGENTS.md
+    closed: true
+
+  - id: OPEN-API-89
+    status: open
+    surface: API
+    severity: low
+    impact: "SCIM 列表深翻页仍走 OFFSET：startIndex 很大（>10000）时 PostgreSQL/MySQL 需扫描并丢弃前置行，延迟随偏移线性增长；scim.md 目标态的游标方案未落地。功能正确性不受影响（排序含 id tiebreaker，页间不重不漏）。"
+    gap: "internal/app/scim/service_user.go / service_group.go 以 Offset=startIndex-1 直传仓储 LIMIT/OFFSET；无游标（keyset）翻页参数与编排。"
+    current_disposition: "自 OPEN-API-87 关闭批（2026-11-21，G4-aa）拆分登记：排序与 count tooMany 已落地，深翻页游标属独立性能优化项，不在 87 关闭条件内；落地需先裁决游标形态（keyset 编码、与 startIndex 语义的兼容口径）。"
+    close_condition: "深翻页游标方案落地（keyset/游标参数 + 编排 + 仓储谓词）附大偏移回归证据，并同步修订 scim.md §分页；或正式裁定接受 OFFSET 边界并修订 scim.md 目标态。"
+    code_reference: internal/app/scim/service_user.go + internal/app/scim/service_group.go + docs/design/protocol/scim.md
+    closed: false
+
+  - id: OPEN-API-90
+    status: open
+    surface: API
+    severity: medium
+    impact: "remember-me 恢复令牌交换（ExchangeRememberMe）当前只做一次性轮换：重用撤销 family、过期/已撤销/跨租户按 401 无效拒绝，交换结果不绑定设备指纹、不降级会话认证等级。令牌被窃后可在任意设备兑换轮换结果；恢复签发的会话与普通口令会话同级，敏感操作无重认证门控。"
+    gap: "remember_me 域无设备指纹字段与校验；sessions.authentication_level 枚举为 password/mfa/fido2（contracts/schema/40_session.yaml），无 recovered 等级；AC-AUTH-010 目标态（同指纹恢复、recovered 降级、跨指纹拒绝并审计）未落地。"
+    current_disposition: "R2 审查台账 A02 核实、2026-11-22 用户裁定 Q4①：先修订 AC-AUTH-010 措辞对齐现状（已随本登记同批完成），指纹绑定与 recovered 等级作为目标态登记开放项。指纹采集形态（客户端指纹来源、隐私边界）与 recovered 等级引入（schema 枚举扩展+敏感操作门控消费）需另行设计裁决后落地。"
+    close_condition: "设备指纹绑定与跨指纹拒绝、authentication_level=recovered 降级（schema 枚举扩展、会话创建接线、敏感操作门控消费）落地并附回归证据，同步修订 AC-AUTH-010 与 webauthn.md remember-me 节；或正式裁定接受现状并修订设计文档目标态描述。"
+    code_reference: internal/app/auth/remember_me.go + contracts/schema/40_session.yaml + docs/acceptance-criteria.md + docs/design/auth/webauthn.md
+    closed: false
+
+  - id: OPEN-API-91
+    status: open
+    surface: API
+    severity: medium
+    impact: "PATCH 端点无法区分「字段缺省=不变」与「显式 null=清除」：PatchUserRequest/PatchGroupRequest 等 DTO 用指针+omitempty，encoding/json 对两种形态同样解出 nil，可空字段无法经 PATCH 清除；不可空字段置 null 也未返 422。规范 4.13.2 明文要求三态语义。"
+    gap: "三态 DTO 改造（json.RawMessage/自定义 UnmarshalJSON/显式 field-mask 任选其一并全站统一）涉及 users/groups 及其余 PATCH 端点的 DTO、app 层 command、校验与 openapi 描述，范围大。"
+    current_disposition: "R2 审查台账 C04 核实、2026-11-22 用户裁定 Q4③登记暂缓：不纳入本轮修复批；同路径的乐观锁前提（缺 revision 428、冲突 412）已先行落地（G6-d，规范 4.10）。"
+    close_condition: "三态 DTO 方案裁决并落地（含 null 语义 openapi 同步、可空字段清除行为、不可空字段 null→422）附回归证据；或正式裁定接受单态语义并修订规范 4.13.2 的适用口径。"
+    code_reference: internal/transport/http/api/v1/users/request.go + internal/transport/http/api/v1/groups/request.go + docs/GuliangIAM-开发规范.md
+    closed: false
+
+  - id: OPEN-API-92
+    status: open
+    surface: API
+    severity: medium
+    impact: "users.user_type 无闭集契约且四方词表分歧：设计 users.md 为 normal/guest/service_account，schema 注释为 human/service_account/bot，种子写 'normal'，控制台为 normal/manager/service（G6-f E03 裁决词表）；organization_settings.user_types 另为租户可配 JSONB。后端仅校验必填/非空白，任意值可写入；设计值 guest/service_account 无控制台创建路径，列表 userType 筛选的正确性依赖词表偶然一致。"
+    gap: "internal/app/users/validation.go 对 userType 只做必填/非空白校验（空白 422 已随 G6-k C12 落地），无闭集；contracts/schema/20_identity.yaml user_type VARCHAR(255) 无 CHECK；state-machines.yaml 只有 users_status 无 user_type 状态机；设计/schema 注释/种子/控制台四方词表与租户可配 user_types 的语义无统一裁决。"
+    current_disposition: "R2 审查台账 C12 核实、G6-k（2026-11-22）登记暂缓：控制台词表已按 G6-f E03 用户裁决对齐 normal/manager/service；后端闭集与 E03 词表同族，涉及四方词表与租户可配 user_types 语义的契约裁决，须另行批次，不纳入 G7-e 前端批。"
+    close_condition: "user_type 权威值集裁决并落地（schema CHECK 或 app 层闭集 + 设计/schema 注释/种子/控制台四方词表对齐 + 租户 user_types 语义裁决）附回归证据；或正式裁定接受开放词表并修订 users.md 目标态描述。"
+    code_reference: internal/app/users/validation.go + contracts/schema/20_identity.yaml + docs/design/iam/users.md + web/src/pages/users/tabs/types.ts
+    closed: false
+
+  - id: OPEN-API-93
+    status: open
+    surface: API
+    severity: medium
+    impact: "Captcha 必需性的裁决面不一致：设计 login.md 规定由 application.signin_items 的 Captcha 项控制，前端登录按应用 Captcha provider rule（getCaptchaRule，Never 不渲染挑战）、注册按组织 captcha-status.required 渲染；后端登录/注册却无条件调用组织级 EnforceCaptcha，组织存在启用提供商行即 fail-close。组织启用提供商而应用未绑定 Captcha signin item 时，前端不渲染挑战、后端拒绝提交，密码登录/注册被 400 captcha is required 阻断且无 UI 出路。"
+    gap: "internal/app/auth/login_flow.go 与 password_reset_signup.go 的 EnforceCaptcha 调用不感知应用 signin_items/provider rule；docs/design/auth/login.md 的 signin_items 控制口径未在后端登录/注册链路落地；登录与注册前端裁决面也不一致（应用 rule vs 组织 captcha-status）。种子占位行已随 G7-f 禁用消除播种态阻断，但语义分歧仍在。"
+    current_disposition: "G7-f（2026-11-23）登记：种子 built-in-captcha 占位行改为 is_enabled=false 并幂等修正现存库（重放/启动场景门禁通过），恢复播种态可登录；组织级 fail-close 与应用级 signin_items 的权威裁决面属认证契约设计裁决，不单方面改动，待用户裁定。"
+    close_condition: "裁定 Captcha 必需性权威裁决面（应用 signin_items/provider rule 或组织级启用行）并统一登录/注册前后端实现与设计文档，附『组织启用提供商 + 应用未绑定 Captcha』组合的回归证据；或正式裁定接受双层语义并修订 login.md 口径。"
+    code_reference: internal/app/auth/login_flow.go + internal/app/auth/password_reset_signup.go + docs/design/auth/login.md + web/src/shared/hooks/useCaptchaFlow.ts + web/src/pages/auth/useSignupPageController.ts
+    closed: false
+
+  - id: OPEN-API-94
+    status: open
+    surface: API
+    severity: medium
+    impact: "高风险跨租户写操作的审批票（operation_ticket）只有判定与存储层，无产品内申请/审批通路：ScopeAuthorizer Gate-8 对跨租户 RiskHigh 写（如平台管理员删除其他组织的应用）无已批准票即 403『cross-tenant high operation requires an approved ticket』，而 cross_tenant_operations 表与仓储虽就绪，却无 app 用例、HTTP 路由与控制台界面创建/审批/消费票据——设计 permissions.md 场景 4 的 NeedApproval 分支在产品内不可达，被拒操作无任何 UI 出路（隔离栈 stage2 实测：同租户删除通过、跨租户删除 403 属设计内安全行为，但审批闭环缺失）。"
+    gap: "internal/infra/postgres/cross_tenant_operations/（repository.go/sql.go，含 ListByScope 查询）与 contracts/schema/60_audit.yaml 表定义、state-machines.yaml 状态闭集 pending/approved/rejected/used/expired 均已就绪；internal/app 无对应服务、internal/transport/http/api/v1 无路由、web/src 无 API/页面；permissions.md §7 票据审批链（approved_by/approved_at/expires_at/used_at）与场景 4 NeedApproval 流程未落地。新增路由与权限点属契约登记红线，须逐次请示。"
+    current_disposition: "G7-g（2026-11-23）登记：Gate-8 拒绝语义经主会话独立核实为设计内行为（allow_if_scoped.go:189），不单方面放宽；审批票的申请/审批/消费端到端 surface（app 服务 + 路由 + 权限点 + 控制台）属新权限面，待用户裁定后另行批次。控制台组织切换为展示上下文（会话组织不变），不改变本缺口。"
+    close_condition: "裁定并落地操作票端到端 surface（创建/审批/拒绝/消费/过期用例 + 路由与权限点注册表同步 + 控制台申请与审批界面 + NeedApproval 拒绝响应携带可操作指引）附『跨租户高风险写：申请→批准→执行→used』回归证据；或正式裁定接受运维侧票据注入（db/运维通道）并修订 permissions.md 场景 4 的产品内可达性口径。"
+    code_reference: internal/platform/scopeauthorizer/allow_if_scoped.go + internal/infra/postgres/cross_tenant_operations/repository.go + contracts/schema/60_audit.yaml + docs/design/iam/permissions.md
+    closed: false
+
+discipline:
+  - "引用形态：代码注释与文档写作 '开放项注册表 OPEN-<面>-<序号>' 或直接写标识"
+  - "禁止未登记标识：任何 OPEN-* 标识必须存在于本表"
+  - "不得用标识代替锚点：标识回答'缺口是什么'，不回指规范条文"
+  - "关闭顺序：先落地实现与测试 → 再改本表状态并回指实现锚点 → 再在同一变更中更新引用点"

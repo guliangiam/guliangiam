@@ -1,0 +1,108 @@
+# ──────────────────────────────────────────────────────────────────────────
+# referential-integrity.yaml — 表间引用完整性裁决（唯一事实源）
+#
+# 定位：声明式 Schema 的「外键 vs 逻辑引用」分类事实。物理外键由
+# contracts/schema/*.yaml 的 fk_constraints 声明并生成 DDL；本文件只登记
+# **不建物理外键**的引用及其理由，以及「目标态应有物理 FK、当前缺失」的待补项。
+#
+# 消费方：
+#   1. scripts/check-fk-coverage.py — UUID *_id 列必须有物理 FK 或本表分类
+#   2. scripts/gen_registry_md.py — 渲染层 docs/generated/referential-integrity-registry.md
+#
+# 分类口径（gate 强制）：
+#   * UUID 类型且以 _id 结尾的列：必须被 fk_constraints 覆盖，或出现在
+#     logical_references（永久逻辑引用）/ pending_physical_fks（目标态物理 FK 待补）。
+#   * TEXT/VARCHAR/BYTEA 等非 UUID 的 _id 列：外部系统标识（如 OAuth client_id、
+#     第三方流水号），不建物理 FK，由应用层在写入前校验；无需逐列登记。
+#   * 非 UUID/非文本类型的 _id 列：属于命名异常（后缀宣称是标识符但语义不是），
+#     由 gate 输出 WARN 并登记开放项，重命名需版本化迁移。
+# ──────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+policy:
+  uuid_identifier: "UUID 类型的 *_id 列必须物理外键（fk_constraints）或在本文件分类"
+  external_identifier: "非 UUID 类型的 *_id 列是外部标识，不建物理 FK；应用层校验存在性/格式"
+  naming_anomaly: "非 UUID/非文本类型的 *_id 列属命名异常，登记开放项后按版本化迁移重命名"
+  on_delete_policy: "物理 FK 必须显式 ON DELETE/ON UPDATE；禁止依赖数据库默认 NO ACTION 的隐式语义"
+
+# ── 永久逻辑引用（架构上不建物理 FK）──────────────────────────────────────
+logical_references:
+  - table: outbox
+    column: aggregate_id
+    kind: polymorphic
+    reason: "多态聚合引用：目标表由 aggregate_type 列决定（跨域事件），单表物理 FK 无法表达；写入前由应用层校验聚合存在性，投递幂等由 event_id 保证"
+  - table: access_lifecycle
+    column: enforcer_id
+    kind: lifecycle
+    reason: "指向 enforcers.id：JIT 授权事实需跨回收保留；创建时由 ValidateAccessTargets 校验，不使用物理级联删除"
+  - table: access_lifecycle
+    column: policy_id
+    kind: lifecycle
+    reason: "指向 casbin_rules.id：策略是可回收工件，生命周期审计事实在策略删除后仍需保留，故不建物理 FK"
+  - table: access_lifecycle
+    column: ticket_id
+    kind: lifecycle
+    reason: "指向 tickets.id：审批与生命周期分属不同聚合，写入前由应用层校验并保留历史引用"
+  - table: authorization_audit_records
+    column: actor_id
+    kind: polymorphic
+    reason: "多态主体引用：actor_type 决定 users/service_accounts/system，单表物理 FK 无法表达"
+  - table: llm_metering_events
+    column: aggregate_id
+    kind: polymorphic
+    reason: "多态聚合引用：目标表由 aggregate_type 决定，投递时由 Outbox 事件上下文保证来源"
+  - table: llm_metering_events
+    column: outbox_id
+    kind: audit_trail
+    reason: "指向 outbox.id：计量审计需独立于 Outbox 清理生命周期长期保留，Save 以事件 ID 幂等写入"
+  - table: pay_recon_items
+    column: local_payment_id
+    kind: audit_trail
+    reason: "指向 payments.id：对账差异是历史证据，支付后续状态变化或删除不应级联修改对账明细"
+  - table: sessions
+    column: lifecycle_id
+    kind: lifecycle
+    reason: "指向 access_lifecycle.id：特权会话回收后仍需保留审批链，运行时由 JIT 查询校验有效性"
+  - table: sessions
+    column: ticket_id
+    kind: lifecycle
+    reason: "指向 tickets.id：会话与审批为不同聚合，提升时由应用层校验 provisioned 请求"
+  - table: tickets
+    column: application_id
+    kind: workflow
+    reason: "指向 applications.id：创建/provision 时由 ValidateAccessTargets 校验，审批历史不做物理级联"
+  - table: tickets
+    column: enforcer_id
+    kind: workflow
+    reason: "指向 enforcers.id：创建/provision 时校验组织内有效 enforcer，历史请求不随引擎配置删除"
+  - table: tickets
+    column: lifecycle_id
+    kind: workflow
+    reason: "指向 access_lifecycle.id：provision 同事务生成并回写，审批历史在授权回收后仍需保留"
+  - table: tickets
+    column: requester_id
+    kind: workflow
+    reason: "指向 users.id：请求人由可信 SessionContext 与 ValidateAccessTargets 校验，不做物理级联"
+  - table: tickets
+    column: role_id
+    kind: workflow
+    reason: "指向 roles.id：目标角色在创建/provision 时校验，审批历史不随角色变更级联"
+  - table: user_role_bindings
+    column: lifecycle_id
+    kind: lifecycle
+    reason: "指向 access_lifecycle.id：JIT binding 由生命周期事务创建/回收，永久绑定与历史绑定共用该表，故使用逻辑引用"
+  - table: dsar_requests
+    column: subject_id
+    kind: polymorphic
+    reason: "多态主体引用：subject_type 决定 users/contact，单表物理 FK 无法表达；写入前校验主体存在且属同租户"
+  - table: consent_records
+    column: subject_id
+    kind: polymorphic
+    reason: "多态主体引用：subject_type 决定 users/contact，单表物理 FK 无法表达；写入前校验主体存在且属同租户"
+
+# ── 待补物理外键（目标态必须有，当前缺失）─────────────────────────────────
+# 空列表 = 无缺口：下列 5 个引用列已通过 squash 后的生成式 V1 基线落物理外键
+# （groups.parent_id / refresh_tokens.family_id / webauthn_challenges.organization_id /
+#   qr_code_sessions.user_id / sites.cert_id）；新增缺口必须重新登记并指向开放项。
+pending_physical_fks: []

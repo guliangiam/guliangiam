@@ -1,0 +1,89 @@
+# 82_support.yaml — Schema Group (3 tables)
+# 工单与表单支撑域（tickets / forms）；文件分组即域边界（OPEN-API-29）。
+# Topology: ordered so every FK target exists first
+
+table_name: guliangiam.tickets
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: 'VARCHAR(255)', nullable: false }
+  - { name: display_name, type: 'VARCHAR(255)', nullable: false, default: "''" }
+  - { name: type, type: 'VARCHAR(100)', nullable: true, default: "''" }
+  - { name: status, type: 'VARCHAR(50)', nullable: false, default: "'open'" }
+  - { name: priority, type: 'VARCHAR(50)', nullable: true, default: "''" }
+  - { name: assignee, type: 'VARCHAR(255)', nullable: true, default: "''" }
+  - { name: creator, type: 'VARCHAR(255)', nullable: true, default: "''" }
+  - { name: description, type: VARCHAR(255), nullable: true, default: "''" }
+  - { name: requester_id, type: UUID, nullable: true }
+  - { name: role_id, type: UUID, nullable: true }
+  - { name: application_id, type: UUID, nullable: true }
+  - { name: enforcer_id, type: UUID, nullable: true }
+  - { name: resource, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: action, type: VARCHAR(64), nullable: false, default: "''" }
+  - { name: starts_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: expires_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: workflow_state, type: VARCHAR(64), nullable: true }
+  - { name: manager_approved_by, type: UUID, nullable: true }
+  - { name: sap_approved_by, type: UUID, nullable: true }
+  - { name: lifecycle_id, type: UUID, nullable: true }
+  - { name: attachment, type: 'VARCHAR(500)', nullable: true, default: "''" }
+  - { name: resolved_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: deleted_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_tickets_org_name, type: unique, columns: [organization_id, name] }
+  - { name: ck_tickets_status, type: check, expr: "status IN ('open', 'pending', 'resolved', 'closed')" }
+indexes:
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.ticket_messages
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: ticket_id, type: UUID, nullable: false }
+  - { name: author_id, type: UUID, nullable: true }
+  - { name: action, type: VARCHAR(64), nullable: false }
+  # TEXT cannot carry a DEFAULT on MySQL/TiDB; every INSERT supplies content,
+  # so the default is dropped rather than narrowing the column to VARCHAR.
+  - { name: content, type: TEXT, nullable: false }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+indexes:
+  - { name: idx_ticket_messages_ticket_created, columns: [ticket_id, created_at] }
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.tickets t WHERE t.id = ticket_id AND t.organization_id = guliangiam.current_organization_id())"
+fk_constraints:
+  - { column: ticket_id, ref_table: guliangiam.tickets, on_delete: CASCADE }
+  - { column: author_id, ref_table: guliangiam.users, on_delete: SET_NULL }
+
+---
+table_name: guliangiam.forms
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: 'VARCHAR(255)', nullable: false }
+  - { name: display_name, type: 'VARCHAR(255)', nullable: false, default: "''" }
+  - { name: description, type: VARCHAR(255), nullable: true, default: "''" }
+  - { name: type, type: 'VARCHAR(100)', nullable: true, default: "''" }
+  - { name: properties, type: VARCHAR(255), nullable: true, default: "''" }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "true" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: deleted_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_forms_org_name, type: unique, columns: [organization_id, name] }
+indexes:
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }

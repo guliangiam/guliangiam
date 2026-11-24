@@ -1,0 +1,163 @@
+# ──────────────────────────────────────────────────────────────────────────
+# limits.yaml — 限流器参数机器可读注册表
+#
+# 唯一事实源：本文件（YAML）+ internal/platform/middleware/ratelimit.go（代码默认值）
+# 渲染层：limit-registry.md（由 gen_registry_md.py 生成，禁手改）
+# 消费方：
+#   1. scripts/gen_ratelimit_constants.py — 生成 Go RateLimiterConfig 常量
+#   2. scripts/check-limit-consistency.sh — ratelimit.go 默认值 ↔ 本文件 零差异
+#   3. scripts/check-openapi-contract.sh — OpenAPI 429 响应体对齐 Retry-After 契约
+#   4. scripts/check-registry-sync.py — env_rate/env_burst 必须同时登记于
+#      env.yaml 且在 Go 代码中有读取点；policy_id 与 IETF 五响应头齐备
+#
+# 纪律：
+#   ① 环境变量名与本文件 env_rate / env_burst 字段对齐
+#   ② 分布式限流暂不预设数字（ADR-019；压测标定后填入）
+#   ③ 策略 id 进入 RateLimit-Policy comment 参数
+#   ④ 本文件的 surface 字段表示「限流挂载面」（all / auth / protocol），与 docs/README 术语表的
+#      API 指标/日志 surface（management / authentication / protocol）不是同一枚举，禁止混用。
+# ──────────────────────────────────────────────────────────────────────────
+
+ratelimiters:
+  - name: DefaultAPIRateLimit
+    dimension: per-client-ip
+    rate: 100
+    burst: 200
+    unit: req_per_second
+    mount: global
+    surface: all
+    env_rate: RATE_LIMIT_GLOBAL_RATE
+    env_burst: RATE_LIMIT_GLOBAL_BURST
+    policy_id: global-ip
+
+  - name: AuthRateLimit
+    dimension: per-ip
+    rate: 10
+    burst: 5
+    unit: req_per_minute
+    mount: auth_surface
+    surface: auth
+    env_rate: RATE_LIMIT_AUTH_RATE
+    env_burst: RATE_LIMIT_AUTH_BURST
+    policy_id: auth-ip
+
+  - name: SignupRateLimit
+    dimension: per-ip
+    rate: 5
+    burst: 3
+    unit: req_per_minute
+    mount: auth_signup_reset
+    env_rate: RATE_LIMIT_SIGNUP_RATE
+    env_burst: RATE_LIMIT_SIGNUP_BURST
+    policy_id: signup-ip
+
+  - name: PasswordResetRateLimit
+    dimension: per-ip
+    rate: 3
+    burst: 2
+    unit: req_per_minute
+    mount: auth_password_reset
+    env_rate: RATE_LIMIT_PASSWORD_RESET_RATE
+    env_burst: RATE_LIMIT_PASSWORD_RESET_BURST
+    policy_id: password-reset-ip
+
+  - name: TokenEndpointRateLimit
+    dimension: per-ip
+    rate: 30
+    burst: 10
+    unit: req_per_minute
+    mount: protocol_surface
+    env_rate: RATE_LIMIT_TOKEN_RATE
+    env_burst: RATE_LIMIT_TOKEN_BURST
+    policy_id: token-endpoint-ip
+
+  # ── 协议面三端点族独立限流（目标态：按端点族而非单一 token 端点区分）──
+  - name: OAuth2TokenRateLimit
+    dimension: per-ip
+    rate: 30
+    burst: 10
+    unit: req_per_minute
+    env_rate: OAUTH2_TOKEN_RATE_LIMIT_RATE
+    env_burst: OAUTH2_TOKEN_RATE_LIMIT_BURST
+    mount: protocol_oauth2_token
+    surface: protocol
+    policy_id: oauth2-token-ip
+
+  - name: OAuth2IntrospectRateLimit
+    dimension: per-client-id
+    rate: 600
+    burst: 120
+    unit: req_per_minute
+    env_rate: OAUTH2_INTROSPECT_RATE_LIMIT_RATE
+    env_burst: OAUTH2_INTROSPECT_RATE_LIMIT_BURST
+    mount: protocol_oauth2_introspect
+    surface: protocol
+    policy_id: oauth2-introspect-client
+
+  - name: OAuth2RevokeRateLimit
+    dimension: per-ip
+    rate: 60
+    burst: 20
+    unit: req_per_minute
+    env_rate: OAUTH2_REVOKE_RATE_LIMIT_RATE
+    env_burst: OAUTH2_REVOKE_RATE_LIMIT_BURST
+    mount: protocol_oauth2_revoke
+    surface: protocol
+    policy_id: oauth2-revoke-ip
+
+  - name: OtlpRateLimit
+    dimension: per-ip
+    rate: 200
+    burst: 400
+    unit: req_per_second
+    mount: entries
+    env_rate: RATE_LIMIT_OTLP_RATE
+    env_burst: RATE_LIMIT_OTLP_BURST
+    policy_id: otlp-ip
+
+  - name: VerificationBusinessLimits
+    dimension: per_recipient_and_ip
+    type: business_counter
+    description: "验证码发送业务限额（非中间件）：3 次失败/码；10 次请求/小时/IP；TTL 清理过期记录"
+
+response_headers:
+  RateLimit-Limit:
+    type: integer
+    semantics: "窗口内可见上限 = max(Quota, Burst)"
+    note: "令牌桶允许瞬时突刺；Limit < Remaining 会出错"
+  RateLimit-Remaining:
+    type: integer_non_negative
+    semantics: "当前剩余额度；0 表示已耗尽"
+  RateLimit-Reset:
+    type: integer_seconds
+    semantics: "距额度恢复的相对时长；向上取整，最小 1"
+  RateLimit-Policy:
+    type: string
+    format: "{quota};w={seconds}[;burst={n}][;comment=\"{policy_id}\"]"
+    note: "comment 用作机器可读策略 id（非 RFC 原意的人类备注）；严格按 RFC 解析的客户端会忽略"
+  Retry-After:
+    type: integer_seconds
+    only_on: 429
+    forbidden: "禁止写 Go 时长字符串（如 1s）——客户端解析失败退化为固定间隔重试"
+
+header_discipline:
+  write_on_success: true
+  write_on_rejection: true
+  retry_after_only_on_429: true
+  cors_expose_headers:
+    - RateLimit-Limit
+    - RateLimit-Remaining
+    - RateLimit-Reset
+    - RateLimit-Policy
+    - Retry-After
+  rejection_status_code: 429
+  discipline_note: |
+    只在 429 给额度，客户端无法在做满之前主动降速；
+    重试风暴由 503 触发，禁止用 503 代替 429
+
+distributed:
+  model: Redis + Lua 令牌桶（ADR-019）
+  dimensions: per_surface × per_organization × per_ip
+  rate_conversion_note: "多实例速率按部署规模折算；单实例 rate 不得直接放大"
+  failure_mode: "高风险操作保守拒绝；低风险只读降级到进程内限额"
+  calib_status: "待容量压测标定；压测完成后填入 rate/burst 数字"

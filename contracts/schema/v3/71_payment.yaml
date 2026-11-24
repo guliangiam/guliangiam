@@ -1,0 +1,515 @@
+# GuliangPay 增强 Schema — 6 张新表
+# payments 表的 6 个增量列 + 2 个 CHECK 约束已直接追加到 db/schema/70_commerce.yaml
+---
+table_name: guliangiam.pay_channel_configs
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: channel
+  type: VARCHAR(50)
+  nullable: false
+- name: environment
+  type: VARCHAR(20)
+  nullable: false
+  default: '''production'''
+- name: config_sealed
+  type: TEXT
+  nullable: false
+- name: config_fingerprint
+  type: VARCHAR(16)
+  nullable: false
+- name: config_set
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: version_no
+  type: INTEGER
+  nullable: false
+  default: '1'
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''draft'''
+- name: test_passed_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: activated_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: disabled_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_pay_channel_configs_status
+  type: check
+  expr: status IN ('draft', 'testing', 'active', 'disabled')
+- name: ck_pay_channel_configs_env
+  type: check
+  expr: environment IN ('sandbox', 'production')
+- name: ck_pay_channel_configs_channel
+  type: check
+  expr: channel IN ('alipay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy')
+- name: uq_pay_channel_configs_org_channel_env_version
+  type: unique
+  columns:
+  - organization_id
+  - channel
+  - environment
+  - version_no
+  predicate: deleted_at IS NULL
+indexes:
+- name: idx_pay_channel_configs_org
+  columns:
+  - organization_id
+- name: idx_pay_channel_configs_status
+  columns:
+  - status
+- name: idx_pay_channel_configs_channel_env
+  columns:
+  - channel
+  - environment
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.pay_callback_receipts
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: channel
+  type: VARCHAR(50)
+  nullable: false
+- name: payload_sha256
+  type: VARCHAR(64)
+  nullable: false
+- name: payload
+  type: BYTEA
+  nullable: false
+- name: headers
+  type: JSONB
+  nullable: true
+  default: '''{}'''
+- name: received_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: client_ip
+  type: VARCHAR(64)
+  nullable: true
+- name: process_state
+  type: TEXT
+  nullable: false
+  default: '''received'''
+- name: event_key
+  type: VARCHAR(255)
+  nullable: true
+- name: out_trade_no
+  type: VARCHAR(255)
+  nullable: true
+- name: raw_event
+  type: JSONB
+  nullable: true
+- name: error_message
+  type: TEXT
+  nullable: true
+constraints:
+- name: ck_receipts_process_state
+  type: check
+  expr: process_state IN ('received', 'verified', 'rejected', 'duplicated', 'normalized', 'accepted')
+- name: ck_receipts_channel
+  type: check
+  expr: channel IN ('alipay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy')
+- name: uq_receipts_channel_sha256
+  type: unique
+  columns:
+  - channel
+  - payload_sha256
+- name: uq_receipts_channel_event_key
+  type: unique
+  columns:
+  - channel
+  - event_key
+  predicate: event_key IS NOT NULL
+indexes:
+- name: idx_receipts_org
+  columns:
+  - organization_id
+- name: idx_receipts_out_trade_no
+  columns:
+  - out_trade_no
+- name: idx_receipts_process_state
+  columns:
+  - process_state
+- name: idx_receipts_received_at
+  columns:
+  - received_at
+soft_delete: false
+revision: false
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.pay_attempts
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: payment_id
+  type: UUID
+  nullable: false
+- name: refund_id
+  type: UUID
+  nullable: true
+- name: channel
+  type: VARCHAR(50)
+  nullable: false
+- name: attempt_type
+  type: VARCHAR(20)
+  nullable: false
+- name: attempt_no
+  type: INTEGER
+  nullable: false
+  default: '1'
+- name: channel_order_no
+  type: VARCHAR(255)
+  nullable: true
+- name: channel_request_id
+  type: VARCHAR(255)
+  nullable: true
+- name: state
+  type: TEXT
+  nullable: false
+  default: '''pending'''
+- name: amount
+  type: DECIMAL(19, 4)
+  nullable: true
+- name: currency
+  type: VARCHAR(3)
+  nullable: true
+- name: error_code
+  type: VARCHAR(100)
+  nullable: true
+- name: error_message
+  type: VARCHAR(2000)
+  nullable: true
+- name: latency_ms
+  type: INTEGER
+  nullable: true
+- name: occurred_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: raw_response
+  type: JSONB
+  nullable: true
+constraints:
+- name: ck_pay_attempts_state
+  type: check
+  expr: state IN ('pending', 'succeeded', 'failed', 'unknown', 'rejected')
+- name: ck_pay_attempts_type
+  type: check
+  expr: attempt_type IN ('charge', 'query', 'refund', 'query_refund', 'close', 'callback')
+- name: ck_pay_attempts_channel
+  type: check
+  expr: channel IN ('alipay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy')
+indexes:
+- name: idx_pay_attempts_payment
+  columns:
+  - payment_id
+- name: idx_pay_attempts_refund
+  columns:
+  - refund_id
+- name: idx_pay_attempts_occurred
+  columns:
+  - occurred_at
+soft_delete: false
+revision: false
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: payment_id
+  ref_table: guliangiam.payments
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: refund_id
+  ref_table: guliangiam.pay_refunds
+  on_delete: SET_NULL
+  on_update: CASCADE
+---
+table_name: guliangiam.pay_refunds
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: payment_id
+  type: UUID
+  nullable: false
+- name: out_refund_no
+  type: VARCHAR(255)
+  nullable: false
+- name: channel
+  type: VARCHAR(50)
+  nullable: false
+- name: amount
+  type: DECIMAL(19, 4)
+  nullable: false
+- name: currency
+  type: VARCHAR(3)
+  nullable: false
+- name: state
+  type: TEXT
+  nullable: false
+  default: '''requested'''
+- name: reason
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: channel_refund_no
+  type: VARCHAR(255)
+  nullable: true
+- name: error_code
+  type: VARCHAR(100)
+  nullable: true
+- name: error_message
+  type: VARCHAR(2000)
+  nullable: true
+- name: requested_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: completed_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_pay_refunds_state
+  type: check
+  expr: state IN ('requested', 'processing', 'succeeded', 'failed', 'cancelled')
+- name: ck_pay_refunds_channel
+  type: check
+  expr: channel IN ('alipay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy')
+- name: uq_pay_refunds_channel_out_no
+  type: unique
+  columns:
+  - channel
+  - out_refund_no
+  predicate: deleted_at IS NULL
+indexes:
+- name: idx_pay_refunds_payment
+  columns:
+  - payment_id
+- name: idx_pay_refunds_state
+  columns:
+  - state
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: payment_id
+  ref_table: guliangiam.payments
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.pay_recon_batches
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: channel
+  type: VARCHAR(50)
+  nullable: false
+- name: batch_date
+  type: DATE
+  nullable: false
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''pending'''
+- name: diff_count
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: total_local
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: total_channel
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_pay_recon_batches_status
+  type: check
+  expr: status IN ('pending', 'processing', 'completed', 'failed')
+- name: uq_pay_recon_batches_org_channel_date
+  type: unique
+  columns:
+  - organization_id
+  - channel
+  - batch_date
+  predicate: deleted_at IS NULL
+indexes:
+- name: idx_pay_recon_batches_org
+  columns:
+  - organization_id
+- name: idx_pay_recon_batches_date
+  columns:
+  - batch_date
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.pay_recon_items
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: batch_id
+  type: UUID
+  nullable: false
+- name: diff_type
+  type: VARCHAR(30)
+  nullable: false
+- name: channel_order_no
+  type: VARCHAR(255)
+  nullable: true
+- name: local_payment_id
+  type: UUID
+  nullable: true
+- name: channel_amount
+  type: DECIMAL(19, 4)
+  nullable: true
+- name: local_amount
+  type: DECIMAL(19, 4)
+  nullable: true
+- name: channel_state
+  type: VARCHAR(50)
+  nullable: true
+- name: local_state
+  type: VARCHAR(50)
+  nullable: true
+- name: resolved
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: resolved_by
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: resolved_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: note
+  type: VARCHAR(1000)
+  nullable: true
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+constraints:
+- name: ck_pay_recon_items_diff_type
+  type: check
+  expr: diff_type IN ('missing_local', 'missing_channel', 'amount_mismatch', 'state_mismatch', 'refund_mismatch')
+indexes:
+- name: idx_pay_recon_items_batch
+  columns:
+  - batch_id
+- name: idx_pay_recon_items_resolved
+  columns:
+  - resolved
+soft_delete: false
+revision: false
+rls: false
+fk_constraints:
+- column: batch_id
+  ref_table: guliangiam.pay_recon_batches
+  on_delete: CASCADE
+  on_update: CASCADE

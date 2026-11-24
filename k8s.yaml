@@ -1,0 +1,188 @@
+# ============================================================================
+# GuliangIAM Production Kubernetes Manifests
+# ============================================================================
+# 覆盖：Deployment (replicas=2 + liveness/readiness probes) + Service + HPA + PDB
+# 端口：8000（HTTP）
+# 健康检查：/healthz（liveness，公开无 token）/ /readyz（readiness，token-protected）
+# HPA：基于 CPU 70% + Memory 80%，min=2 max=10
+# PDB：minAvailable=50%，保证至少 1 Pod 在线
+# ============================================================================
+# 使用前替换以下占位符：
+#   <IMAGE>       — 生产镜像 tag（默认 guliangtech/guliangiam:latest）
+#   <METRICS_TOKEN> — 用于 /readyz + /metrics + /debug/pprof 的 token
+#   <ENV_VARS>    — DB_DSN / SESSION_HMAC_KEY / ENCRYPTION_KEY_CURRENT 等生产变量
+# ============================================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guliangiam
+  labels:
+    app: guliangiam
+    tier: app
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: guliangiam
+  template:
+    metadata:
+      labels:
+        app: guliangiam
+        tier: app
+      annotations:
+        # 让 Prometheus 自动发现 /metrics（如果集群已配 Prometheus Operator）
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: guliangiam
+          image: guliangtech/guliangiam:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          # ── 健康检查 ──────────────────────────────────────────────────
+          # Liveness：公开端点 /healthz（无 token），进程级存活
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          # Readiness：token-protected /readyz（带 DB pool ping），业务就绪
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+              httpHeaders:
+                - name: X-Metrics-Token
+                  value: "${METRICS_SCRAPE_TOKEN}"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          # ── 资源 ──────────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          # ── 环境变量 ───────────────────────────────────────────────────
+          env:
+            - name: HTTP_PORT
+              value: "8000"
+            - name: APP_ENV
+              value: "production"
+            - name: IS_PRODUCTION
+              value: "true"
+            - name: METRICS_SCRAPE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: guliangiam-secrets
+                  key: metrics-scrape-token
+            - name: DB_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: guliangiam-secrets
+                  key: db-dsn
+            - name: SESSION_HMAC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: guliangiam-secrets
+                  key: session-hmac-key
+            - name: ENCRYPTION_KEY_CURRENT
+              valueFrom:
+                secretKeyRef:
+                  name: guliangiam-secrets
+                  key: encryption-key-current
+            - name: ISSUER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: guliangiam-config
+                  key: issuer-url
+          # ── 卷（可选：本地文件系统存储上传资源） ────────────────────────
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+      volumes:
+        - name: uploads
+          emptyDir: {}
+      # ── 拓扑分布约束（可选：跨节点调度提高容灾） ────────────────────────
+      # topologySpreadConstraints:
+      #   - maxSkew: 1
+      #     topologyKey: kubernetes.io/hostname
+      #     whenUnsatisfiable: DoNotSchedule
+      #     labelSelector:
+      #       matchLabels:
+      #         app: guliangiam
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guliangiam-svc
+  labels:
+    app: guliangiam
+spec:
+  type: ClusterIP
+  selector:
+    app: guliangiam
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+
+---
+# PodDisruptionBudget — 保证滚动更新 / 节点维护时至少 1 Pod 在线
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: guliangiam-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: guliangiam
+
+---
+# HorizontalPodAutoscaler — 基于 CPU + Memory 双指标
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: guliangiam-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: guliangiam
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

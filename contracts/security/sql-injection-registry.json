@@ -1,0 +1,335 @@
+{
+  "registry_version": "1.0",
+  "scanned_at": "2026-10-20",
+  "scanner": "P0 v3 — tighten dynamic SQL scan",
+  "scope": "internal/infra/ (postgres + mysql) + internal/app/",
+  "summary": {
+    "L2_whitelist_token": 22,
+    "L3_internal_const_or_param_construction": 14,
+    "L4_user_input_in_sql_text": 0,
+    "note_constant_table_prefixes": "(mysql) btXXX constants are compile-time, safe by construction",
+    "conclusion": "当前代码库无 SQL 注入向量。所有绕过 pgx 参数化的动态点均有显式守护：要么白名单 map，要么纯占位符拼接，要么编译期常量。",
+    "runtime_guard_note": "P3: runtime guards added via sqlguard package on Resolve(), buildColumnSearch(), AppendParamCondition(), and IN placeholder construction.",
+    "known_gaps": [
+      "metering ListEvents >=/<= — manual fmt.Sprintf, not AppendParamCondition guarded"
+    ]
+  },
+  "entries": [
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/records/repository.go",
+      "line": 90,
+      "pattern": "strings.Replace(queryListRecords, '{ORDER_BY}', orderBy, 1)",
+      "guardian": "recordSortSpec = platformsorting.NewSpec({createdAt, action, resourceType, surface})",
+      "arg_source": "query.SortField → whitelist map lookup → physical column",
+      "safe": true,
+      "note": "ORDER BY 方向 Resolve() 内部还有 closed-direction set，永远返回 ASC|DESC",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/records/repository.go",
+      "line": 128,
+      "pattern": "strings.Replace(querySearchRecords, '{ORDER_BY}', orderBy, 1)",
+      "guardian": "同上 recordSortSpec",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/mysql/records/repository.go",
+      "line": 87,
+      "pattern": "strings.Replace(queryListRecords, '{ORDER_BY}', orderBy, 1)",
+      "guardian": "同 postgres recordSortSpec",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/mysql/records/repository.go",
+      "line": 154,
+      "pattern": "strings.Replace(querySearchRecords, '{ORDER_BY}', orderBy, 1)",
+      "guardian": "同 postgres recordSortSpec",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/users/repository_list.go",
+      "line": 24,
+      "pattern": "fmt.Sprintf('%s %s %s LIMIT $5 OFFSET $6', queryListUsers, columnSearchClause, orderBy)",
+      "guardian": "allowedSearchFields={username:'u.username'} whitelist + userSortSpec",
+      "safe": true,
+      "note": "columnSearchClause = buildColumnSearch() — column 来自 whitelist map，searchValue 走 $7 placeholder",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/users/repository_list.go",
+      "line": 77,
+      "pattern": "fmt.Sprintf('%s %s', queryCountUsers, columnSearchClause)",
+      "guardian": "同上",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/iga/repository.go",
+      "line": 31,
+      "pattern": "qListCampaignsBase + extra + ' ORDER BY ...' + fmt.Sprintf('LIMIT $%d OFFSET $%d', ...)",
+      "guardian": "extra 只拼 'AND status = $N' — 永远是常量模板 + 正确的 placeholder 编号",
+      "safe": true,
+      "note": "extra 的每段都是内部 fmt.Sprintf 拼的固定 AND 条件，条件值全部走 args 参数数组",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/iga/repository.go",
+      "line": 123,
+      "pattern": "qListLifecycleBase + extra + ORDER BY + LIMIT/OFFSET",
+      "guardian": "同上 extra 安全拼法 (AND user_id=$N, AND role_id=$N, AND status=$N)",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/actions/repository.go",
+      "line": 126,
+      "pattern": "selectSQL = queryListVersionsSelect + queryListVersionsBase + ' ORDER BY version DESC'",
+      "guardian": "纯编译期常量拼接",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/actions/repository.go",
+      "line": 191,
+      "pattern": "selectSQL = ...Base + extra + ' ORDER BY created_at DESC'",
+      "guardian": "extra 是 ListExecLogs 的 WHERE 扩展 — 同 iga 模式，纯 AND col = $N",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/metering/repository.go",
+      "line": 47,
+      "pattern": "selectSQL = queryListEventsSelect + extra + ' ORDER BY occurred_at DESC'",
+      "guardian": "extra 同 iga 模式，纯 AND col = $N",
+      "safe": true,
+      "runtime_guard": true,
+      "runtime_guard_gap": ">= and <= use manual fmt.Sprintf — sqlguard ValidAndClause expects = $N. Known limitation."
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/metering/repository.go",
+      "line": 137,
+      "pattern": "selectSQL = queryListAggregatesSelect + extra + ' ORDER BY period DESC'",
+      "guardian": "同上",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/risk/repository.go",
+      "line": 46,
+      "pattern": "selectSQL = queryListSignalsSelect + queryListSignalsBase + extra + ' ORDER BY created_at DESC'",
+      "guardian": "extra 同 iga 模式",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/risk/repository.go",
+      "line": 91,
+      "pattern": "queryListDecisions* + extra",
+      "guardian": "同上",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/risk/repository.go",
+      "line": 158,
+      "pattern": "queryListGovernance* + extra",
+      "guardian": "同上",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/scim/user_repository.go",
+      "line": 71,
+      "pattern": "countQuery = `SELECT COUNT(*) ` + baseQuery",
+      "guardian": "baseQuery 是函数内硬编码 FROM...WHERE 常量（organization_id=$1 AND deleted_at IS NULL）",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/scim/user_repository.go",
+      "line": 72,
+      "pattern": "selectQuery = `SELECT ... ` + baseQuery",
+      "guardian": "同上",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/scim/group_repository.go",
+      "line": 45,
+      "pattern": "countQuery + selectQuery 拼接 baseQuery",
+      "guardian": "baseQuery 硬编码 FROM...WHERE 常量",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/scim/schema_repository.go",
+      "line": 42,
+      "pattern": "countQuery + selectQuery 拼接 baseQuery",
+      "guardian": "baseQuery 硬编码 FROM...WHERE 常量",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/mysql/iga/sql.go",
+      "line": 40,
+      "pattern": "countSQL = `SELECT COUNT(*) FROM ` + btCampaigns + ` WHERE organization_id = ?` + extra",
+      "guardian": "btCampaigns 编译期 const；extra 同 pg 版，纯 `AND status = ?` 安全拼法",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/mysql/iga/sql.go",
+      "line": 92,
+      "pattern": "countSQL + selectSQL lifecycle",
+      "guardian": "同上",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/platform/sorting/sorting.go",
+      "line": 111,
+      "pattern": "return 'ORDER BY ' + column + ' ' + direction + ', ' + s.tiebreaker() + ' ASC'",
+      "guardian": "Resolve() 只返回 whitelist 里的 physical column + direction ∈ {ASC,DESC}",
+      "safe": true,
+      "note": "所有 SortSpec 必须用 NewSpec(map[apiField]physicalColumn) 构造，无 map lookup → 直接 return error",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L2",
+      "file": "internal/infra/postgres/regions/repository.go",
+      "line": 99,
+      "pattern": "fullSQL = fmt.Sprintf('... IN (%s) ...', ph, ph2, ph2)",
+      "guardian": "ph/ph2 是 '$1,$2,$3...' 占位符列表 — %d 计算出来的编号，不来自用户",
+      "safe": true,
+      "note": "allArgs 两次 append(args...) 作为参数数组传入，完全参数化",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L3",
+      "file": "internal/infra/postgres/shared/bulk.go",
+      "line": 50,
+      "pattern": "sb.WriteString(fmt.Sprintf('INSERT INTO %s (%s) VALUES ', table, colList))",
+      "guardian": "table/colList 来自 reflect.TypeOf(row).Field — 编译期结构体元数据",
+      "safe": true,
+      "note": "后续 VALUES 也用 sb.WriteString(fmt.Sprintf('($%d', len(args)+1)) 动态算 placeholder 编号",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L3",
+      "file": "internal/infra/dialect/postgres.go",
+      "line": 63,
+      "pattern": "fmt.Sprintf('ON CONFLICT (%s) DO UPDATE SET %s', conflict, set)",
+      "guardian": "internal dialect DSL — conflict/set 是传入的内部列名列表常量",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L3",
+      "file": "internal/infra/dialect/mysql.go",
+      "line": 76,
+      "pattern": "fmt.Sprintf('ON DUPLICATE KEY UPDATE %s', set)",
+      "guardian": "同 postgres dialect",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L3",
+      "file": "internal/infra/syncer/database_syncer.go",
+      "line": 239,
+      "pattern": "fmt.Sprintf('SELECT %s FROM %s', strings.Join(fields), table)",
+      "guardian": "table/fields 来自 SyncerConfig 结构体字段（admin 配置），不来自 HTTP 请求",
+      "safe": true,
+      "runtime_guard": true
+    },
+    {
+      "tier": "L3",
+      "file": "internal/platform/crypto/reencrypt_job.go",
+      "line": 239,
+      "pattern": "fmt.Sprintf(`UPDATE %s SET %s = $1 WHERE %s = $2`, col.Table, col.Column, col.PKColumn)",
+      "guardian": "col.Table/Column/PKColumn 是 reencrypt job 启动时遍历 schema YAML 得到的内部常量",
+      "safe": true,
+      "note": "job 启动脚本定义了哪些表哪些列要 reencrypt，不接受用户输入",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L3",
+      "file": "internal/infra/mysql/*/sql.go",
+      "line": "N/A (~100 hits)",
+      "pattern": "`SELECT ... FROM ` + btXXX + ` WHERE ...`",
+      "guardian": "btXXX 都是 mysql/sql.go 顶部 const (btPayments, btEntries, ...)，编译期常量",
+      "safe": true,
+      "note": "这是 MySQL 方言的表名前缀常量化惯例，pgx 版本用 schema 限定表名（guliangiam.payments）",
+      "runtime_guard": true
+    },
+    {
+      "tier": "L3",
+      "file": "internal/infra/postgres/webhookevents/repository.go",
+      "line": 189,
+      "pattern": "strings.Replace(queryInsertWebhookEventsBatch, webhookEventValuesRow, strings.Join(values, \",\"), 1)",
+      "guardian": "单行占位符子句 webhookEventValuesRow 仅被替换为 $N::uuid/$N 多行占位符子句：columnsPerRow=13 编译期常量 × 行号生成，无任何运行时值进入 SQL 文本；模板本身是可独立 PREPARE 的完整单行 INSERT",
+      "arg_source": "webhookEventInsertArgs(e) → pgx args 参数绑定（13 列严格同序）",
+      "safe": true,
+      "note": "分块多行 INSERT（maxBatchInsertRows=4000，占位符每语句重启）；与 records/repository.go:90 的 strings.Replace 登记同型",
+      "runtime_guard": true
+    }
+  ],
+  "false_positives_filtered_out": [
+    {
+      "file": "internal/infra/storage/synology_storage.go:218",
+      "reason": "HTTP API URL，不是 SQL"
+    },
+    {
+      "file": "internal/app/auth/anomaly_detection.go",
+      "reason": "fmt.Sprintf 拼装错误消息，不进 SQL"
+    },
+    {
+      "file": "internal/app/mcpservers/tool_sync.go",
+      "reason": "同上"
+    },
+    {
+      "file": "internal/app/rules/validator.go",
+      "reason": "同上"
+    },
+    {
+      "file": "internal/app/ldaps/operations.go",
+      "reason": "同上"
+    },
+    {
+      "file": "internal/domain/regions/replication.go",
+      "reason": "同上"
+    },
+    {
+      "file": "infra/mysql/... 大量 btXXX 表名拼接",
+      "reason": "编译期 const，安全 by construction — 批量归入 L3 单条"
+    },
+    {
+      "file": "variable_arg 分类里的 countQuery/selectQuery/ReceiptInsert/ReconItemList 等",
+      "reason": "是 sql.go 里的 const 名字（queryXxx 前缀扫描时没命中），被误归为变量"
+    }
+  ]
+}

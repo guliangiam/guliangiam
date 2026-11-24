@@ -1,0 +1,704 @@
+orders:
+  table: orders
+  column: status
+  check_constraint: ck_orders_status
+  states:
+  - created
+  - payment_pending
+  - paid
+  - completed
+  - failed
+  - cancelled
+  - refunded
+  - closed
+  transitions:
+    created:
+    - payment_pending
+    - cancelled
+    payment_pending:
+    - paid
+    - failed
+    - cancelled
+    failed:
+    - payment_pending
+    paid:
+    - completed
+    - refunded
+    completed:
+    - refunded
+    - closed
+    refunded:
+    - closed
+  terminal:
+  - cancelled
+  - refunded
+  - closed
+  compensation: cancelled 仅允许自 created / payment_pending（已收款前）；已支付取消走 refunded
+  invariants:
+  - 状态 ∈ {paid, completed, refunded, closed} ⟺ paid_at IS NOT NULL（ck_orders_paid_at）
+payments:
+  table: payments
+  column: status
+  check_constraint: ck_payments_status
+  states:
+  - created
+  - processing
+  - succeeded
+  - partially_refunded
+  - failed
+  - cancelled
+  - refunded
+  transitions:
+    created:
+    - processing
+    - cancelled
+    processing:
+    - succeeded
+    - partially_refunded
+    - failed
+    - refunded
+    succeeded:
+    - refunded
+    - partially_refunded
+    partially_refunded:
+    - refunded
+    - partially_refunded
+  terminal:
+  - failed
+  - cancelled
+  - refunded
+  invariants:
+  - status IN (succeeded, partially_refunded) ⟺ IsSettled() = true
+  - refunded_amount + refunding_amount <= price (ck_payments_refund_limit)
+  - partially_refunded 触发条件：Refund.Amount < AvailableForRefund
+  - refunded 触发条件：Refund.Amount == AvailableForRefund（全额退款）
+subscriptions:
+  table: subscriptions
+  column: status
+  check_constraint: ck_subscriptions_status
+  states:
+  - pending
+  - trialing
+  - active
+  - past_due
+  - expired
+  - cancelled
+  transitions:
+    pending:
+    - active
+    - trialing
+    trialing:
+    - active
+    - cancelled
+    active:
+    - past_due
+    - cancelled
+    past_due:
+    - active
+    - expired
+  terminal:
+  - expired
+  - cancelled
+  recovery_edges:
+    past_due:
+    - active
+transactions:
+  table: transactions
+  column:
+  - transaction_type
+  - status
+  check_constraint:
+  - ck_transactions_type
+  - ck_transactions_status
+  transaction_type:
+  - payment
+  - refund
+  - cancellation
+  transaction_note: transaction_type 追加型不可变更；status=completed 后不可变
+  status_states:
+  - pending
+  - completed
+  - failed
+  - cancelled
+  status_transitions:
+    pending:
+    - completed
+    - failed
+    - cancelled
+  terminal:
+  - completed
+  - failed
+  - cancelled
+coupons:
+  table: coupons
+  column: status
+  check_constraint: ck_coupons_status
+  states:
+  - active
+  - disabled
+  - expired
+  transitions:
+    active:
+    - disabled
+    - expired
+    disabled:
+    - active
+    - expired
+  terminal:
+  - expired
+products:
+  table: products
+  column: status
+  check_constraint: ck_products_status
+  states:
+  - draft
+  - active
+  - discontinued
+  transitions:
+    draft:
+    - active
+    - discontinued
+    active:
+    - discontinued
+  terminal:
+  - discontinued
+plans:
+  table: plans
+  column: status
+  check_constraint: ck_plans_status
+  states:
+  - draft
+  - active
+  - archived
+  transitions:
+    draft:
+    - active
+    - archived
+    active:
+    - archived
+  terminal:
+  - archived
+  discipline: plans 不再使用 is_enabled 布尔开关；可售性由 status 单一承载
+tickets:
+  table: tickets
+  column: status
+  check_constraint: ck_tickets_status
+  states:
+  - open
+  - pending
+  - resolved
+  - closed
+  transitions:
+    open:
+    - pending
+    - resolved
+    - closed
+    pending:
+    - open
+    - resolved
+    - closed
+    resolved:
+    - pending
+    - closed
+  terminal:
+  - closed
+  reopens: closed 不可重开；重开建新单，使已闭环记录保留原始处置结论
+sessions:
+  table: sessions
+  column: session_state
+  check_constraint: ck_sessions_state
+  states:
+  - active
+  - idle
+  - expired
+  - revoked
+  transitions:
+    active:
+    - idle
+    - revoked
+    idle:
+    - active
+    - expired
+  terminal:
+  - expired
+  - revoked
+  triggers:
+    revoked: 登出 / family 撤销 / 强制下线 API / 风险引擎降级
+  discipline: 登录成功必须轮换 SessionID（会话固定防护）
+tokens:
+  table:
+  - access_tokens
+  - refresh_tokens
+  model: 无独立状态机列；revoked_at 非空即撤销
+  rotation: refresh_token 以 family_id 组织，重用检测命中即整族撤销
+  introspection: active = 未撤销 ∧ 未过期 ∧ 会话有效；缓存 TTL ≤ 30s 且撤销优先
+one_time_credentials:
+  model: pending → consumed / expired；原子消费（UPDATE ... WHERE 状态守卫 或 DELETE RETURNING）；TTL
+    到期清理
+  device_flow:
+    states:
+    - pending
+    - authorized
+    - consumed
+    rate_limiting: 连续超限 → denied（响应语义 slow_down 非状态）
+    replay_disposal: 授权码重放 → 拒绝 + 审计 + 关联令牌族撤销
+user_identities_merge:
+  codegen: false
+  table: user_identities
+  column: link_state
+  check_constraint: ck_user_identities_link_state
+  states:
+  - auto_linked
+  - merge_pending
+  - linked
+  - rejected
+  transitions:
+    auto_linked:
+    - merge_pending
+    merge_pending:
+    - linked
+    - rejected
+  terminal:
+  - linked
+  - rejected
+  safeguards:
+  - 邮箱未验证的外部断言不得自动绑定
+  - merge_pending 期间本地账号可正常登录（不阻塞）
+  - 确认操作要求本地凭据二次验证
+webauthn_credentials:
+  codegen: false
+  table: webauthn_credentials
+  column: status
+  check_constraint: ck_webauthn_credentials_status
+  states:
+  - active
+  - revoked
+  - deactivated
+  transitions:
+    active:
+    - revoked
+    - deactivated
+    deactivated:
+    - active
+    - revoked
+  terminal:
+  - revoked
+  login_guard: 仅 active 凭证可用于认证断言校验；revoked/deactivated 签名一律拒绝并审计
+outbox:
+  table: outbox
+  column: status
+  check_constraint: ck_outbox_status
+  states:
+  - pending
+  - processing
+  - succeeded
+  - failed
+  - dead
+  transitions:
+    pending:
+    - processing
+    - dead
+    processing:
+    - succeeded
+    - failed
+    failed:
+    - pending
+    - dead
+  terminal:
+  - succeeded
+  - dead
+  serialization: SKIP LOCKED + locked_by/locked_at 租约
+  dead_fix: dead 支持人工修复后重放入队（新行，不改历史）
+idempotency_keys:
+  codegen: false
+  table: idempotency_keys
+  column: status
+  check_constraint: ck_idempotency_keys_status
+  states:
+  - in_progress
+  - succeeded
+  - failed
+  discipline:
+  - in_progress 并发同键 → 409 + Retry-After
+  - failed 允许同键重试（新尝试）
+  - 'succeeded 同键同体 → 首响应 + Idempotency-Replayed: true'
+  - succeeded 同键异体 → 409
+encryption_keys:
+  table: encryption_keys
+  column: status
+  check_constraint: ck_encryption_keys_status
+  states:
+  - pending
+  - active
+  - retiring
+  - retired
+  - revoked
+  transitions:
+    pending:
+    - active
+    - revoked
+    active:
+    - retiring
+    - revoked
+    retiring:
+    - retired
+    - revoked
+  terminal:
+  - retired
+  - revoked
+  rotation_checklist:
+  - 旧版本零密文引用
+  - 双人审批
+  - 批量重加密断点续跑
+invitations:
+  table: invitations
+  column: status
+  states:
+  - pending
+  - accepted
+  - expired
+  - revoked
+  terminal:
+  - accepted
+  - expired
+  - revoked
+  check_constraint: ck_invitations_status
+
+# ───────────────────────────────────────────────────────────────────────────
+# AI Gateway 新增状态机（P0 设计，P2-P4 生产落地）
+# ───────────────────────────────────────────────────────────────────────────
+
+llm_providers:
+  codegen: false
+  table: guliangiam.llm_providers
+  column: status
+  states:
+  - active
+  - disabled
+  - testing
+  transitions:
+    active:
+    - disabled
+    - testing
+    testing:
+    - active
+    - disabled
+    disabled:
+    - active
+  terminal: []  # 三状态均可互相迁移
+
+llm_models:
+  codegen: false
+  table: guliangiam.llm_models
+  column: status
+  states:
+  - active
+  - deprecated
+  transitions:
+    active:
+    - deprecated
+    deprecated:
+    - active
+  terminal: []
+
+llm_model_aliases:
+  codegen: false
+  table: guliangiam.llm_model_aliases
+  column: status
+  states:
+  - active
+  - deprecated
+  transitions:
+    active:
+    - deprecated
+    deprecated:
+    - active
+  terminal: []
+
+provider_health:
+  codegen: false
+  table: guliangiam.llm_provider_health
+  column: state
+  check_constraint: ck_llm_health_state
+  states:
+  - healthy
+  - degraded
+  - open
+  - half_open
+  transitions:
+    healthy:
+    - degraded      # 连续 3 次失败（degraded_threshold=3）
+    - open          # 连续 5 次失败（failure_threshold=5）
+    degraded:
+    - healthy       # 任意成功即清除降级（RecordSuccess）
+    - open          # 连续失败达到 failure_threshold=5
+    open:
+    - half_open      # OPEN 30s 窗口过期进入探测（EnterHalfOpen）
+    half_open:
+    - healthy       # 探测成功
+    - open          # 探测失败
+  terminal: []
+  thresholds:
+    degraded_threshold: 3
+    failure_threshold: 5
+    half_open_window: 30s
+    consecutive_success_to_recover: 1
+  invariants:
+  - state=open 期间上游请求全部快速失败（ErrProviderUnavailable）
+  - state=half_open 只允许 1 个探测请求（singleflight 或并发限制）
+  - state=degraded 仍接受生产流量（IsAvailable=true）；open 期间成功不转移状态（陈旧探测，计数钉在阈值）
+
+llm_api_keys:
+  table: guliangiam.llm_api_keys
+  column: status
+  states:
+  - active
+  - revoked
+  - expired
+  transitions:
+    active:
+    - revoked
+    - expired
+  terminal:
+  - revoked
+  - expired
+  invariants:
+  - revoked_at != nil ⟺ state=revoked
+
+# ── AI Gateway 枚举型状态（CHECK 约束承载，非独立状态机） ─────────────────
+# 设计 §11：provider_status / provider_type / api_key_status
+llm_providers_status:
+  table: guliangiam.llm_providers
+  column: status
+  check_constraint: ck_llm_providers_status
+  values: [active, disabled, testing]
+  note: CHECK 枚举；运行时迁移由管理面 API 触发，无独立状态机
+llm_providers_provider_type:
+  table: guliangiam.llm_providers
+  column: provider_type
+  check_constraint: ck_llm_providers_provider_type
+  values: [openai, anthropic, gemini, deepseek, glm, kimi, qwen, seed, ollama, vllm, custom]
+  note: 独立枚举（与 IAM 域 providers 表无复用关系）；provider_factory.go 按此分发上游适配器
+llm_providers_preferred_protocol:
+  table: guliangiam.llm_providers
+  column: preferred_protocol
+  check_constraint: ck_llm_providers_preferred_protocol
+  values: [openai, anthropic, gemini]
+
+llm_models_status:
+  table: guliangiam.llm_models
+  column: status
+  values: [active, deprecated]
+
+llm_model_aliases_status:
+  table: guliangiam.llm_model_aliases
+  column: status
+  values: [active, disabled]
+
+llm_routes_status:
+  table: guliangiam.llm_routes
+  column: status
+  values: [active, disabled]
+
+llm_quota_policies_status:
+  table: guliangiam.llm_quota_policies
+  column: status
+  values: [active, disabled]
+
+llm_quota_policies_scope:
+  table: guliangiam.llm_quota_policies
+  column: scope
+  values: [organization, api_key, alias]
+
+llm_usage_logs_status:
+  table: guliangiam.llm_usage_logs
+  column: status
+  values: [succeeded, failed, timeout]
+
+# ───────────────────────────────────────────────────────────────────────────
+# Payment 新增状态机（P0 设计，P1 回调管线/P2 完整退款落地）
+# ───────────────────────────────────────────────────────────────────────────
+
+pay_refunds:
+  codegen: false
+  table: guliangiam.pay_refunds
+  column: state
+  states:
+  - requested
+  - processing
+  - succeeded
+  - failed
+  - cancelled
+  transitions:
+    requested:
+    - processing
+    - failed
+    - cancelled
+    processing:
+    - succeeded
+    - failed
+    - cancelled
+  terminal:
+  - succeeded
+  - failed
+  - cancelled
+  invariants:
+  - Amount <= AvailableForRefund (SELECT FOR UPDATE 保证并发互斥)
+  - ChannelRefundNo 非空 ⟺ state IN (processing, succeeded)
+
+pay_callback_receipts:
+  codegen: false   # 状态常量手写于 internal/domain/payments/callback_receipt.go
+  table: guliangiam.pay_callback_receipts
+  column: process_state
+  check_constraint: ck_receipts_process_state
+  states:
+  - received
+  - verified
+  - rejected
+  - duplicated
+  - normalized
+  - accepted
+  transitions:
+    received:
+    - normalized    # 验签+归一化在 adapter.ParseCallback 内同一步完成（callback_pipeline.go）
+    - rejected
+    verified:       # 历史兼容态：现行管线不产生，存量行仍可前进/拒绝
+    - normalized
+    - rejected
+    normalized:
+    - accepted      # payment 状态机实际推进
+    - duplicated    # payment 已在目标状态（幂等，不推进）
+    - rejected
+  terminal:
+  - rejected
+  - duplicated
+  - accepted
+  note: 管线状态赋值一律经 CallbackReceipt.TransitionTo（validReceiptTransitions 唯一事实源）；design/commerce/payment.md §5.1 的持久化 verified 中间态与 UPSERT 冲突去重为目标态口径，运行期边界见该节注记
+
+# ───────────────────────────────────────────────────────────────────────────
+# 审计链与身份生命周期状态（Phase 3 声明式 Schema 约束对齐）
+# ───────────────────────────────────────────────────────────────────────────
+
+records_chain:
+  table: records
+  column: chain_status
+  check_constraint: ck_records_chain_status
+  states:
+  - pending
+  - chained
+  - anchored
+  - broken
+  terminal:
+  - anchored
+  - broken
+  note: 链构建 Worker 异步从 pending 推进到 chained/anchored；校验失败进入 broken
+
+users_status:
+  table: users
+  column: status
+  check_constraint: ck_users_status
+  states:
+  - active
+  - disabled
+  - locked
+  - pending_verification
+  terminal: []
+  note: 账户生命周期枚举（CHECK 承载）；无终态，各状态可经管理面 API 迁移
+
+access_lifecycle:
+  codegen: false   # 状态常量手写于 internal/domain/iga/iga.go（LifecycleStatus）
+  table: guliangiam.access_lifecycle
+  column: status
+  check_constraint: ck_access_lifecycle_status
+  states:
+  - active
+  - expired
+  - revoked
+  transitions:
+    active:
+    - expired       # JIT 到期回收（app/iga/worker.go reclaimJITGrant）
+    - revoked       # 管理面/票据撤销（app/iga/service.go reclaimLifecycleByID）
+  terminal:
+  - expired
+  - revoked
+  note: reclaimJITGrant 仅接受 status=active 的行（幂等：终态行直接跳过）；回收同事务撤销特权会话（RevokePrivilegedSessions）并发 iga.jit.expired / iga.jit.revoked 审计
+
+# ───────────────────────────────────────────────────────────────────────────
+# 租户身份与隔离拓扑状态（0-R2-T）
+# ───────────────────────────────────────────────────────────────────────────
+
+tenant_identity:
+  table: tenant_identities
+  column: status
+  check_constraint: ck_tenant_identities_status
+  states:
+  - provisioning
+  - active
+  - failed
+  - decommissioned
+  transitions:
+    provisioning:
+    - active
+    - failed
+    active:
+    - failed
+    - decommissioned
+    failed:
+    - provisioning
+    - decommissioned
+  terminal:
+  - decommissioned
+  invariants:
+  - is_built_in = TRUE 的身份不得进入 decommissioned
+  - status = active ⟺ provisioned_at IS NOT NULL
+  - status = decommissioned ⟺ decommissioned_at IS NOT NULL
+  note: CreateOrganization 在单事务内直接写 active（行级开通同步完成）；failed 仅用于异步/未来专用放置的失败态
+
+tenant_instance:
+  table: tenant_instances
+  column: status
+  check_constraint: ck_tenant_instances_status
+  states:
+  - pending
+  - active
+  - failed
+  - decommissioned
+  transitions:
+    pending:
+    - active
+    - failed
+    active:
+    - failed
+    - decommissioned
+    failed:
+    - pending
+    - decommissioned
+  terminal:
+  - decommissioned
+  invariants:
+  - 每租户至多一条 is_primary 且 status <> 'decommissioned'（uq_tenant_instances_primary）
+  - 拓扑是描述性元数据，不参与任何 RLS 谓词
+  note: 区域迁移（切主）须写审计并触发 control.tenant_region_changed
+
+recon_items:
+  table: pay_recon_items
+  column: resolution_state
+  check_constraint: ck_pay_recon_items_resolution_state
+  states:
+  - pending
+  - resolved
+  - approved
+  - rejected
+  transitions:
+    pending:
+    - resolved
+    resolved:
+    - approved
+    - rejected
+    rejected:
+    - pending
+  terminal:
+  - approved
+  invariants:
+  - approved 要求 approved_by 非空且 approved_by <> resolved_by（ck_pay_recon_items_operator_distinct_approver）
+  - resolved 要求 resolved = TRUE

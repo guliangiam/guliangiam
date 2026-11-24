@@ -1,0 +1,242 @@
+# ──────────────────────────────────────────────────────────────────────────
+# errors.yaml — 错误码机器可读注册表
+#
+# 唯一事实源：本文件（YAML）+ internal/platform/errors/errors.go（代码常量）
+# 渲染层：docs/generated/errors-registry.md（由 gen_registry_md.py 生成，禁手改）
+# 消费方：
+#   1. scripts/gen_openapi.py — 协议端点 error schema enum
+#   2. 未来 scripts/gen_errors.py — 前端 TS 错误码联合类型
+#   3. scripts/check-errors.py — 与 errors.go 一致性门禁
+#
+# 双命名空间纪律：application（非协议端点）与 protocol（协议端点）互不混用
+# 桥接接口：internal/platform/errors.ProtocolCodeError
+# ──────────────────────────────────────────────────────────────────────────
+
+application:
+  # 响应体：{"error":{"code","message","details"},"requestId","traceId"}
+  - code: invalid_argument
+    http: 400
+    category: request
+    scenario: "请求畸形或不可解析：JSON 截断、类型根本无法解码、Content-Type 与体不符"
+  - code: unprocessable_entity
+    http: 422
+    category: request
+    scenario: "可解析可绑定但语义校验失败：page/pageSize 越界、sortField 不在白名单、枚举闭集外取值、跨字段矛盾"
+  - code: request_entity_too_large
+    http: 413
+    category: request
+    scenario: "请求体超过配置上限（STORAGE_UPLOAD_MAX_BYTES，手册 4.17.2）；客户端缩减后重试"
+  - code: unsupported_media_type
+    http: 415
+    category: request
+    scenario: "请求 Content-Type 不被端点接受：报文本身可能合法，仅媒体类型不受支持（RFC 9110 §15.5.16）"
+  - code: unauthorized
+    http: 401
+    category: auth
+    scenario: "未认证或 Token 缺失/过期"
+  - code: forbidden
+    http: 403
+    category: auth
+    scenario: "Casbin 拒绝或资源归属校验失败"
+  - code: password_expired
+    http: 403
+    category: auth
+    scenario: "密码已过期"
+  - code: password_change_required
+    http: 403
+    category: auth
+    scenario: "必须修改密码（管理员强制或初始口令，details.reason=need_update_password 并附 changePasswordUrl）"
+  - code: mfa_required
+    http: 403
+    category: auth
+    scenario: "强制 MFA 策略，响应附 challengeId"
+  - code: not_found
+    http: 404
+    category: resource
+    scenario: "ID 未找到或不属于当前租户"
+  - code: conflict
+    http: 409
+    category: resource
+    scenario: "唯一约束冲突、幂等键复用但请求体不同"
+  - code: already_exists
+    http: 409
+    category: resource
+    scenario: "资源已存在（与 conflict 同 409，语义更具体）"
+  - code: invitation_used
+    http: 409
+    category: resource
+    scenario: "邀请已被接受"
+  - code: invitation_expired
+    http: 410
+    category: resource
+    scenario: "邀请超过有效期"
+  - code: gone
+    http: 410
+    category: resource
+    scenario: "资源已永久移除（通用）"
+  - code: precondition_failed
+    http: 412
+    category: resource
+    scenario: "If-Match/revision 前提与当前版本不符（规范 4.10）；details 返回当前 revision，客户端重取后重试；409 仅保留给非版本冲突"
+  - code: account_locked
+    http: 423
+    category: auth
+    scenario: "连续失败次数触发锁定"
+  - code: precondition_required
+    http: 428
+    category: request
+    scenario: "写路径要求乐观锁前提但请求未携带 If-Match/revision（规范 4.10）；不得默认最后写入获胜"
+  - code: too_many_requests
+    http: 429
+    category: rate_limit
+    scenario: "触发限流；必须同时返回 Retry-After"
+  - code: quota_exceeded
+    http: 429
+    category: quota
+    scenario: "租户配额（tenant_quotas）硬上限已用尽；details 返回 quota/limit/used/requested，客户端不得重试直至配额调整"
+  - code: internal
+    http: 500
+    category: system
+    scenario: "未捕获异常；禁止回显堆栈、SQL 或内部路径"
+  - code: unimplemented
+    http: 501
+    category: system
+    scenario: "能力尚未实现"
+  - code: unavailable
+    http: 503
+    category: system
+    scenario: "依赖不可用（数据库、Redis、Casbin、KMS 等）"
+
+  # ── 支付域（design/commerce/payment.md §12.1）────────────────────────────
+  - code: payment_receipt_storage_failed
+    http: 500
+    category: payment
+    scenario: "回调回执落库失败；回调方按幂等键重试"
+  - code: payment_verification_failed
+    http: 400
+    category: payment
+    scenario: "支付回调验签失败；不重试并写安全告警"
+  - code: payment_refund_exceeds_balance
+    http: 422
+    category: payment
+    scenario: "退款金额超出可退余额；客户端修正后重试"
+  - code: payment_refund_required
+    http: 422
+    category: payment
+    scenario: "已支付订单必须走退款，不能直接取消"
+  - code: payment_channel_unavailable
+    http: 503
+    category: payment
+    scenario: "支付渠道暂时不可用；可重试并携带 Retry-After"
+  - code: payment_channel_config_invalid
+    http: 400
+    category: payment
+    scenario: "渠道配置非法；修正配置后重试"
+  - code: payment_channel_not_activated
+    http: 422
+    category: payment
+    scenario: "渠道配置未激活；激活后重试"
+  - code: payment_consistency_mismatch
+    http: 400
+    category: payment
+    scenario: "回调金额/币种/商户不一致；进对账队列并告警"
+  - code: payment_invalid_transition
+    http: 400
+    category: payment
+    scenario: "非法支付状态迁移；拒绝并写审计"
+
+protocol:
+  # 响应体：{"error":"<code>","error_description":"..."}；仅在协议端点使用
+  - code: invalid_client
+    rfc: "6749"
+    namespace: oauth2
+  - code: invalid_grant
+    rfc: "6749"
+    namespace: oauth2
+  - code: invalid_scope
+    rfc: "6749"
+    namespace: oauth2
+  - code: invalid_redirect_uri
+    rfc: "6749"
+    namespace: oauth2
+  - code: unsupported_grant_type
+    rfc: "6749"
+    namespace: oauth2
+  - code: unsupported_response_type
+    rfc: "6749"
+    namespace: oauth2
+  - code: invalid_token
+    rfc: "6750"
+    namespace: oauth2
+  - code: invalid_dpop_proof
+    rfc: "9449"
+    namespace: dpop
+  - code: use_dpop_nonce
+    rfc: "9449"
+    namespace: dpop
+
+  # ──────────────────────────────────────────────────────────────────
+  # AI 网关域错误码（见 docs/design/ai-gateway/README.md 错误码章节）
+  # ──────────────────────────────────────────────────────────────────
+  - code: ai_quota_exceeded
+    http: 429
+    category: rate_limit
+    scenario: "AI 配额超限（RPM/TPM/预算）"
+    retry_after: true
+  - code: ai_provider_circuit_open
+    http: 503
+    category: ai_gateway
+    scenario: "AI 供应商熔断器 open"
+    retry_after: true
+  - code: ai_provider_circuit_half_open
+    http: 503
+    category: ai_gateway
+    scenario: "AI 供应商熔断器 half_open 探测中"
+    retry_after: true
+  - code: ai_api_key_invalid
+    http: 401
+    category: ai_gateway
+    scenario: "AI API Key 无效或哈希不匹配"
+  - code: ai_api_key_revoked
+    http: 401
+    category: ai_gateway
+    scenario: "AI API Key 已撤销"
+  - code: ai_api_key_expired
+    http: 401
+    category: ai_gateway
+    scenario: "AI API Key 已过期"
+  - code: ai_alias_not_found
+    http: 404
+    category: ai_gateway
+    scenario: "逻辑模型别名未找到"
+  - code: ai_route_resolution_failed
+    http: 502
+    category: ai_gateway
+    scenario: "别名下无健康供应商可用"
+    retry_after: true
+  - code: ai_upstream_timeout
+    http: 504
+    category: ai_gateway
+    scenario: "上游 LLM 供应商请求超时"
+    retry_after: true
+  - code: ai_upstream_error
+    http: 502
+    category: ai_gateway
+    scenario: "上游 LLM 供应商返回错误"
+    retry_after: true
+  - code: ai_config_sealed_decrypt_failed
+    http: 500
+    category: ai_gateway
+    scenario: "KMS 解密供应商凭据失败"
+
+discipline:
+  # 400 vs 422 分界（naming-registry N12）
+  http_400_422_split: |
+    invalid_argument(400) = 报文畸形不可解析；客户端重试无用
+    unprocessable_entity(422) = 语法可解析但语义校验失败；客户端改字段可成功
+  naming_forbidden:
+    # naming-allow 标注的废弃字面量
+    - internal_error          # 应用内部错误码用 internal
+    - revision_conflict       # 版本前提语义用 precondition_failed(412)/precondition_required(428)，规范 4.10
+    - bad_request             # 400 一律 invalid_argument
+    - invalid_dpop_proof_in_application_section  # DPoP 码归 protocol

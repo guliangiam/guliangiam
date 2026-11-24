@@ -1,0 +1,191 @@
+# docker-compose.national-db.yml
+# ─────────────────────────────────────────────────────────────────────
+# 国产数据库本地一键启动（用于方言验证 + parity check + DDL 重放测试）
+#
+# 使用方式：
+#   # 1. 全部拉起（至少留 6GB 内存）
+#   docker compose -f docker-compose.national-db.yml up -d
+#
+#   # 2. 只起 openGauss（最简单，Docker Hub 官方镜像）
+#   docker compose -f docker-compose.national-db.yml up -d opengauss
+#
+#   # 3. KingbaseES / DM8 / Shentong 标准版 需要先导入官方 tar 镜像
+#   docker load -i KingbaseES_V009R001C010_x86_64_Docker.tar
+#   docker load -i dm8_20250521_rev270902_x86_rh6_64_single.tar
+#   docker load -i ShenTong_088_241028_x86_64bit.tar
+#   然后再对应取消下面 services 的注释
+#
+#   # 4. 重放 DDL（以 openGauss 为例）
+#   python3 scripts/gen_schema.py --dialect gaussdb --all
+#   PGPASSWORD=Secretpassword@123 psql -h 127.0.0.1 -p 55432 -U gaussdb -d guliangiam \
+#     -f db/gaussdb/V1__guliangiam_schema_init.sql
+#
+#   # 5. parity check + runtime 门禁
+#   python3 scripts/check-schema-parity.py
+#   python3 scripts/check-schema-vs-db.py --dialect postgresql \
+#     --host 127.0.0.1 --port 55432 --user gaussdb --db guliangiam
+#
+# DB_DRIVER → dialectKey 映射（internal/bootstrap/runtime.go driverNormalize）：
+#   gaussdb / opengauss        → wire=pgx, dialectKey=gaussdb   (PG 兼容)
+#   kingbase / kingbasees      → wire=pgx, dialectKey=kingbase  (PG 兼容, RLS 关)
+#   dm8 / dameng               → wire=godror, dialectKey=dm8    (Oracle MERGE INTO)
+#   shentong / shentongdb      → wire=stgo,  dialectKey=shentong (Oracle MERGE INTO)
+#   shentong-gaussdb           → wire=pgx, dialectKey=shentong_gaussdb (PG 兼容)
+# ─────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── 1. openGauss / GaussDB ──────────────────────────────────────────
+  # CI 直接可用（Docker Hub 官方镜像 + 社区镜像）
+  # wire protocol: pgx  | dialectKey: gaussdb
+  opengauss:
+    image: opengauss/opengauss-server:latest          # 官方镜像（1.77GB，最近更新）
+    # image: enmotech/opengauss:latest                # 社区镜像（更轻量）
+    container_name: guliangiam-opengauss
+    restart: unless-stopped
+    privileged: true                                    # openGauss 必须 --privileged
+    environment:
+      GS_PASSWORD: Guliangiam@2026                      # 密码需 ≥8 字符 + 大小写 + 数字 + 特殊符号
+      GS_NODENAME: gaussdb
+      GS_USERNAME: gaussdb                              # 外部连接用（默认值）
+      GS_USER_PASSWORD: Guliangiam@2026
+      GS_PORT: "5432"
+      GS_DB: guliangiam                                 # 启动时自动创建
+    ports:
+      - "55432:5432"                                    # 宿主机 55432 → 容器 5432
+    volumes:
+      - opengauss-data:/var/lib/opengauss
+    # 健康检查——用容器内置 gsql 验证
+    healthcheck:
+      test: >-
+        bash -c "su - omm -c \"gsql -d guliangiam -c 'SELECT 1'\""
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s                                  # openGauss 首次初始化较慢
+    networks:
+      - guliangiam-db
+
+  # ── 2. KingbaseES V9 ────────────────────────────────────────────────
+  # 镜像来源：https://www.kingbase.com.cn/download.html (需邮箱注册)
+  # docker load -i KingbaseES_V009R001C010_x86_64_Docker.tar
+  # wire protocol: pgx  | dialectKey: kingbase
+  kingbase:
+    image: kingbase_v009r001c010b0004_single_x86:v1    # ← 替换为 docker load 后的实际镜像名
+    container_name: guliangiam-kingbase
+    profiles: ["kingbase"]                              # 默认不启动，手动加 profile 才起
+    restart: unless-stopped
+    privileged: true
+    environment:
+      DB_USER: guliangiam                               # 数据库用户名（默认 system）
+      DB_PASSWORD: Guliangiam@2026
+      DB_MODE: postgresql                               # postgresql / oracle / mysql / sqlserver
+      ENCODING: UTF8
+    ports:
+      - "55433:54321"                                   # KingbaseES 默认 54321
+    volumes:
+      - kingbase-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "ksql guliangiam guliangiam -c 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - guliangiam-db
+
+  # ── 3. 达梦 DM8 ──────────────────────────────────────────────────────
+  # 官方镜像：https://eco.dameng.com/download/ (需登录)
+  # docker load -i dm8_20250521_rev270902_x86_rh6_64_single.tar
+  # 社区镜像（非官方，仅用于 PoC）：docker pull teamide/dm8:v201106
+  # wire protocol: godror  | dialectKey: dm8    (Oracle MERGE INTO UPSERT)
+  dm8:
+    image: teamide/dm8:v201106                          # 社区镜像（或替换为官方导入后的标签）
+    container_name: guliangiam-dm8
+    profiles: ["dm8"]
+    restart: unless-stopped
+    privileged: true
+    environment:
+      LD_LIBRARY_PATH: /opt/dmdbms/bin
+      PAGE_SIZE: "16"
+      EXTENT_SIZE: "32"
+      LOG_SIZE: "2048"
+      SYSDBA_PWD: Guliangiam@2026                       # sysdba 密码
+      PORT_NUM: "5236"
+      INSTANCE_NAME: DM8
+    ports:
+      - "5236:5236"
+    volumes:
+      - dm8-data:/opt/dmdbms/data
+    healthcheck:
+      test: ["CMD-SHELL", "disql SYSDBA/Guliangiam@2026@localhost:5236 `SELECT 1`"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s                                 # DM8 初始化最慢
+    networks:
+      - guliangiam-db
+
+  # ── 4. 神舟通用 ShenTong 标准版（Oracle 兼容） ─────────────────────
+  # 镜像来源：神舟通用官方（4006-198-288 联系客服获取 Docker tar）
+  # docker load -i ShenTong_088_241028_x86_64bit.tar
+  # wire protocol: stgo  | dialectKey: shentong    (Oracle MERGE INTO UPSERT)
+  # 默认库 OSRDB / 用户 SYSDBA / 密码 szoscar55
+  shentong-std:
+    image: shentong_088_241028_x86_64bit:latest          # ← 替换为 docker load 后的实际镜像名
+    container_name: guliangiam-shentong-std
+    profiles: ["shentong"]
+    restart: unless-stopped
+    privileged: true
+    # ShenTong 需要先解压 dbdata.tar.gz 并挂载
+    # tar -zxf dbdata.tar.gz → 生成 odbs/ arch/ backup/ 三个目录
+    volumes:
+      - ./shentong-dbdata/odbs:/opt/ShenTong/odbs/OSRDB
+      - ./shentong-dbdata/arch:/opt/ShenTong/arch/OSRDB
+      - ./shentong-dbdata/backup:/opt/ShenTong/backup
+    ports:
+      - "58020:2003"                                    # ShenTong 默认 2003
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/ShenTong/bin/isql -U SYSDBA/szoscar55 -d osrdb <<< 'SELECT VERSION;'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+    networks:
+      - guliangiam-db
+
+  # ── 5. ShenTong openGauss 版（PG wire protocol） ───────────────────
+  # 与 ShenTong 标准版 Docker tar 可能同包，需要从官方确认是否支持拆分
+  # wire protocol: pgx  | dialectKey: shentong_gaussdb
+  # 作为 ShenTong 标准版的降级路径——若 MERGE INTO 驱动不可用可走此线
+  shentong-gaussdb:
+    image: opengauss/opengauss-server:latest            # ← 临时用 openGauss 镜像占位
+    container_name: guliangiam-shentong-gaussdb
+    profiles: ["shentong-gaussdb"]
+    privileged: true
+    environment:
+      GS_PASSWORD: Guliangiam@2026
+      GS_USERNAME: guliangiam
+      GS_DB: guliangiam
+    ports:
+      - "55434:5432"
+    volumes:
+      - shentong-gaussdb-data:/var/lib/opengauss
+    healthcheck:
+      test: ["CMD-SHELL", "su - omm -c \"gsql -d guliangiam -c 'SELECT 1'\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - guliangiam-db
+
+volumes:
+  opengauss-data:
+  kingbase-data:
+  dm8-data:
+  shentong-gaussdb-data:
+
+networks:
+  guliangiam-db:
+    driver: bridge

@@ -1,0 +1,124 @@
+# ============================================================
+# GuliangIAM Docker Compose
+# Usage:
+#   Production: docker compose up -d
+#   Development: docker compose --profile dev up -d
+#   First-time dev init: AUTO_MIGRATE=true AUTO_SEED=true docker compose --profile dev up -d
+# ============================================================
+
+services:
+  # ---- Production Application ----
+  guliangiam:
+    image: guliangiam/guliangiam:latest
+    container_name: guliangiam
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "${HTTP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - RUNNING_IN_DOCKER=true
+      - HTTP_ADDR=:8000
+      - APP_ENV=${APP_ENV:-development}
+      - driverName=postgres
+      - DB_DSN=postgres://guliangiam:${POSTGRES_PASSWORD:-guliangiam}@db:5432/guliangiam?sslmode=disable
+      - dataSourceName=user=guliangiam password=${POSTGRES_PASSWORD:-guliangiam} host=db port=5432 sslmode=disable dbname=guliangiam
+      - origin=${GULIANGIAM_ORIGIN:-http://localhost:8000}
+      - SESSION_HMAC_KEY=${SESSION_HMAC_KEY:-change-me-to-a-secure-random-string}
+      - ENCRYPTION_KEY_CURRENT=${ENCRYPTION_KEY_CURRENT:?ENCRYPTION_KEY_CURRENT must be set (openssl rand -base64 32)}
+      - AUTO_MIGRATE=${AUTO_MIGRATE:-false}
+      - AUTO_SEED=${AUTO_SEED:-false}
+    volumes:
+      - guliangiam-conf:/app/conf
+      - guliangiam-logs:/app/logs
+      - guliangiam-uploads:/app/uploads
+    healthcheck:
+      test: [ "CMD", "curl", "-fsSL", "http://localhost:8000/healthz" ]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+  # ---- PostgreSQL Database ----
+  db:
+    image: postgres:18-alpine
+    container_name: guliangiam-db
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=guliangiam
+    volumes:
+      - guliangiam-pgdata:/var/lib/postgresql/data
+      # initdb.d: PostgreSQL 官方镜像首次启动时自动执行本目录下的 .sql
+      # / .sh 文件（postgres superuser 权限）。挂载仅在数据目录为空时生效，
+      # 对已有集群无任何副作用。bootstrap 脚本是幂等的，可安全重跑。
+      - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d guliangiam" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---- Development Application (hot-reload) ----
+  guliangiam-dev:
+    image: guliangtech/guliangiam:dev
+    container_name: guliangiam-dev
+    profiles:
+      - dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "${HTTP_PORT:-8000}:8000"
+      - "2345:2345" # Delve debugger port
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - RUNNING_IN_DOCKER=true
+      - HTTP_ADDR=:8000
+      - APP_ENV=development
+      - driverName=postgres
+      - DB_DSN=postgres://guliangiam:${POSTGRES_PASSWORD:-guliangiam}@db:5432/guliangiam?sslmode=disable
+      - dataSourceName=user=guliangiam password=${POSTGRES_PASSWORD:-guliangiam} host=db port=5432 sslmode=disable dbname=guliangiam
+      - origin=${GULIANGIAM_ORIGIN:-http://localhost:8000}
+      - SESSION_HMAC_KEY=${SESSION_HMAC_KEY:-change-me-to-a-secure-random-string}
+      - ENCRYPTION_KEY_CURRENT=${ENCRYPTION_KEY_CURRENT:?ENCRYPTION_KEY_CURRENT must be set (openssl rand -base64 32)}
+      # 启动默认不重放迁移、不导入种子；首次初始化或需要升级时显式置为 true。
+      - AUTO_MIGRATE=${AUTO_MIGRATE:-false}
+      - AUTO_SEED=${AUTO_SEED:-false}
+      # 未设置时留空：仅在导入种子（AUTO_SEED=true 或服务 -seed）后生效，
+      # 由数据链 V1 的开发哨兵口令兜底（仅本地/测试环境）；设置后播种执行器
+      # 以环境口令替换哨兵，新凭据强制首登改密。
+      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-}
+      - runmode=dev
+    volumes:
+      - guliangiam-conf:/app/conf
+      - guliangiam-logs:/app/logs
+      - guliangiam-uploads:/app/uploads
+    healthcheck:
+      test: [ "CMD", "curl", "-fsSL", "http://localhost:8000/healthz" ]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+# ---- Named Volumes ----
+volumes:
+  guliangiam-pgdata:
+    driver: local
+  guliangiam-conf:
+    driver: local
+  guliangiam-logs:
+    driver: local
+  guliangiam-uploads:
+    driver: local

@@ -1,0 +1,40 @@
+/* GlFormGrid — 在 GlForm.css 里追加响应式 grid 规则 */
+
+.gl-form-grid {
+  display: grid;
+  gap: var(--gl-space-2, 8px) var(--gl-space-4, 16px);
+}
+
+.gl-form-grid[data-columns-md] {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+@media (min-width: 768px) {
+  .gl-form-grid[data-columns-md="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gl-form-grid[data-columns-md="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .gl-form-grid[data-columns-md="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .gl-form-grid[data-gap-md] {
+    gap: var(--_gl-gap-md) var(--_gl-gap-md);
+  }
+}
+
+@media (min-width: 1024px) {
+  .gl-form-grid[data-columns-lg="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .gl-form-grid[data-columns-lg="3"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .gl-form-grid[data-columns-lg="4"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .gl-form-grid[data-gap-lg] {
+    gap: var(--_gl-gap-lg) var(--_gl-gap-lg);
+  }
+}

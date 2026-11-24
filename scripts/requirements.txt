@@ -1,0 +1,3 @@
+# 门禁脚本的 Python 依赖（CI 与本地共用同一份清单）
+# 安装：python3 -m pip install -r scripts/requirements.txt
+PyYAML>=6.0,<7

@@ -1,0 +1,2525 @@
+table_name: guliangiam.users
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: User primary key (UUID)
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant org this user belongs to (RLS predicate key)
+- name: username
+  type: TEXT
+  nullable: false
+  comment: User login name, unique within organization
+- name: external_id
+  type: TEXT
+  nullable: true
+  comment: IdP subject identifier when account was created via SSO; NULL for local
+    users
+- name: user_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: 'User classification: human / service_account / bot'
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''active'''
+  comment: 'Account lifecycle state: active / disabled / locked / pending_verification'
+- name: is_admin
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+  comment: Org-level admin flag; when true the user bypasses role-based permission
+    checks
+- name: is_forbidden
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+  comment: Emergency block flag; when true all auth flows reject this user
+- name: is_verified
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+  comment: Whether email/phone verification has completed
+- name: is_online
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+  comment: Cached session presence flag updated by periodic heartbeat
+- name: created_ip
+  type: VARCHAR(50)
+  nullable: false
+  default: ''''''
+  comment: First-seen creation IP address (varchar to tolerate IPv6 variants)
+- name: signup_application_id
+  type: UUID
+  nullable: true
+  comment: Application through which the user registered; NULL for admin-created accounts
+- name: register_source
+  type: TEXT
+  nullable: true
+  comment: 'Creation channel: self_signup | admin_create | invitation | SCIM | OpenID
+    | SAML'
+- name: register_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: 'Auth method used at signup: password | oidc | saml | webauthn | magic_link'
+- name: tag
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: Free-form admin label (no schema constraint; use for internal cohorting)
+- name: score
+  type: INTEGER
+  nullable: false
+  default: '0'
+  comment: Composite risk / engagement score used by admin UX sorting
+- name: is_deleted
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+  comment: Soft-delete marker; rows with true are hidden from normal queries
+- name: ip_whitelist
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: Semicolon-separated CIDR list; when non-empty, login restricted to these
+    ranges
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Account creation timestamp
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last row modification timestamp (always set on any update)
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Soft-delete timestamp; NULL when is_deleted=false
+- name: created_by
+  type: UUID
+  nullable: true
+  comment: User UUID that created this account (admin self-serve flow)
+- name: updated_by
+  type: UUID
+  nullable: true
+  comment: User UUID that last modified this account
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter; incremented on every write
+constraints:
+- name: ck_users_status
+  type: check
+  expr: status IN ('active', 'disabled', 'locked', 'pending_verification')
+- name: uq_users_org_username_active
+  type: unique_partial
+  columns:
+  - organization_id
+  - username
+  predicate: deleted_at IS NULL
+indexes:
+- name: idx_users_org_created_at_desc
+  columns:
+  - organization_id
+  - created_at DESC
+- name: idx_users_organization_id
+  columns:
+  - organization_id
+- name: idx_users_org_deleted
+  columns:
+  - organization_id
+  - deleted_at
+- name: idx_users_org_username_deleted
+  columns:
+  - organization_id
+  - username
+  predicate: deleted_at IS NULL
+- name: idx_users_status
+  columns:
+  - status
+  predicate: deleted_at IS NULL
+- name: idx_users_org_status
+  columns:
+  - organization_id
+  - status
+  predicate: deleted_at IS NULL
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+- name: fk_users_signup_application_id
+  columns:
+  - signup_application_id
+  ref_columns:
+  - id
+  ref_table: guliangiam.applications
+  on_delete: SET_NULL
+---
+table_name: guliangiam.user_signin_tracking
+pk: user_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: signin_wrong_times
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: last_signin_wrong_time
+  type: TIMESTAMPTZ
+  nullable: true
+- name: last_signin_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: last_signin_ip
+  type: INET
+  nullable: true
+- name: signup_ip
+  type: INET
+  nullable: true
+revision: true
+rls: true
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.user_mfa_config
+pk: user_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: preferred_mfa_type
+  type: TEXT
+  nullable: true
+- name: recovery_code_hashes
+  type: TEXT[]
+  nullable: false
+  default: '''{}'''
+  comment: "Argon2id hashes of one-time recovery codes; plaintext never stored"
+- name: recovery_generated_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: "When the current recovery-code set was generated"
+- name: totp_secret
+  type: TEXT
+  nullable: true
+- name: mfa_radius_provider
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: mfa_radius_username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: mfa_push_receiver
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: mfa_push_provider
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: mfa_push_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: mfa_remember_deadline
+  type: TIMESTAMPTZ
+  nullable: true
+revision: true
+rls: true
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.user_financials
+pk: user_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: balance
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: balance_credit
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: balance_currency
+  type: VARCHAR(3)
+  nullable: false
+  default: '''USD'''
+revision: true
+rls: true
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.user_custom_attributes
+pk: user_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: custom1
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom2
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom3
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom4
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom5
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom6
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom7
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom8
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom9
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom10
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+revision: true
+rls: true
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.user_collections
+pk: user_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: addresses
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: managed_accounts
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: face_ids
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: cart
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: mfa_items
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: mfa_accounts
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: managed_accounts_sealed
+  type: LONGTEXT
+  nullable: true
+  comment: v2 envelope of the managed_accounts plaintext payload (AAD table/column/user_id); NULL = not yet sealed, legacy column remains authoritative
+- name: mfa_items_sealed
+  type: LONGTEXT
+  nullable: true
+  comment: v2 envelope of the mfa_items plaintext payload (AAD table/column/user_id); NULL = not yet sealed
+- name: mfa_accounts_sealed
+  type: LONGTEXT
+  nullable: true
+  comment: v2 envelope of the mfa_accounts plaintext payload (AAD table/column/user_id); NULL = not yet sealed
+- name: application_scopes
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+indexes:
+- name: idx_user_collections_addresses_gin
+  columns:
+  - addresses JSONB_PATH_OPS
+  using: gin
+- name: idx_user_collections_face_ids_gin
+  columns:
+  - face_ids JSONB_PATH_OPS
+  using: gin
+rls: true
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.user_profiles
+pk: user_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: display_name
+  type: TEXT
+  nullable: true
+- name: first_name
+  type: TEXT
+  nullable: true
+- name: last_name
+  type: TEXT
+  nullable: true
+- name: avatar_url
+  type: TEXT
+  nullable: true
+- name: email
+  type: TEXT
+  nullable: true
+- name: email_verified
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: phone
+  type: TEXT
+  nullable: true
+- name: phone_verified
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: country_code
+  type: TEXT
+  nullable: true
+- name: region
+  type: TEXT
+  nullable: true
+- name: location
+  type: TEXT
+  nullable: true
+- name: birthday
+  type: DATE
+  nullable: true
+- name: gender
+  type: TEXT
+  nullable: true
+- name: bio
+  type: TEXT
+  nullable: true
+- name: real_name
+  type: TEXT
+  nullable: true
+- name: id_card_type
+  type: TEXT
+  nullable: true
+- name: id_card
+  type: TEXT
+  nullable: true
+- name: passport_no
+  type: VARCHAR(64)
+  nullable: true
+- name: driver_license_no
+  type: VARCHAR(64)
+  nullable: true
+- name: id_card_expiry
+  type: DATE
+  nullable: true
+- name: issue_country
+  type: VARCHAR(8)
+  nullable: true
+- name: issuing_authority
+  type: VARCHAR(255)
+  nullable: true
+- name: passport_photo_url
+  type: TEXT
+  nullable: true
+- name: driver_license_front_url
+  type: TEXT
+  nullable: true
+- name: driver_license_back_url
+  type: TEXT
+  nullable: true
+- name: properties
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_user_profiles_email_active
+  type: unique_partial
+  columns:
+  - email
+  predicate: deleted_at IS NULL AND email IS NOT NULL
+indexes:
+- name: idx_users_email_deleted
+  columns:
+  - email
+  predicate: deleted_at IS NULL AND email IS NOT NULL
+- name: idx_users_phone_deleted
+  columns:
+  - phone
+  predicate: deleted_at IS NULL AND phone IS NOT NULL
+soft_delete: true
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.user_credentials
+pk: user_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: password_hash
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: password_algo
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: password_updated_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: access_key
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: access_secret_hash
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: access_secret_rotated_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: access_secret_hash_prev
+  type: VARCHAR(255)
+  nullable: true
+- name: access_secret_prev_expires_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: need_update_password
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.user_password_history
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: password_hash
+  type: TEXT
+  nullable: false
+- name: password_algo
+  type: VARCHAR(64)
+  nullable: false
+  default: '''argon2id'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+indexes:
+- name: idx_password_history_user_created
+  columns:
+  - user_id
+  - created_at DESC
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.user_identities
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: provider_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: identity_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: subject
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: provider_account
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: profile_snapshot
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: linked_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: link_state
+  comment: Identity merge lifecycle state declared by the state machine registry (user_identities_merge)
+    and by the generated domain constants.
+  type: VARCHAR(64)
+  nullable: false
+  default: '''auto_linked'''
+indexes:
+- name: idx_user_identities_subject
+  columns:
+  - subject
+- name: idx_user_identities_user_id
+  columns:
+  - user_id
+  - linked_at DESC
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+constraints:
+- name: uq_identity_provider_subject
+  type: unique
+  columns:
+  - identity_type
+  - provider_id
+  - subject
+- name: ck_user_identities_link_state
+  type: check
+  expr: link_state IN ('auto_linked', 'merge_pending', 'linked', 'rejected')
+---
+table_name: guliangiam.user_mfa_methods
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: method_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: verified
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: last_used_at
+  type: TIMESTAMPTZ
+  nullable: true
+indexes:
+- name: idx_user_mfa_methods_user_id
+  columns:
+  - user_id
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.applications
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: slug
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: TEXT
+  nullable: false
+- name: category
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: app_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: description
+  type: TEXT
+  nullable: true
+- name: homepage_url
+  type: TEXT
+  nullable: true
+- name: domain
+  type: TEXT
+  nullable: true
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''active'''
+- name: client_id
+  type: TEXT
+  nullable: true
+- name: tags
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: logo
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: is_portal
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: is_visible
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: is_shared
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: title
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: favicon
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: menu_order
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: menu_mode
+  type: VARCHAR(64)
+  nullable: false
+  default: '''side'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_by
+  type: UUID
+  nullable: true
+- name: updated_by
+  type: UUID
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_applications_org_slug
+  type: unique
+  columns:
+  - organization_id
+  - slug
+- name: uq_applications_client_id_non_empty
+  type: unique_partial
+  columns:
+  - client_id
+  predicate: client_id <> ''
+indexes:
+- name: idx_apps_org_deleted
+  columns:
+  - organization_id
+  - deleted_at
+- name: idx_applications_organization_id_active
+  columns:
+  - organization_id
+  predicate: deleted_at IS NULL
+- name: idx_applications_client_id_active
+  columns:
+  - client_id
+  predicate: client_id IS NOT NULL AND deleted_at IS NULL
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+---
+table_name: guliangiam.app_network_config
+pk: application_id
+columns:
+- name: application_id
+  type: UUID
+  nullable: false
+- name: provider_items
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: forced_redirect_origin
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: other_domains
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: upstream_host
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ssl_mode
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ssl_cert
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: client_cert
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+revision: true
+rls: true
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.applications
+  a WHERE a.id = application_id AND a.organization_id = guliangiam.current_organization_id())
+--- null
+---
+table_name: guliangiam.app_oauth_config
+pk: application_id
+columns:
+- name: application_id
+  type: UUID
+  nullable: false
+- name: redirect_uris
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: grant_types
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: token_endpoint_auth_method
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: client_secret_hash
+  type: TEXT
+  nullable: true
+- name: registration_access_token_hash
+  type: TEXT
+  nullable: true
+- name: custom_scopes
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: token_format
+  type: VARCHAR(64)
+  nullable: false
+  default: '''JWT'''
+- name: expire_in_hours
+  type: INTEGER
+  nullable: false
+  default: '24'
+- name: refresh_token_expire_in_hours
+  type: INTEGER
+  nullable: false
+  default: '168'
+- name: token_signing_method
+  type: VARCHAR(64)
+  nullable: false
+  default: '''RS256'''
+- name: token_fields
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: token_attributes
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: dpop_required
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: pkce_required
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: cookie_expire_in_hours
+  type: INTEGER
+  nullable: false
+  default: '168'
+- name: enable_beta_oidc
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: consent_mode
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: backchannel_logout_uri
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: frontchannel_logout_uri
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: frontchannel_logout_session_required
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.applications
+  a WHERE a.id = application_id AND a.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+constraints:
+- name: ck_app_oauth_config_token_signing_method
+  type: check
+  expr: "token_signing_method IN ('RS256', 'SM2-SM3')"
+- name: ck_app_oauth_config_token_endpoint_auth_method
+  type: check
+  expr: "token_endpoint_auth_method IN ('', 'none', 'client_secret_basic', 'client_secret_post',
+    'private_key_jwt', 'tls_client_auth', 'self_signed_tls_client_auth')"
+indexes:
+- name: idx_app_oauth_config_grant_types
+  columns:
+  - grant_types
+  using: gin
+  predicate: grant_types != '{}'
+---
+table_name: guliangiam.app_client_secrets
+pk: id
+comment: Client secret lifecycle rows; secret_hash is the only stored credential
+  material (client_secret_basic / client_secret_post)
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Secret row identifier (UUIDv7, generated by the application layer)
+- name: application_id
+  type: UUID
+  nullable: false
+  comment: Owning OAuth client application
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant owner (denormalised from applications.organization_id) so every
+    repository query can filter explicitly without relying on RLS
+- name: secret_prefix
+  type: VARCHAR(16)
+  nullable: false
+  comment: Non-secret display prefix (gl_cs_ + first six random characters)
+- name: secret_hash
+  type: VARCHAR(255)
+  nullable: false
+  comment: Argon2id hash used by client_secret_basic and client_secret_post
+- name: status
+  type: VARCHAR(16)
+  nullable: false
+  default: '''active'''
+  comment: 'Lifecycle state: active / grace / retired'
+- name: rotated_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Time this secret was superseded by a rotation
+- name: grace_until
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: End of the acceptance window for a rotated secret
+- name: retired_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Time the secret was permanently retired
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.applications
+  a WHERE a.id = application_id AND a.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+constraints:
+- name: ck_app_client_secrets_status
+  type: check
+  expr: "status IN ('active', 'grace', 'retired')"
+- name: uq_app_client_secrets_active
+  type: unique_partial
+  columns:
+  - application_id
+  predicate: "status = 'active'"
+indexes:
+- name: idx_app_client_secrets_application_status
+  columns:
+  - application_id
+  - status
+- name: idx_app_client_secrets_org_application_status
+  columns:
+  - organization_id
+  - application_id
+  - status
+---
+table_name: guliangiam.app_client_jwks
+pk: id
+comment: Public keys registered by a client for private_key_jwt assertions; private
+  key parameters are rejected before persistence
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: JWK row identifier (UUIDv7, generated by the application layer)
+- name: application_id
+  type: UUID
+  nullable: false
+  comment: Owning OAuth client application
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant owner (denormalised from applications.organization_id) so every
+    repository query can filter explicitly without relying on RLS
+- name: kid
+  type: VARCHAR(128)
+  nullable: false
+  comment: Key identifier the client places in the assertion JWT header
+- name: alg
+  type: VARCHAR(16)
+  nullable: false
+  default: '''RS256'''
+  comment: 'Signature algorithm allowed for this key: RS256 / PS256 / ES256'
+- name: jwk
+  type: JSONB
+  nullable: false
+  comment: Public JWK document only (no d/p/q/dp/dq/qi/k members)
+- name: status
+  type: VARCHAR(16)
+  nullable: false
+  default: '''active'''
+  comment: 'Lifecycle state: active / retired'
+- name: retired_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Time the key was retired
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.applications
+  a WHERE a.id = application_id AND a.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+constraints:
+- name: ck_app_client_jwks_alg
+  type: check
+  expr: "alg IN ('RS256', 'PS256', 'ES256')"
+- name: ck_app_client_jwks_status
+  type: check
+  expr: "status IN ('active', 'retired')"
+indexes:
+- name: uq_app_client_jwks_application_kid
+  columns:
+  - application_id
+  - kid
+  unique: true
+- name: idx_app_client_jwks_org_application_status
+  columns:
+  - organization_id
+  - application_id
+  - status
+---
+table_name: guliangiam.app_client_certificates
+pk: id
+comment: Client certificates registered for tls_client_auth and
+  self_signed_tls_client_auth; only public certificate PEM is stored
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Certificate row identifier (UUIDv7, generated by the application layer)
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant org of the owning application (RLS predicate and fingerprint scope)
+- name: application_id
+  type: UUID
+  nullable: false
+  comment: Owning OAuth client application
+- name: auth_method
+  type: VARCHAR(32)
+  nullable: false
+  comment: 'tls_client_auth (CA-issued) or self_signed_tls_client_auth (fingerprint only)'
+- name: certificate_pem
+  type: TEXT
+  nullable: false
+  comment: Public certificate PEM (private key material is rejected on upload)
+- name: fingerprint_sha256
+  type: VARCHAR(43)
+  nullable: false
+  comment: base64url(SHA-256(DER)) RFC 8705 x5t#S256 value, 43 characters
+- name: subject_dn
+  type: VARCHAR(512)
+  nullable: false
+  comment: Subject distinguished name used for tls_client_auth binding
+- name: issuer_dn
+  type: VARCHAR(512)
+  nullable: false
+  comment: Issuer distinguished name; equals subject_dn for self-signed certificates
+- name: not_before
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Certificate validity start
+- name: not_after
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Certificate validity end
+- name: status
+  type: VARCHAR(16)
+  nullable: false
+  default: '''active'''
+  comment: 'Lifecycle state: active / retired'
+- name: retired_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Time the certificate binding was retired
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+constraints:
+- name: ck_app_client_certificates_auth_method
+  type: check
+  expr: "auth_method IN ('tls_client_auth', 'self_signed_tls_client_auth')"
+- name: ck_app_client_certificates_status
+  type: check
+  expr: "status IN ('active', 'retired')"
+indexes:
+- name: uq_app_client_certificates_org_fingerprint
+  columns:
+  - organization_id
+  - fingerprint_sha256
+  unique: true
+- name: idx_app_client_certificates_application_status
+  columns:
+  - application_id
+  - status
+---
+table_name: guliangiam.app_signin_config
+pk: application_id
+columns:
+- name: application_id
+  type: UUID
+  nullable: false
+- name: disable_signin
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: enable_exclusive_signin
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: enable_signin_session
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: enable_signup
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: enable_guest_signin
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: enable_auto_signin
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: enable_link_with_email
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: signin_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: logout_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: logout_redirect_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: prompt_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: signup_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: forget_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: affiliation_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: signin_methods
+  type: TEXT[]
+  nullable: false
+  default: '''{}'''
+- name: signin_items
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: failed_signin_limit
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: failed_signin_frozen_time
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: code_resend_timeout
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: code_expire
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: default_group
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: org_choice_mode
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ip_whitelist
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ip_blacklist
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: cors_allowed_origins
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.applications
+  a WHERE a.id = application_id AND a.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+---
+table_name: guliangiam.app_saml_config
+pk: application_id
+columns:
+- name: application_id
+  type: UUID
+  nullable: false
+- name: saml_reply_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: certificate
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: saml_metadata
+  type: TEXT
+  nullable: false
+  comment: IdP SAML metadata XML; multi-KB document, so unbounded text rather than
+    a 255-char column
+- name: saml_metadata_url
+  type: VARCHAR(2048)
+  nullable: false
+  default: ''''''
+  comment: IdP metadata URL; 2048 is the practical browser/HTTP URL ceiling
+- name: enable_saml_compress
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: saml_name_id_format
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: saml_name_id_content
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: saml_sign_request
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: saml_attributes
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: enable_saml_c14n10
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: enable_saml_post_binding
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: disable_saml_attributes
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: enable_saml_assertion_signature
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: is_email_saml_nameid
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+- name: saml_hash_algorithm
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: saml_c14n_prefix
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.applications
+  a WHERE a.id = application_id AND a.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+---
+table_name: guliangiam.app_form_config
+pk: application_id
+columns:
+- name: application_id
+  type: UUID
+  nullable: false
+- name: signup_items
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: custom_css
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom_header
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: form_css
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: form_css_mobile
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: form_side_html
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: form_background_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: form_background_url_mobile
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: form_offset
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: form_position
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: header_html
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: footer_html
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: signup_html
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: signin_html
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: page_html
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom_js
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: terms_of_use
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: privacy_policy
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.applications
+  a WHERE a.id = application_id AND a.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+---
+table_name: guliangiam.application_provider_bindings
+pk:
+- application_id
+- provider_id
+columns:
+- name: application_id
+  type: UUID
+  nullable: false
+- name: provider_id
+  type: UUID
+  nullable: false
+indexes:
+- name: idx_app_provider_bindings_provider_id
+  columns:
+  - provider_id
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- name: fk_app_provider_bindings_provider_id
+  columns:
+  - provider_id
+  ref_columns:
+  - id
+  ref_table: guliangiam.providers
+  on_delete: CASCADE
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR application_id IN (SELECT id FROM guliangiam.applications
+  WHERE organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.providers
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: display_name
+  type: TEXT
+  nullable: false
+- name: category
+  type: TEXT
+  nullable: false
+- name: provider_type
+  type: TEXT
+  nullable: false
+- name: sub_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: family
+  type: VARCHAR(32)
+  nullable: true
+- name: kind
+  type: VARCHAR(64)
+  nullable: true
+- name: variant
+  type: VARCHAR(32)
+  nullable: true
+- name: method
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: client_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: client_secret
+  type: TEXT
+  nullable: false
+- name: client_id2
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: client_secret2
+  type: TEXT
+  nullable: false
+- name: provider_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: auth_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: token_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: user_info_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: callback_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: signing_alg
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: scopes
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: idp_entity_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: sso_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: slo_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: metadata
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: issuer_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: region
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: host
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: port
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: database_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: user_mapping
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: template
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom_api
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom_header
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom_body
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: admin
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: password
+  type: TEXT
+  nullable: false
+- name: app_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: app_secret
+  type: TEXT
+  nullable: false
+- name: agent_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: content_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: sender
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: receiver
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_by
+  type: UUID
+  nullable: true
+- name: updated_by
+  type: UUID
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_providers_family
+  type: check
+  columns: [family]
+  expr: "family IS NULL OR family IN ('identity', 'ai', 'payment', 'notification')"
+- name: ck_providers_kind
+  type: check
+  columns: [kind]
+  expr: "kind IS NULL OR (family = 'identity' AND kind IN ('github', 'google', 'azure_ad', 'azure_ad_b2c', 'facebook', 'linkedin', 'twitter', 'gitlab', 'gitee', 'okta', 'wechat', 'wechat_mobile', 'wechat_miniprogram', 'wecom_internal', 'wecom_third', 'dingtalk', 'lark', 'feishu', 'qq', 'weibo', 'baidu', 'douyin', 'kwai', 'bilibili', 'infoflow_internal', 'infoflow_third', 'telegram', 'ldap', 'adfs', 'saml', 'oidc', 'custom', 'goth', 'metamask', 'web3onboard', 'alipay', 'wechat_pay', 'smtp', 'default', 'local', 'faceid', 'apple', 'keycloak', 'slack', 'discord', 'steam', 'amazon', 'sendgrid', 'azure_acs', 'resend', 'submail_email', 'mailtrap_email', 'directmail', 'tencent_ses', 'sendcloud', 'mailgun', 'amazon_ses', 'postmark', 'mailersend', 'brevo', 'zoho_mail', 'custom_http', 'sms', 'twilio_sms', 'alibaba_sms', 'alibaba_pnvs', 'tencent_sms', 'volcengine_sms', 'huawei_sms', 'amazon_sns', 'azure_acs_sms', 'infobip', 'ucloud_sms', 'emay_sms', 'baidu_sms', 'submail', 'mailtrap_sms', 'oson_sms', 'mock_sms', 'twilio_verify', 'smsbao', 'msg91', 'custom_http_sms', 'unisms_sms', 'yunpian_sms', 'jdcloud_sms', 'vonage_sms', 'plivo_sms', 'telnyx_sms', 'sinch_sms', 'bird_sms', 'clickatell_sms', 'africastalking_sms', 'aws_s3', 'azure_blob', 'gcs', 'minio', 'ali_oss', 'tencent_cos', 'qiniu', 'cu_cloud', 'huawei_obs', 'cloudflare_r2', 'backblaze_b2', 'digitalocean_spaces', 'synology', 'recaptcha', 'recaptcha_v3', 'hcaptcha', 'turnstile', 'geetest', 'aliyun_captcha', 'tencent_captcha', 'totp', 'radius', 'push', 'aliyun_face_body', 'wechat_scan', 'dingtalk_scan', 'jumio', 'aliyun_idv', 'tencent_idv', 'onfido', 'veriff', 'persona', 'elasticsearch', 'loki')) OR (family = 'ai' AND kind IN ('openai', 'anthropic', 'gemini', 'deepseek', 'glm', 'kimi', 'qwen', 'seed', 'ollama', 'vllm', 'custom')) OR (family = 'payment' AND kind IN ('alipay', 'wechat_pay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy', 'square', 'checkout')) OR (family = 'notification' AND kind IN ('email', 'sms', 'dingtalk', 'lark', 'wecom', 'slack', 'discord', 'rocketchat', 'teams', 'bark', 'telegram', 'pushover', 'line', 'matrix', 'pushbullet', 'viber', 'webpush', 'twitter', 'reddit', 'customhttp', 'googlechat', 'cucloud', 'ntfy', 'serverchan', 'pagerduty', 'opsgenie', 'gotify'))"
+- name: ck_providers_variant
+  type: check
+  columns: [variant]
+  expr: "variant IS NULL OR (family = 'payment' AND variant IN ('sandbox', 'production')) OR (family IN ('identity', 'ai', 'notification') AND variant = '')"
+- name: uq_providers_registration
+  type: unique_partial
+  columns: [organization_id, family, kind, name, variant]
+  predicate: "family IS NOT NULL AND kind IS NOT NULL AND variant IS NOT NULL AND deleted_at IS NULL"
+indexes:
+- name: idx_providers_organization_id
+  columns:
+  - organization_id
+- name: idx_providers_category
+  columns:
+  - category
+  predicate: deleted_at IS NULL
+- name: idx_providers_org_category
+  columns:
+  - organization_id
+  - category
+  predicate: deleted_at IS NULL
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+---
+table_name: guliangiam.provider_configs
+pk:
+- provider_id
+- config_type
+columns:
+- name: provider_id
+  type: UUID
+  nullable: false
+- name: config_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: config
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+revision: true
+fk_constraints:
+- column: provider_id
+  ref_table: guliangiam.providers
+  on_delete: CASCADE
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR provider_id IN (SELECT id FROM guliangiam.providers
+  WHERE organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.provider_secrets
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: provider_id
+  type: UUID
+  nullable: false
+- name: secret_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''active'''
+- name: last_rotated_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+- name: version
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_provider_secrets_provider_id
+  columns:
+  - provider_id
+  - updated_at DESC
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR provider_id IN (SELECT id FROM guliangiam.providers
+  WHERE organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: provider_id
+  ref_table: guliangiam.providers
+  on_delete: CASCADE
+---
+table_name: guliangiam.webhooks
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: method
+  type: VARCHAR(64)
+  nullable: false
+  default: '''POST'''
+- name: content_type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''application/json'''
+- name: headers
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: events
+  type: JSONB
+  nullable: false
+  default: '''[]'''
+- name: custom_body
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: custom_headers
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: cert_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: secret
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: is_error
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: error_text
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: organization
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: token_fields
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: object_fields
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: is_user_extended
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: single_org_only
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: retry_count
+  type: INTEGER
+  nullable: false
+  default: '3'
+- name: max_retries
+  type: INTEGER
+  nullable: false
+  default: '3'
+- name: retry_interval
+  type: INTEGER
+  nullable: false
+  default: '60'
+- name: use_exponential_backoff
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: timeout_ms
+  type: INTEGER
+  nullable: false
+  default: '5000'
+- name: retry_policy
+  type: JSONB
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_webhooks_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.agents
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''gateway-proxy'''
+- name: host
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: port
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: token
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: application_id
+  type: UUID
+  nullable: true
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: last_ping_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_agents_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+revision: true
+rls: true
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: SET_NULL
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.verifications
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: type
+  type: TEXT
+  nullable: false
+- name: recipient
+  type: TEXT
+  nullable: false
+- name: code
+  type: TEXT
+  nullable: false
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''pending'''
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+indexes:
+- name: idx_verifications_org_created_at_desc
+  columns:
+  - organization_id
+  - created_at DESC
+- name: idx_verifications_recipient
+  columns:
+  - recipient
+- name: idx_verifications_type_status
+  columns:
+  - type
+  - status
+- name: idx_verifications_recipient_code_type_pending
+  columns:
+  - recipient
+  - code
+  - type
+  predicate: status = 'pending'
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.captcha_providers
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: provider_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: site_key
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: secret_key
+  type: TEXT
+  nullable: false
+- name: config
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_captcha_providers_organization_id
+  columns:
+  - organization_id
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.face_id_providers
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: provider_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: access_key_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: access_key_secret
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: endpoint
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: config
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_face_id_providers_organization_id
+  columns:
+  - organization_id
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.dpop_replay
+pk: jti
+columns:
+- name: jti
+  type: TEXT
+  nullable: false
+- name: seen_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+indexes: []
+fk_constraints: []
+triggers:
+- name: trg_dpop_replay_purge
+  event: insert
+  condition: seen_at < now() - interval '3 minutes'
+  action: 'DELETE FROM guliangiam.dpop_replay WHERE seen_at < now() - interval ''3
+    minutes'';
+
+    '
+---
+table_name: guliangiam.webhook_events
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: webhook_id
+  type: UUID
+  nullable: false
+- name: event_type
+  type: TEXT
+  nullable: false
+- name: payload
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: response_code
+  type: INTEGER
+  nullable: true
+- name: response_body
+  type: TEXT
+  nullable: true
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''pending''::text'
+- name: retry_count
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: next_retry_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: idempotency_key
+  type: TEXT
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR webhook_id IN (SELECT id FROM guliangiam.webhooks
+  WHERE organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: webhook_id
+  ref_table: guliangiam.webhooks
+  on_delete: CASCADE
+
+---
+table_name: guliangiam.web3_identity_mappings
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+  comment: Owning user — FK to guliangiam.users
+- name: credential_id
+  type: UUID
+  nullable: false
+  comment: FK to guliangiam.webauthn_credentials.id — the passkey whose pubkey was used to derive this address
+- name: wallet_address
+  type: CHAR(42)
+  nullable: false
+  comment: Derived EVM address (0x + 40 hex). Deterministic from passkey pubkey via keccak256(pubkey || "guliangiam-web3-v1")[12:]
+- name: derivation_method
+  type: VARCHAR(64)
+  nullable: false
+  default: '''keccak256-passkey'''
+  comment: Method used to derive the address. Currently only 'keccak256-passkey'. Reserved for future extension.
+- name: derivation_seed
+  type: CHAR(64)
+  nullable: false
+  comment: Hex-encoded keccak256(compressed_pubkey || "guliangiam-web3-v1") — full 32-byte hash captured for auditability
+- name: chain_ids
+  type: INTEGER[]
+  nullable: false
+  default: '''{1,137,56,10,42161,42170}'''
+  comment: Supported EVM chain IDs for this identity mapping
+- name: ens_name
+  type: TEXT
+  nullable: true
+  comment: Optional ENS name resolved at registration time
+- name: is_primary
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: verified_at
+  type: TIMESTAMPTZ
+  nullable: false
+  comment: When the mapping was created/verified
+- name: last_used_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Updated on each successful login via this passkey → address
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_web3_identity_mappings_wallet_address
+  type: unique
+  columns:
+  - wallet_address
+- name: uq_web3_identity_mappings_credential
+  type: unique
+  columns:
+  - credential_id
+indexes:
+- name: idx_web3_identity_mappings_user
+  columns:
+  - user_id
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+- column: credential_id
+  ref_table: guliangiam.webauthn_credentials
+  on_delete: CASCADE
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+revision: true
+
+---
+# Identity Verifications — 持久化身份验证会话（Provider 会话过期后仍可审计）
+# 所有 Repository 方法强制 organization_id 多租户过滤（domain/idv 注释约定）。
+# RLS predicate: org 内 super_admin 或 user 本人可读写。
+table_name: guliangiam.identity_verifications
+comment: Identity verification durable records — survives provider session lifetime
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false, comment: Verification primary key }
+- { name: organization_id, type: UUID, nullable: false, comment: FK -> organizations.id (tenant boundary) }
+- { name: user_id, type: UUID, comment: FK -> users.id (nullable — pre-registration verification) }
+- { name: provider, type: VARCHAR(32), nullable: false, comment: Verification provider (jumio/onfido/manual/etc) }
+- { name: status, type: VARCHAR(16), nullable: false, default: "'pending'", comment: pending/in_progress/approved/rejected/expired }
+- { name: redirect_url, type: TEXT, comment: Post-verification redirect URL for provider callback }
+- { name: session_token, type: VARCHAR(255), comment: Provider session correlation token }
+- { name: provider_ref, type: VARCHAR(255), comment: Provider-side reference (session id / verification id) }
+- { name: biz_seq, type: VARCHAR(32), comment: Merchant business sequence (32-char hex; fresh per request); unique constraint enforces idempotency / anti-replay }
+- { name: action, type: VARCHAR(32), comment: Face action semantics (real_name_verify_cn/login_verify/real_name_verify_overseas); NULL = legacy row }
+- { name: product_code, type: VARCHAR(32), comment: Provider product code (ID_PRO/ID_PLUS/LR_FR/eKYC_PRO/FACE_IDU/etc) }
+- { name: subject_ref, type: VARCHAR(64), comment: De-identified subject reference (salted SM3 hex of the claimed ID number); never plaintext PII }
+- { name: first_name, type: VARCHAR(64), comment: Given name (from provider) }
+- { name: last_name, type: VARCHAR(64), comment: Family name (from provider) }
+- { name: date_of_birth, type: DATE, comment: Date of birth (from provider) }
+- { name: nationality, type: VARCHAR(3), comment: ISO 3166-1 alpha-2 country code }
+- { name: id_type, type: VARCHAR(32), comment: Government-issued ID type (passport/driver_license/etc) }
+- { name: id_number, type: VARCHAR(128), comment: Government-issued ID number (PII — encrypted at rest) }
+- { name: confidence, type: "DECIMAL(19, 4)", comment: Provider confidence score (0.0 – 1.0) }
+- { name: reason, type: TEXT, comment: Reject reason or completion note }
+- { name: raw_result, type: JSONB, comment: Complete provider payload (PII — encrypted at rest) }
+- { name: id_number_sealed, type: TEXT, comment: v2 envelope of id_number (PII); NULL = legacy plaintext row remains }
+- { name: raw_result_sealed, type: LONGTEXT, comment: v2 envelope of the raw_result plaintext payload (PII/audit); NULL = legacy plaintext row remains }
+- { name: initiated_at, type: TIMESTAMP, nullable: false, comment: When user started verification }
+- { name: completed_at, type: TIMESTAMP, comment: When provider returned final result }
+constraints:
+- { name: ck_idv_status, type: check, expr: "status IN ('pending', 'in_progress', 'approved', 'rejected', 'expired')" }
+- { name: ck_idv_action, type: check, expr: "action IS NULL OR action IN ('real_name_verify_cn', 'login_verify', 'real_name_verify_overseas')" }
+- { name: uq_idv_biz_seq, type: unique, columns: [biz_seq] }
+indexes:
+- { name: idx_idv_org_user, columns: [organization_id, user_id, initiated_at] }
+- { name: idx_idv_provider_ref, columns: [provider, provider_ref] }
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+- { column: user_id, ref_table: guliangiam.users, on_delete: SET_NULL }
+
+---
+# User Face Templates — FaceID 登录底图加密引用（替代 user_collections.face_ids 明文 URL）
+# template_ref 只存应用层信封加密后的引用（OSS 路径/特征向量），绝不存明文图片。
+# user_id 唯一：每用户一条模板；重采为原位更新，吊销置 status=revoked。
+table_name: guliangiam.user_face_templates
+comment: FaceID login templates — encrypted references only, never plaintext images
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false, comment: Template primary key }
+- { name: organization_id, type: UUID, nullable: false, comment: FK -> organizations.id (tenant boundary) }
+- { name: user_id, type: UUID, nullable: false, comment: FK -> users.id (one template per user) }
+- { name: template_ref, type: TEXT, nullable: false, comment: Envelope-encrypted reference to face image/feature (PII — never plaintext) }
+- { name: provider, type: VARCHAR(32), comment: Face provider that enrolled the template (aliyun/lr_fr/localuniface/etc) }
+- { name: provider_ref, type: VARCHAR(255), comment: Provider-side subject reference (e.g. MerchantUserId / face group code) }
+- { name: status, type: VARCHAR(16), nullable: false, default: "'active'", comment: active/revoked }
+- { name: revoked_at, type: TIMESTAMP, comment: When the template was revoked }
+constraints:
+- { name: ck_user_face_templates_status, type: check, expr: "status IN ('active', 'revoked')" }
+- { name: uq_user_face_templates_user, type: unique, columns: [user_id] }
+indexes:
+- { name: idx_user_face_templates_org_status, columns: [organization_id, status] }
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+- { column: user_id, ref_table: guliangiam.users, on_delete: CASCADE }
+
+---
+table_name: guliangiam.custom_attribute_definitions
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- name: key
+  type: TEXT
+  nullable: false
+  comment: Attribute key used inside user_profiles.properties (for example department)
+- name: data_type
+  type: VARCHAR(16)
+  nullable: false
+  default: '''string'''
+  comment: string | number | boolean | date | enum
+- { name: required, type: BOOLEAN, nullable: false, default: 'false' }
+- name: options
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+  comment: Allowed values for data_type=enum (JSON array of strings)
+- { name: writable, type: BOOLEAN, nullable: false, default: 'true' }
+- name: visibility
+  type: VARCHAR(16)
+  nullable: false
+  default: '''private'''
+  comment: private | public | admin
+- { name: description, type: TEXT, nullable: false }
+- { name: enabled, type: BOOLEAN, nullable: false, default: 'true' }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: now() }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: now() }
+- { name: revision, type: BIGINT, nullable: false, default: '1' }
+constraints:
+- { name: ck_custom_attribute_definitions_data_type, type: check, expr: "data_type IN ('string', 'number', 'boolean', 'date', 'enum')" }
+- { name: ck_custom_attribute_definitions_visibility, type: check, expr: "visibility IN ('private', 'public', 'admin')" }
+indexes:
+- name: uq_custom_attribute_definitions_org_key
+  columns:
+  - organization_id
+  - key
+  unique: true
+- name: idx_custom_attribute_definitions_org_enabled
+  columns:
+  - organization_id
+  - enabled
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.app_client_jwks_uris
+pk: application_id
+columns:
+- { name: application_id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: jwks_uri, type: TEXT, nullable: false }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: now() }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: now() }
+revision: false
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- { column: application_id, ref_table: guliangiam.applications, on_delete: CASCADE }
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }

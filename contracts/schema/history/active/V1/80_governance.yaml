@@ -1,0 +1,850 @@
+# 80_governance.yaml — Schema Group (16 tables)
+# Generated from DDL by declarative schema builder
+# Topology: ordered so every FK target exists first
+
+table_name: guliangiam.invitations
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: email, type: TEXT, nullable: false }
+  - { name: code, type: TEXT, nullable: false }
+  - { name: role_ids, type: 'UUID[]', nullable: false, default: "'{}'" }
+  - { name: group_ids, type: 'UUID[]', nullable: false, default: "'{}'" }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'pending'" }
+  - { name: expires_at, type: TIMESTAMPTZ, nullable: false }
+  - { name: accepted_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: invited_by, type: UUID, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+  - { name: idx_invitations_org_created_at_desc, columns: [organization_id, created_at DESC] }
+  - { name: idx_invitations_email, columns: [email] }
+  - { name: idx_invitations_status, columns: [status] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+constraints:
+  - { name: uq_invitations_code, type: unique, columns: [code] }
+  - { name: ck_invitations_status, type: check, expr: "status IN ('pending', 'accepted', 'expired', 'revoked')" }
+
+---
+table_name: guliangiam.certs
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: display_name, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: scope, type: VARCHAR(64), nullable: false, default: "'JWT'" }
+  - { name: type, type: VARCHAR(64), nullable: false, default: "'x509'" }
+  - { name: crypto_algorithm, type: VARCHAR(64), nullable: false, default: "'RS256'" }
+  - { name: bit_size, type: INTEGER, nullable: false, default: "2048" }
+  - { name: expire_in_years, type: INTEGER, nullable: false, default: "1" }
+  - { name: expire_time, type: TIMESTAMPTZ, nullable: true }
+  - { name: certificate, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: private_key, type: TEXT, nullable: false }
+  - { name: provider, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: account, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: access_key, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: access_secret, type: TEXT, nullable: false }
+  - { name: domain, type: JSONB, nullable: false, default: "'[]'" }
+  - { name: authority_public_key, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: authority_root_public_key, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: acme_issuer, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: acme_endpoint, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: domain_expire_time, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_certs_org_name, type: unique, columns: [organization_id, name] }
+indexes:
+  - { name: idx_certs_scope, columns: [scope] }
+  - { name: idx_certs_type, columns: [type] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.lockout_attempts
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: user_id, type: UUID, nullable: false }
+  - { name: attempts, type: INT, nullable: false, default: "0" }
+  - { name: locked_until, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+revision: true
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())"
+fk_constraints:
+  - { column: user_id, ref_table: guliangiam.users, on_delete: CASCADE }
+constraints:
+  - { name: uq_lockout_attempts_user_id, type: unique, columns: [user_id] }
+
+---
+table_name: guliangiam.ip_rules
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: rule_type, type: VARCHAR(64), nullable: false, default: "'block'" }
+  - { name: cidr, type: CIDR, nullable: false }
+  - { name: description, type: TEXT, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+  - { name: idx_ip_rules_org, columns: [organization_id] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.rules
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: scope, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: rule_type, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: conditions, type: JSONB, nullable: false, default: "'[]'::jsonb" }
+  - { name: action, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: priority, type: INTEGER, nullable: false, default: "0" }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+constraints:
+  - { name: uq_rules_org_name, type: unique, columns: [organization_id, name] }
+
+---
+table_name: guliangiam.mcp_servers
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: display_name, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: url, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: token, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: application, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: tools, type: JSONB, nullable: false, default: "'[]'" }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+constraints:
+  - { name: uq_mcp_servers_org_name, type: unique, columns: [organization_id, name] }
+
+---
+table_name: guliangiam.radius_accountings
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: username, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: service_type, type: BIGINT, nullable: false, default: "0" }
+  - { name: nas_id, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: nas_ip_addr, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: nas_port_id, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: nas_port_type, type: BIGINT, nullable: false, default: "0" }
+  - { name: nas_port, type: BIGINT, nullable: false, default: "0" }
+  - { name: framed_ip_addr, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: framed_ip_netmask, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: acct_session_id, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: acct_session_time, type: BIGINT, nullable: false, default: "0" }
+  - { name: acct_input_total, type: BIGINT, nullable: false, default: "0" }
+  - { name: acct_output_total, type: BIGINT, nullable: false, default: "0" }
+  - { name: acct_input_packets, type: BIGINT, nullable: false, default: "0" }
+  - { name: acct_output_packets, type: BIGINT, nullable: false, default: "0" }
+  - { name: acct_terminate_cause, type: BIGINT, nullable: false, default: "0" }
+  - { name: acct_start_time, type: TIMESTAMPTZ, nullable: false }
+  - { name: acct_stop_time, type: TIMESTAMPTZ, nullable: true }
+  - { name: last_update, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "NOW()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+  - { name: idx_radius_accountings_org, columns: [organization_id] }
+  - { name: idx_radius_accountings_username, columns: [username] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.servers
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: endpoint, type: TEXT, nullable: false }
+  - { name: protocol, type: VARCHAR(64), nullable: false, default: "'https'" }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'active'" }
+  - { name: metadata, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: deleted_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_servers_org_name, type: unique, columns: [organization_id, name] }
+indexes:
+  - { name: idx_servers_org_created_at_desc, columns: [organization_id, created_at DESC] }
+  - { name: idx_servers_status, columns: [status], predicate: "deleted_at IS NULL" }
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.sites
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: host, type: TEXT, nullable: false }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'active'" }
+  - { name: ssl_mode, type: 'VARCHAR(20)', nullable: false, default: "'off'" }
+  - { name: cert_id, type: UUID, nullable: true }
+  - { name: force_https, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: enable_health_check, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: health_check_interval, type: INTEGER, nullable: false, default: "60" }
+  - { name: last_health_status, type: 'VARCHAR(20)', nullable: false, default: "'unknown'" }
+  - { name: last_health_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: enable_alert, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: alert_interval, type: INTEGER, nullable: false, default: "300" }
+  - { name: alert_try_times, type: INTEGER, nullable: false, default: "3" }
+  - { name: alert_provider_ids, type: 'TEXT[]', nullable: false, default: "'{}'" }
+  - { name: metadata, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: deleted_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_sites_org_name, type: unique, columns: [organization_id, name] }
+  - { name: uq_sites_host_active, type: unique_partial, columns: [host], predicate: "deleted_at IS NULL" }
+indexes:
+  - { name: idx_sites_org_created_at_desc, columns: [organization_id, created_at DESC] }
+  - { name: idx_sites_status, columns: [status], predicate: "deleted_at IS NULL" }
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+  - { column: cert_id, ref_table: guliangiam.certs, on_delete: SET_NULL, on_update: CASCADE }
+---
+table_name: guliangiam.keys
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: display_name, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: key_type, type: TEXT, nullable: false }
+  - { name: public_key, type: TEXT, nullable: false }
+  - { name: private_key, type: TEXT, nullable: true }
+  - { name: algorithm, type: VARCHAR(64), nullable: false, default: "'RS256'" }
+  - { name: expires_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "true" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_keys_org_name, type: unique, columns: [organization_id, name] }
+indexes:
+  - { name: idx_keys_type, columns: [key_type] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.notification_providers
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: provider_id, type: UUID, nullable: true }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: provider_type, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: webhook_url, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: access_token, type: TEXT, nullable: false }
+  - { name: config, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - name: uq_notification_providers_provider
+    type: unique_partial
+    columns: [provider_id]
+    predicate: "provider_id IS NOT NULL"
+indexes:
+  - { name: idx_notification_providers_organization_id, columns: [organization_id] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+  - { column: provider_id, ref_table: guliangiam.providers, on_delete: RESTRICT, on_update: CASCADE }
+
+---
+table_name: guliangiam.radius_configs
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: host, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: port, type: INTEGER, nullable: false, default: "1812" }
+  - { name: shared_secret, type: TEXT, nullable: false }
+  - { name: auth_protocol, type: VARCHAR(64), nullable: false, default: "'PAP'" }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+  - { name: idx_radius_configs_organization_id, columns: [organization_id] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.ldaps
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: display_name, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: server_name, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: host, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: port, type: INTEGER, nullable: false, default: "389" }
+  - { name: admin, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: bind_dn, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: bind_password, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: base_dn, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: type, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: attribute_name, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: password_type, type: VARCHAR(64), nullable: false, default: "'Plain'" }
+  - { name: filter, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: filter_fields, type: 'TEXT[]', nullable: false, default: "'{}'" }
+  - { name: enable_ssl, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: allow_self_signed_cert, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: enable_groups, type: BOOLEAN, nullable: false, default: "false" }
+  - { name: default_groups, type: 'TEXT[]', nullable: false, default: "'{}'" }
+  - { name: custom_attributes, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "true" }
+  - { name: sync_interval, type: INTEGER, nullable: false, default: "0" }
+  - { name: last_sync_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_ldaps_org_name, type: unique, columns: [organization_id, name] }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.ldap_sync_configs
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: ldap_id, type: UUID, nullable: false }
+  - { name: sync_interval_minutes, type: INTEGER, nullable: false, default: "60" }
+  - { name: base_dn, type: TEXT, nullable: false }
+  - { name: user_filter, type: VARCHAR(64), nullable: true, default: "'(objectClass=person)'" }
+  - { name: group_filter, type: VARCHAR(64), nullable: true, default: "'(objectClass=group)'" }
+  - { name: enabled, type: BOOLEAN, nullable: false, default: "true" }
+  - { name: last_sync_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: next_sync_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: sync_status, type: VARCHAR(64), nullable: true, default: "'idle'" }
+  - { name: sync_error, type: TEXT, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+  - { name: idx_ldap_sync_configs_org_id, columns: [organization_id] }
+  - { name: idx_ldap_sync_configs_ldap_id, columns: [ldap_id] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: ldap_id, ref_table: guliangiam.ldaps, on_delete: CASCADE }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.ldap_sync_tasks
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: ldap_id, type: UUID, nullable: false }
+  - { name: config_id, type: UUID, nullable: false }
+  - { name: status, type: VARCHAR(32), nullable: false, default: "'pending'" }
+  - { name: trigger_type, type: VARCHAR(32), nullable: false }
+  - { name: users_synced, type: INTEGER, nullable: false, default: "0" }
+  - { name: users_created, type: INTEGER, nullable: false, default: "0" }
+  - { name: users_updated, type: INTEGER, nullable: false, default: "0" }
+  - { name: users_failed, type: INTEGER, nullable: false, default: "0" }
+  - { name: groups_synced, type: INTEGER, nullable: false, default: "0" }
+  - { name: groups_created, type: INTEGER, nullable: false, default: "0" }
+  - { name: error_message, type: VARCHAR(2000), nullable: false, default: "''" }
+  - { name: started_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: completed_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: ck_ldap_sync_tasks_status, type: check, expr: "status IN ('pending', 'running', 'succeeded', 'failed')" }
+  - { name: ck_ldap_sync_tasks_trigger_type, type: check, expr: "trigger_type IN ('manual', 'scheduled')" }
+indexes:
+  - { name: idx_ldap_sync_tasks_ldap_created, columns: [ldap_id, created_at DESC] }
+  - { name: idx_ldap_sync_tasks_config, columns: [config_id] }
+  - { name: idx_ldap_sync_tasks_org_status, columns: [organization_id, status] }
+revision: false
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+  - { column: ldap_id, ref_table: guliangiam.ldaps, on_delete: CASCADE }
+  - { column: config_id, ref_table: guliangiam.ldap_sync_configs, on_delete: CASCADE }
+
+---
+table_name: guliangiam.scim_schemas
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: schema_id, type: TEXT, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: description, type: TEXT, nullable: true }
+  - { name: attributes, type: JSONB, nullable: false }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+# (organization_id, schema_id) 是 SCIM 的自然键：schema_id 在同一租户内唯一、跨租户重复出现
+# （urn:ietf:params:scim:schemas:core:2.0:User 每个租户各一份）。此前只有主键 id，
+# 于是 scim 仓储的 upsert 仲裁目标 (schema_id) 在库中无匹配唯一约束，执行即 42P10。
+constraints:
+  - { name: uq_scim_schemas_org_schema_id, type: unique, columns: [organization_id, schema_id] }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.notifications
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: provider_id, type: UUID, nullable: false }
+  - { name: recipient, type: TEXT, nullable: false }
+  - { name: subject, type: TEXT, nullable: true }
+  - { name: content, type: TEXT, nullable: false }
+  - { name: template_id, type: TEXT, nullable: true }
+  - { name: variables, type: JSONB, nullable: true }
+  - { name: status, type: VARCHAR(64), nullable: true, default: "'pending'" }
+  - { name: error, type: TEXT, nullable: true }
+  - { name: sent_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: retry_count, type: INTEGER, nullable: true, default: "0" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+indexes:
+  - { name: idx_notifications_org_status, columns: [organization_id, status] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+  - { column: provider_id, ref_table: guliangiam.notification_providers, on_delete: CASCADE }
+
+---
+# IGA 身份治理（ADR-025）：访问认证 Campaign、访问请求、SoD、JIT 生命周期
+table_name: guliangiam.access_campaigns
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'draft'" }
+  - { name: start_date, type: TIMESTAMPTZ, nullable: true }
+  - { name: end_date, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_access_campaigns_org_name, type: unique, columns: [organization_id, name] }
+  - { name: ck_access_campaigns_status, type: check, expr: "status IN ('draft', 'active', 'completed', 'cancelled')" }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.sod_rules
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: role_a_id, type: UUID, nullable: false }
+  - { name: role_b_id, type: UUID, nullable: false }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_sod_rules_org_name, type: unique, columns: [organization_id, name] }
+  - { name: uq_sod_rules_org_roles, type: unique, columns: [organization_id, role_a_id, role_b_id] }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: role_a_id, ref_table: guliangiam.roles, on_delete: CASCADE }
+  - { column: role_b_id, ref_table: guliangiam.roles, on_delete: CASCADE }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.access_lifecycle
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: user_id, type: UUID, nullable: false }
+  - { name: role_id, type: UUID, nullable: false }
+  - { name: ticket_id, type: UUID, nullable: true }
+  - { name: enforcer_id, type: UUID, nullable: true }
+  - { name: resource, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: action, type: VARCHAR(64), nullable: false, default: "''" }
+  - { name: policy_id, type: UUID, nullable: true }
+  - { name: granted_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: starts_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: expires_at, type: TIMESTAMPTZ, nullable: false }
+  - { name: revoked_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'active'" }
+  - { name: retry_count, type: INTEGER, nullable: false, default: "0" }
+  - { name: last_error, type: VARCHAR(2000), nullable: false, default: "''" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: ck_access_lifecycle_status, type: check, expr: "status IN ('active', 'expired', 'revoked')" }
+indexes:
+  - { name: idx_access_lifecycle_org_user, columns: [organization_id, user_id] }
+  - { name: idx_access_lifecycle_expires, columns: [expires_at], predicate: "status = 'active'" }
+revision: true
+rls: true
+fk_constraints:
+  - { column: user_id, ref_table: guliangiam.users, on_delete: CASCADE }
+  - { column: role_id, ref_table: guliangiam.roles, on_delete: CASCADE }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+# Risk 风险域（ADR-027）：风险信号、决策、持续访问评估
+table_name: guliangiam.risk_signals
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: user_id, type: UUID, nullable: true }
+  - { name: signal_type, type: TEXT, nullable: false }
+  - { name: signal_value, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: ip, type: INET, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+indexes:
+  - { name: idx_risk_signals_org_type, columns: [organization_id, signal_type] }
+  - { name: idx_risk_signals_user, columns: [user_id] }
+  - { name: idx_risk_signals_created, columns: [created_at DESC] }
+rls: true
+fk_constraints:
+  - { column: user_id, ref_table: guliangiam.users, on_delete: SET_NULL }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.risk_decisions
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: user_id, type: UUID, nullable: true }
+  - { name: score, type: INTEGER, nullable: false, default: "0" }
+  - { name: decision, type: VARCHAR(64), nullable: false, default: "'allow'" }
+  - { name: factors, type: JSONB, nullable: false, default: "'[]'::jsonb" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: ck_risk_decisions_decision, type: check, expr: "decision IN ('allow', 'challenge', 'deny')" }
+  - { name: ck_risk_decisions_score, type: check, expr: "score >= 0 AND score <= 100" }
+indexes:
+  - { name: idx_risk_decisions_org_user, columns: [organization_id, user_id] }
+  - { name: idx_risk_decisions_created, columns: [created_at DESC] }
+rls: true
+fk_constraints:
+  - { column: user_id, ref_table: guliangiam.users, on_delete: SET_NULL }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.session_governance
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: session_id, type: UUID, nullable: true }
+  - { name: risk_score, type: INTEGER, nullable: false, default: "0" }
+  - { name: action, type: VARCHAR(64), nullable: false, default: "'monitor'" }
+  - { name: reason, type: TEXT, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: ck_session_governance_action, type: check, expr: "action IN ('monitor', 'step_up', 'revoke')" }
+indexes:
+  - { name: idx_session_governance_org_session, columns: [organization_id, session_id] }
+  - { name: idx_session_governance_created, columns: [created_at DESC] }
+rls: true
+fk_constraints:
+  - { column: session_id, ref_table: guliangiam.sessions, on_delete: SET_NULL }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+# Actions 身份操作沙箱（ADR-029）：操作定义、版本、执行日志
+table_name: guliangiam.identity_actions
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: trigger_type, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'draft'" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_identity_actions_org_name, type: unique, columns: [organization_id, name] }
+  - { name: ck_identity_actions_status, type: check, expr: "status IN ('draft', 'active', 'disabled', 'deleted')" }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.action_versions
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: action_id, type: UUID, nullable: false }
+  - { name: version, type: INTEGER, nullable: false, default: "1" }
+  - { name: code, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: uq_action_versions_action_version, type: unique, columns: [action_id, version] }
+indexes:
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.identity_actions a WHERE a.id = action_id AND a.organization_id = guliangiam.current_organization_id())"
+fk_constraints:
+  - { column: action_id, ref_table: guliangiam.identity_actions, on_delete: CASCADE }
+
+---
+table_name: guliangiam.execution_logs
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: action_id, type: UUID, nullable: false }
+  - { name: version, type: INTEGER, nullable: false, default: "1" }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'pending'" }
+  - { name: input, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: output, type: JSONB, nullable: true }
+  - { name: error, type: TEXT, nullable: true }
+  - { name: executed_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: ck_execution_logs_status, type: check, expr: "status IN ('pending', 'running', 'success', 'failed', 'timeout')" }
+indexes:
+  - { name: idx_execution_logs_action, columns: [action_id] }
+  - { name: idx_execution_logs_status, columns: [status] }
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.identity_actions a WHERE a.id = action_id AND a.organization_id = guliangiam.current_organization_id())"
+fk_constraints:
+  - { column: action_id, ref_table: guliangiam.identity_actions, on_delete: CASCADE }
+
+---
+table_name: guliangiam.scim_reconciliation_reports
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: connector_id, type: TEXT, nullable: false }
+  - { name: status, type: VARCHAR(32), nullable: false, default: "'completed'" }
+  - { name: started_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: finished_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: user_report, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: group_report, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: error_message, type: VARCHAR(2048), nullable: false, default: "''" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: ck_scim_reconciliation_reports_status, type: check, expr: "status IN ('completed', 'failed')" }
+indexes:
+  - { name: idx_scim_reconciliation_reports_org_created, columns: [organization_id, created_at] }
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()"
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+# connectors — SCIM 出站连接器配置。Bearer 令牌只以信封密文写入
+# bearer_token_sealed（仓储注入 FieldEncryptor，v2 AAD 绑定 id）；明文只在内存流动。
+table_name: guliangiam.connectors
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: VARCHAR(255), nullable: false }
+  - { name: scim_base_url, type: TEXT, nullable: false }
+  - { name: bearer_token_sealed, type: TEXT, nullable: false }
+  - { name: is_enabled, type: BOOLEAN, nullable: false, default: "true" }
+  - { name: timeout_ms, type: INTEGER, nullable: false, default: "5000" }
+  - { name: max_rate_per_min, type: INTEGER, nullable: false, default: "300" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: uq_connectors_org_name, type: unique, columns: [organization_id, name] }
+indexes:
+  - { name: idx_connectors_org_enabled, columns: [organization_id, is_enabled] }
+revision: true
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()"
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.ssf_receivers
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: VARCHAR(255), nullable: false }
+  - { name: receiver_url, type: TEXT, nullable: false }
+  - { name: auth_token_hash, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: event_types, type: JSONB, nullable: false, default: "'[]'::jsonb" }
+  - { name: status, type: VARCHAR(32), nullable: false, default: "'active'" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: created_by, type: UUID, nullable: true }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_ssf_receivers_org_name, type: unique, columns: [organization_id, name] }
+  - { name: ck_ssf_receivers_status, type: check, expr: "status IN ('active', 'disabled')" }
+indexes:
+  - { name: idx_ssf_receivers_org_status, columns: [organization_id, status] }
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()"
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+---
+table_name: guliangiam.dsar_requests
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: subject_type, type: VARCHAR(16), nullable: false }
+- { name: subject_id, type: UUID, nullable: false }
+- { name: request_type, type: VARCHAR(24), nullable: false }
+- { name: state, type: VARCHAR(16), nullable: false, default: "'received'" }
+- { name: sla_due_at, type: TIMESTAMPTZ, nullable: false }
+- { name: closed_at, type: TIMESTAMPTZ, nullable: true }
+- { name: rejection_reason, type: VARCHAR(255), nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: created_by, type: UUID, nullable: true }
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- { name: ck_dsar_requests_type, type: check, expr: "request_type IN ('access', 'rectify', 'freeze', 'erase', 'portability', 'withdraw_consent')" }
+- { name: ck_dsar_requests_state, type: check, expr: "state IN ('received', 'verifying', 'in_progress', 'fulfilled', 'rejected')" }
+- { name: ck_dsar_requests_subject_type, type: check, expr: "subject_type IN ('user', 'contact')" }
+- { name: ck_dsar_requests_closed, type: check, expr: "state NOT IN ('fulfilled', 'rejected') OR closed_at IS NOT NULL" }
+indexes:
+- { name: idx_dsar_requests_org_state, columns: [organization_id, state] }
+- { name: idx_dsar_requests_sla, columns: [state, sla_due_at] }
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+---
+table_name: guliangiam.dsar_events
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: dsar_id, type: UUID, nullable: false }
+- { name: action, type: VARCHAR(32), nullable: false }
+- { name: actor_id, type: UUID, nullable: true }
+- { name: payload, type: JSONB, nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+- { name: ck_dsar_events_action, type: check, expr: "action IN ('created', 'verifying', 'in_progress', 'fulfilled', 'rejected')" }
+indexes:
+- { name: idx_dsar_events_dsar_created, columns: [dsar_id, created_at] }
+- { name: idx_dsar_events_org_created, columns: [organization_id, created_at] }
+revision: false
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+- { column: dsar_id, ref_table: guliangiam.dsar_requests, on_delete: CASCADE }
+- { column: actor_id, ref_table: guliangiam.users, on_delete: SET_NULL }
+---
+table_name: guliangiam.consent_records
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: subject_type, type: VARCHAR(16), nullable: false }
+- { name: subject_id, type: UUID, nullable: false }
+- { name: purpose, type: VARCHAR(64), nullable: false }
+- { name: version, type: INTEGER, nullable: false }
+- { name: granted_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: withdrawn_at, type: TIMESTAMPTZ, nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- { name: uq_consent_records_version, type: unique, columns: [organization_id, subject_type, subject_id, purpose, version] }
+- { name: ck_consent_records_subject_type, type: check, expr: "subject_type IN ('user', 'contact')" }
+- { name: ck_consent_records_withdrawn, type: check, expr: "withdrawn_at IS NULL OR withdrawn_at >= granted_at" }
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }

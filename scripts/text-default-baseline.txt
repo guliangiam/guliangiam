@@ -1,0 +1,20 @@
+# 逻辑 TEXT/LONGTEXT 列携带默认值的存量清单（只减不增）。
+#
+# 为什么需要这份清单：MySQL 严格模式禁止 TEXT/BLOB/JSON 携带 DEFAULT，因此这些默认值
+# 在 MySQL 产物中不可表达。此前生成器是「静默丢弃」，于是同一份声明式 Schema 在
+# PostgreSQL 与 MySQL 上给出不同契约而无人知晓。清单把它变成显式存量：
+#   - 新增（不在本清单内）→ check-schema-defaults.py 失败，必须改用 VARCHAR(n) 或去掉默认值
+#   - 减少（本清单内的条目消失）→ 允许，并把数字往下调（只减不增）
+#
+# 收敛方向：有界且需要默认值的列改用 VARCHAR(n)；真正无上界的列保持 TEXT/LONGTEXT
+# 并不得携带默认值（NOT NULL 的长文本列需同时评估可空性，见 OPEN-API-12）。
+#
+# 当前存量：0 列（2026-10-16 全部收敛完毕）
+#
+# 收敛记录：
+#   第一批 A1 类（71 列，2026-10-16）：非空短默认值 → VARCHAR(64) + 保留 DEFAULT
+#     status='active', method='POST', type='database', algorithm='RS256', currency='USD' 等
+#   第二批 A2 类（325 列，2026-10-16）：空串默认 + 短列名 → VARCHAR(255) + 保留 DEFAULT
+#     host, url, token, name, database, region_code, description, password, username 等
+#   B 类（22 列，2026-10-16）：真实长文本 + 空串默认（custom_css/template/model_text 等）
+#     已不在活动 schema，无需处理

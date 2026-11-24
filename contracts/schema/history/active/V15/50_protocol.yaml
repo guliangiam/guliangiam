@@ -1,0 +1,531 @@
+table_name: guliangiam.authorization_codes
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: application_id
+  type: UUID
+  nullable: false
+- name: code_hash
+  type: TEXT
+  nullable: false
+- name: code_prefix
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: redirect_uri
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: scopes
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: status
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: sid
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: nonce
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: resource
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: code_challenge
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: code_challenge_method
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: auth_time
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: used_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+constraints:
+- name: uq_authorization_codes_hash
+  type: unique
+  columns:
+  - code_hash
+indexes:
+- name: idx_authorization_codes_expires_at
+  columns:
+  - expires_at
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR user_id IN (SELECT id FROM guliangiam.users
+  WHERE organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.consents
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: organization_id
+  type: UUID
+  nullable: true
+- name: organization_slug
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: application_id
+  type: UUID
+  nullable: false
+- name: application_slug
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: scopes
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: granted_scopes
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revoked_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_consents_user_application
+  type: unique
+  columns:
+  - user_id
+  - application_id
+indexes:
+- name: idx_consents_application_active
+  columns:
+  - application_id
+  predicate: revoked_at IS NULL
+- name: idx_consents_user_active
+  columns:
+  - user_id
+  - application_id
+  predicate: revoked_at IS NULL
+revision: true
+rls: true
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.device_auth_codes
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: device_code
+  type: TEXT
+  nullable: false
+- name: user_code
+  type: TEXT
+  nullable: false
+- name: client_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: scope
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: poll_interval_sec
+  type: INT
+  nullable: false
+  default: '5'
+- name: verified
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: verified_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: user_id
+  type: UUID
+  nullable: true
+- name: username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: organization_id
+  type: UUID
+  nullable: true
+- name: last_polled_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: slow_down_count
+  type: INT
+  nullable: false
+  default: '0'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: SET_NULL
+constraints:
+- name: uq_device_auth_codes_device_code
+  type: unique
+  columns:
+  - device_code
+- name: uq_device_auth_codes_user_code
+  type: unique
+  columns:
+  - user_code
+---
+table_name: guliangiam.qr_code_sessions
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: code_id
+  type: TEXT
+  nullable: false
+- name: code
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: application_id
+  type: UUID
+  nullable: false
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''pending'''
+- name: user_id
+  type: UUID
+  nullable: true
+- name: username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ip_address
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: user_agent
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+revision: true
+rls: true
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  ref_column: id
+  on_delete: CASCADE
+  on_update: CASCADE
+constraints:
+- name: uq_qr_code_sessions_code_id
+  type: unique
+  columns:
+  - code_id
+# 二维码载荷（扫码端唯一持有的句柄）必须可按 code 解析，且随机 32 字节碰撞可忽略：
+# 扫码/确认端点按 code 寻址，轮询/换取仍按 code_id，故 code 需要独立唯一索引。
+- name: uq_qr_code_sessions_code
+  type: unique
+  columns:
+  - code
+---
+table_name: guliangiam.web3_nonces
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: nonce
+  type: TEXT
+  nullable: false
+- name: wallet_address
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: application_id
+  type: UUID
+  nullable: true
+- name: chain_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: consumed
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+rls: true
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+constraints:
+- name: uq_web3_nonces_nonce
+  type: unique
+  columns:
+  - nonce
+---
+table_name: guliangiam.face_id_sessions
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: session_id
+  type: TEXT
+  nullable: false
+- name: challenge
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: user_id
+  type: UUID
+  nullable: false
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: verified
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: liveness_ok
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: attempt_count
+  type: INT
+  nullable: false
+  default: '0'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+revision: true
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+constraints:
+- name: uq_face_id_sessions_session_id
+  type: unique
+  columns:
+  - session_id
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR user_id IN (SELECT id FROM guliangiam.users
+  WHERE organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.cas_tickets
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: ticket_id
+  type: TEXT
+  nullable: false
+- name: ticket_type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''service'''
+- name: user_id
+  type: UUID
+  nullable: true
+- name: username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: service
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: pgt_iou
+  type: TEXT
+  nullable: true
+- name: pgt_iou_expires_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: pgt_iou_used
+  type: BOOLEAN
+  nullable: false
+  default: 'FALSE'
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+constraints:
+- name: uq_cas_tickets_ticket_id
+  type: unique
+  columns:
+  - ticket_id
+- name: uq_cas_tickets_pgt_iou
+  type: unique
+  columns:
+  - pgt_iou
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR user_id IN (SELECT id FROM guliangiam.users
+  WHERE organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.kerberos_tickets
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: ticket_id
+  type: TEXT
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: true
+- name: username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: service
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: realm
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+constraints:
+- name: uq_kerberos_tickets_ticket_id
+  type: unique
+  columns:
+  - ticket_id
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR user_id IN (SELECT id FROM guliangiam.users
+  WHERE organization_id = guliangiam.current_organization_id())

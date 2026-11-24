@@ -1,0 +1,355 @@
+table_name: guliangiam.records
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Audit record primary key (UUID)
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant org (RLS predicate key)
+- name: actor_id
+  type: UUID
+  nullable: true
+  comment: User or service account UUID that performed the action; NULL for system
+    events
+- name: action
+  type: TEXT
+  nullable: false
+  comment: Verb-style action name (create / update / delete / login / token_revoke
+    / ...)
+- name: resource_type
+  type: TEXT
+  nullable: false
+  comment: 'Domain entity type: users / roles / orders / ...'
+- name: resource_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: Entity UUID (or string ID) the action targeted
+- name: ip
+  type: INET
+  nullable: true
+  comment: Client IP observed at the time of the action
+- name: user_agent
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: User-Agent header captured with the request
+- name: surface
+  type: VARCHAR(64)
+  nullable: false
+  default: '''management'''
+  comment: 'Interface where the action originated: management / user_portal / api
+    / cli / system'
+- name: request_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: Incoming request correlation ID (X-Request-ID header); empty when unavailable
+- name: trace_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: OpenTelemetry trace ID for distributed tracing correlation
+- name: metadata
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+  comment: Action-specific payload (diff fields, risk scores, geo info, etc.)
+- name: chain_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: Audit chain identifier; links records into tamper-evident append-only chains
+    per (org, surface, period)
+- name: chain_seq
+  type: BIGINT
+  nullable: false
+  default: '0'
+  comment: Monotonic sequence within the chain; used to verify append order
+- name: prev_hash
+  type: BYTEA
+  nullable: true
+  comment: Previous entry_hash in the chain (NULL for the first entry); digest
+    algorithm per chain_algo (sha256 or sm3)
+- name: entry_hash
+  type: BYTEA
+  nullable: true
+  comment: Tamper-evident digest of the canonical record body plus prev_hash;
+    algorithm per chain_algo (sha256 or sm3)
+- name: chain_status
+  type: VARCHAR(16)
+  nullable: false
+  default: '''pending'''
+  comment: 'Chain build state: worker advances pending -> chained -> anchored asynchronously; broken marks a verification failure'
+- name: chain_algo
+  type: VARCHAR(8)
+  nullable: false
+  default: '''sha256'''
+  comment: 'Hash algorithm backing prev_hash / entry_hash: sha256 or sm3'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Timestamp of the audited action
+  comment: Timestamp of last modification (rarely used; records are mostly append-only)
+constraints:
+- name: ck_records_chain_seq_nonneg
+  type: check
+  expr: chain_seq >= 0
+- name: ck_records_chain_hash_len
+  type: check
+  expr: (entry_hash IS NULL AND prev_hash IS NULL) OR (octet_length(entry_hash) =
+    32 AND (prev_hash IS NULL OR octet_length(prev_hash) = 32))
+- name: ck_records_chain_status
+  type: check
+  expr: chain_status IN ('pending', 'chained', 'anchored', 'broken')
+- name: ck_records_chain_algo
+  type: check
+  expr: chain_algo IN ('sha256', 'sm3')
+- name: uq_records_chain_seq
+  type: unique
+  columns:
+  - organization_id
+  - chain_id
+  - chain_seq
+indexes:
+- name: idx_audit_records_org_created_at_desc
+  columns:
+  - organization_id
+  - created_at DESC
+- name: idx_audit_records_action
+  columns:
+  - action
+- name: idx_audit_records_resource_type
+  columns:
+  - resource_type
+- name: idx_audit_records_actor_id
+  columns:
+  - actor_id
+- name: idx_records_org_action_created_at
+  columns:
+  - organization_id
+  - action
+  - created_at DESC
+- name: idx_records_action_created_at_date
+  columns:
+  - action
+  - created_at
+- name: idx_records_surface_created
+  columns:
+  - surface
+  - created_at DESC
+- name: idx_records_request_id
+  columns:
+  - request_id
+  predicate: request_id <> ''
+- name: idx_records_trace_id
+  columns:
+  - trace_id
+  predicate: trace_id <> ''
+- name: idx_records_created_at_desc
+  columns:
+  - created_at DESC
+- name: idx_records_user_created
+  columns:
+  - actor_id
+  - created_at DESC
+- name: idx_records_actor_id_created_at
+  columns:
+  - actor_id
+  - created_at DESC
+- name: idx_records_action_created_at_desc
+  columns:
+  - action
+  - created_at DESC
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: actor_id
+  ref_table: guliangiam.users
+  on_delete: SET_NULL
+---
+table_name: guliangiam.secret_rotation_audit
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: provider_id
+  type: UUID
+  nullable: false
+- name: secret_type
+  type: TEXT
+  nullable: false
+- name: old_version
+  type: INT
+  nullable: false
+- name: new_version
+  type: INT
+  nullable: false
+- name: rotated_by
+  type: UUID
+  nullable: true
+- name: rotated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: reason
+  type: TEXT
+  nullable: true
+indexes:
+- name: idx_secret_rotation_audit_provider
+  columns:
+  - provider_id
+- name: idx_secret_rotation_audit_rotated_at
+  columns:
+  - rotated_at
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.providers
+  p WHERE p.id = provider_id AND p.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: provider_id
+  ref_table: guliangiam.providers
+  on_delete: CASCADE
+---
+table_name: guliangiam.audit_chain_anchors
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: chain_id
+  type: TEXT
+  nullable: false
+- name: anchor_seq
+  type: BIGINT
+  nullable: false
+- name: entry_hash
+  type: BYTEA
+  nullable: false
+- name: proof
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: anchored_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: anchor_source
+  type: VARCHAR(64)
+  nullable: false
+  default: '''system'''
+constraints:
+- name: ck_audit_chain_anchors_hash_len
+  type: check
+  expr: octet_length(entry_hash) = 32
+- name: uq_audit_chain_anchors_org_chain_seq
+  type: unique
+  columns:
+  - organization_id
+  - chain_id
+  - anchor_seq
+indexes:
+- name: idx_audit_chain_anchors_anchored_at
+  columns:
+  - anchored_at DESC
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.authorization_chain_state
+pk: id
+columns:
+- { name: id, type: INTEGER, nullable: false }
+- { name: last_hash, type: VARCHAR(64), nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+- { name: ck_authorization_chain_state_singleton, type: check, expr: "id = 1" }
+revision: false
+rls: true
+rls_predicate: guliangiam.is_super_admin()
+---
+table_name: guliangiam.cross_tenant_operations
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: scope_id, type: UUID, nullable: true }
+- { name: actor_id, type: UUID, nullable: false }
+- { name: source_tenant, type: UUID, nullable: true }
+- { name: target_tenant, type: UUID, nullable: false }
+- { name: resource_type, type: TEXT, nullable: false }
+- { name: action, type: TEXT, nullable: false }
+- { name: risk_level, type: VARCHAR(16), nullable: false }
+- { name: status, type: VARCHAR(16), nullable: false, default: "'pending'" }
+- { name: approved_by, type: UUID, nullable: true }
+- { name: approved_at, type: TIMESTAMPTZ, nullable: true }
+- { name: expires_at, type: TIMESTAMPTZ, nullable: false }
+- { name: used_at, type: TIMESTAMPTZ, nullable: true }
+- { name: trace_id, type: VARCHAR(255), nullable: true }
+- { name: reason, type: TEXT, nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+- { name: ck_cross_tenant_operations_risk, type: check, expr: "risk_level IN ('low', 'medium', 'high', 'critical')" }
+- { name: ck_cross_tenant_operations_status, type: check, expr: "status IN ('pending', 'approved', 'rejected', 'used', 'expired')" }
+indexes:
+- { name: idx_cross_tenant_operations_actor, columns: [actor_id, status, created_at DESC] }
+- { name: idx_cross_tenant_operations_scope, columns: [scope_id, created_at DESC] }
+- { name: idx_cross_tenant_operations_target, columns: [target_tenant, expires_at] }
+revision: false
+rls: true
+rls_predicate: guliangiam.is_super_admin()
+fk_constraints:
+- { column: scope_id, ref_table: guliangiam.platform_admin_scopes, on_delete: SET_NULL }
+- { column: actor_id, ref_table: guliangiam.users, on_delete: RESTRICT }
+- { column: source_tenant, ref_table: guliangiam.organizations, on_delete: RESTRICT }
+- { column: target_tenant, ref_table: guliangiam.organizations, on_delete: RESTRICT }
+- { column: approved_by, ref_table: guliangiam.platform_admins, on_delete: SET_NULL }
+---
+table_name: guliangiam.authorization_audit_records
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: actor_id, type: UUID, nullable: false }
+- { name: actor_type, type: VARCHAR(32), nullable: false }
+- { name: source_tenant, type: UUID, nullable: true }
+- { name: target_tenant, type: UUID, nullable: true }
+- { name: resource_type, type: TEXT, nullable: false }
+- { name: action, type: TEXT, nullable: false }
+- { name: risk_level, type: VARCHAR(16), nullable: false }
+- { name: scope_id, type: UUID, nullable: true }
+- { name: ticket_id, type: UUID, nullable: true }
+- { name: decision, type: VARCHAR(16), nullable: false }
+- { name: reason, type: TEXT, nullable: true }
+- { name: prev_hash, type: VARCHAR(64), nullable: true }
+- { name: hash, type: VARCHAR(64), nullable: false }
+- { name: trace_id, type: VARCHAR(255), nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+- { name: ck_authorization_audit_actor_type, type: check, expr: "actor_type IN ('user', 'platform_admin', 'service_account', 'system')" }
+- { name: ck_authorization_audit_risk, type: check, expr: "risk_level IN ('low', 'medium', 'high', 'critical')" }
+- { name: ck_authorization_audit_decision, type: check, expr: "decision IN ('allow', 'deny')" }
+- { name: ck_authorization_audit_hash, type: check, expr: "char_length(hash) = 64 AND (prev_hash IS NULL OR char_length(prev_hash) = 64)" }
+indexes:
+- { name: idx_authorization_audit_created, columns: [created_at DESC] }
+- { name: idx_authorization_audit_actor, columns: [actor_id, created_at DESC] }
+- { name: idx_authorization_audit_tenants, columns: [source_tenant, target_tenant, created_at DESC] }
+- { name: idx_authorization_audit_ticket, columns: [ticket_id] }
+revision: false
+rls: true
+rls_predicate: guliangiam.is_super_admin()
+fk_constraints:
+- { column: source_tenant, ref_table: guliangiam.organizations, on_delete: RESTRICT }
+- { column: target_tenant, ref_table: guliangiam.organizations, on_delete: RESTRICT }
+- { column: scope_id, ref_table: guliangiam.platform_admin_scopes, on_delete: SET_NULL }
+- { column: ticket_id, ref_table: guliangiam.cross_tenant_operations, on_delete: SET_NULL }

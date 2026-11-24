@@ -1,0 +1,81 @@
+# ============================================================
+# Nightly Database Dialects (PostgreSQL-first)
+# PostgreSQL 是运行期唯一基线；MySQL 8.4 的 DDL 重放、回滚与
+# runtime consistency 在夜间或手动触发，不进入 PR 阻断路径。
+# 对应契约：AC-DATA-014；开放项：OPEN-API-37。
+# ============================================================
+
+name: Nightly Database Dialects
+
+on:
+  schedule:
+    # 18:00 UTC = 02:00 Asia/Shanghai
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-db-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  mysql_integration:
+    name: MySQL Integration (AC-DATA-014)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: guliangiam
+          MYSQL_CHARACTER_SET_SERVER: utf8mb4
+          MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -u root -proot --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install gate dependencies
+        run: python3 -m pip install -r scripts/requirements.txt --quiet
+
+      # ── gen_schema mysql DDL ──
+      - name: Generate MySQL DDL
+        run: python3 scripts/gen_schema.py --dialect mysql --all
+
+      # ── DDL 重放（第一次）──
+      - name: Apply MySQL DDL (first)
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u root -proot guliangiam \
+            < db/mysql/V1__guliangiam_schema_init.sql
+
+      # ── 幂等性断言：第二次重放必须零错误 ──
+      - name: Apply MySQL DDL (idempotency check)
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u root -proot guliangiam \
+            < db/mysql/V1__guliangiam_schema_init.sql
+          echo "✅ Idempotent — second replay zero error"
+
+      # ── 静态四方言 parity（夜间全量；PR 只要求 PG 运行期）──
+      - name: Schema parity check (all dialects)
+        run: python3 scripts/check-schema-parity.py
+
+      # ── MySQL runtime consistency（表/列级对齐 + 方言降级 warnings）──
+      - name: MySQL runtime consistency check
+        env:
+          MYSQL_HOST: "127.0.0.1"
+          MYSQL_PORT: "3306"
+          MYSQL_USER: "root"
+          MYSQL_PASSWORD: "root"
+          MYSQL_DATABASE: "guliangiam"
+        run: python3 scripts/check-schema-vs-db.py --dialect mysql --fail-fast

@@ -1,0 +1,335 @@
+# ──────────────────────────────────────────────────────────────────────────
+# surfaces.yaml — API 三面分类与端点契约机器可读注册表
+#
+# 唯一事实源：本文件（YAML）+ internal/transport/http/route/definition.go
+# 渲染层：docs/generated/surfaces-registry.md（人类可读视图）
+# 消费方：
+#   1. scripts/gen_openapi.py — 端点契约由 Definition 声明生成
+#   2. scripts/check-registry-sync.py — 三面常量与协议面家族前缀 ↔ route.SurfaceFor 唯一分类器
+#
+# 端点契约由 gen_openapi.py 从 routes.go 生成，本文件只登记分类规则
+# ──────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+# ── API 三面分类 ──────────────────────────────────────────────────────────
+surfaces:
+  - surface: management
+    consumers: 控制台 / 管理员 API
+    contract_source: 本项目自定 REST
+
+  - surface: authentication
+    consumers: 本系统登录页 / SPA
+    contract_source: 本项目自定 REST
+
+  - surface: protocol
+    consumers: 外部标准客户端（RP/SP/IdP/SCIM/DCR）
+    contract_source: RFC / OASIS 规定
+
+# ── 协议面家族（七个前缀家族，由 SurfaceFor 识别） ─────────────────────────
+protocol_families:
+  - id: "①"
+    family: 根级 OAuth2
+    prefix: /oauth2/*
+    typical_endpoints:
+      - /oauth2/register
+      - /oauth2/userinfo
+      - /oauth2/token
+    contract: RFC 6749 / 6750 / OIDC
+    note: "UserInfo 属协议面，从 /.well-known/* 家族移出"
+
+  - id: "②"
+    family: 根级 Well-Known
+    prefix: /.well-known/*
+    typical_endpoints:
+      - /.well-known/openid-configuration
+      - /.well-known/jwks.json
+      - /.well-known/jwks-gm.json
+    contract: RFC 5785 / OIDC Discovery
+
+  - id: "③"
+    family: 根级 CAS
+    prefix: /cas/{organizationSlug}/{applicationSlug}/*
+    typical_endpoints:
+      - CAS 2.0 标准 URL 形态
+    contract: CAS Protocol
+
+  - id: "④"
+    family: 根级 SCIM
+    prefix: /scim/v2/*
+    typical_endpoints:
+      - SCIM 2.0 CRUD
+    contract: RFC 7644
+
+  - id: "⑤"
+    family: Auth 内协议端点
+    prefix: /api/v1/auth/*
+    typical_endpoints:
+      - authorize
+      - tokens:exchange
+      - device/authorize
+      - device/token
+      - oauth2/revoke
+      - oauth2/introspect
+      - webauthn/*
+    contract: RFC 6749 / OIDC / WebAuthn
+
+  - id: "⑥"
+    family: 根级 SAML
+    prefix: /api/v1/saml/*
+    typical_endpoints:
+      - 元数据 / SSO / SLO
+    contract: SAML 2.0
+
+  - id: "⑦"
+    family: AI 协议面网关
+    prefix: /api/v1/ai/faces/*
+    typical_endpoints:
+      - OpenAI 兼容 /chat/completions
+      - Anthropic 兼容 /messages
+      - Gemini 兼容 生成端点
+    contract: OpenAI / Anthropic / Gemini 协议兼容
+    note: "AI 网关对外暴露的 LLM 协议兼容面；归 protocol 面（面外标准客户端）"
+
+# ── 端点契约字段（由 gen_openapi.py 从 Definition 生成） ──────────────────
+endpoint_contract_fields:
+  - field: method
+    source: Definition.Method
+  - field: path
+    source: Definition.Path
+  - field: operationId
+    source: Definition.OperationID
+  - field: surface
+    source: SurfaceFor(path)
+  - field: permission
+    source: Definition.Permission
+    note: '"" = 公开'
+  - field: request_schema
+    source: OpenAPI
+  - field: response_schema
+    source: OpenAPI
+  - field: idempotent
+    source: Definition.Idempotent
+  - field: optimistic_lock
+    source: Definition.OptimisticLock
+
+# ── 三面契约要素（唯一事实源：openapi/openapi.yaml 的 components） ──────────
+# 本块登记的是「哪一面用哪个契约组件」这一分类事实；组件的具体形状是生成物，
+# 不在此重复（对齐 docs/README.md 红线 1）。每个组件名都由
+# scripts/check-registry-sync.py 断言在生成的 openapi/openapi.yaml 中真实存在。
+contract_elements:
+  error_body:
+    management: ErrorResponse
+    authentication: ErrorResponse
+    protocol: OAuthErrorResponse
+    note: 管理/认证面错误体必须走 route.WriteError（手写错误体会丢顶层 requestId/traceId，由 scripts/check-errors.py 拦截）；协议面走 OAuth 2.0 错误体（RFC 6749 §5.2）
+  success_envelope:
+    detail: ResourceDetail
+    list: PaginatedResponse
+    status: OperationStatusResponse
+  auth_schemes:
+    - BearerAuth
+    - CookieSession
+  pagination:
+    request_params:
+      - page
+      - pageSize
+    response_meta: PageMeta
+
+# ── 门禁 ───────────────────────────────────────────────────────────────────
+gates:
+  - script: scripts/gen_openapi.py
+    action: 生成 openapi/openapi.yaml
+  - script: scripts/check-openapi-contract.sh
+    action: OpenAPI 契约一致性门禁
+  - script: scripts/check-http-methods.py
+    action: HTTP 方法语义检查
+  - script: scripts/check-api-params.py
+    action: 前端查询键 ↔ 后端读取面双向校验
+  - script: scripts/check-api-contract.sh
+    action: API 契约完整性检查
+
+# ── 显式端点面归属（认证面 + 协议面：方法 + 路径模板）──────────────────────────
+# 来源：internal/transport/http/api/v1/**/routes.go 的 route.Definition（实测）。
+# 供启动自检断言：route.Definition.Surface 必须等于此处的声明值。
+explicit_paths:
+  - { method: "POST", path: "/api/v1/auth/login", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/native-sso-complete", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/login-challenges/{challengeId}", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/login-challenges/{challengeId}/approve", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/login-challenges/{challengeId}/reject", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/account", surface: authentication }
+  - { method: "PATCH", path: "/api/v1/auth/account", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/logout", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/permissions", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/exit-impersonate", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/contact", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/reset-password", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/signup", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/password/reset", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/password/change", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/password/check", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/social/login", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/social/authorize", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/social/callback", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/login/ldap", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/sso-logout", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/sso-logout", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/captcha-status", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/captcha", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/captcha/verify", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/verify-code", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/qrcode", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/qrcode/scan", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/qrcode/confirm", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/qrcode/{codeId}/status", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/qrcode/exchange", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/faceid", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/faceid/verify", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/faceid/complete", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/web3", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/web3/verify", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/app-login", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/mfa/push/initiate", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/mfa/push/verify", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/mfa/push/enable", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/mfa/push/disable", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/verification-code/send", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/verification-code/verify", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/remember-me/issue", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/remember-me/exchange", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/remember-me/revoke", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/step-up/begin", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/step-up/finish", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/trusted-devices/begin", surface: authentication }
+  - { method: "POST", path: "/api/v1/auth/trusted-devices", surface: authentication }
+  - { method: "GET", path: "/api/v1/auth/trusted-devices", surface: authentication }
+  - { method: "DELETE", path: "/api/v1/auth/trusted-devices/{deviceId}", surface: authentication }
+  - { method: "POST", path: "/api/v1/ai/faces/openai/chat/completions", surface: protocol }
+  - { method: "POST", path: "/api/v1/ai/faces/openai/embeddings", surface: protocol }
+  - { method: "GET", path: "/api/v1/ai/faces/openai/models", surface: protocol }
+  - { method: "POST", path: "/api/v1/ai/faces/anthropic/chat/completions", surface: protocol }
+  - { method: "POST", path: "/api/v1/ai/faces/anthropic/embeddings", surface: protocol }
+  - { method: "GET", path: "/api/v1/ai/faces/anthropic/models", surface: protocol }
+  - { method: "POST", path: "/api/v1/ai/faces/gemini/chat/completions", surface: protocol }
+  - { method: "POST", path: "/api/v1/ai/faces/gemini/embeddings", surface: protocol }
+  - { method: "GET", path: "/api/v1/ai/faces/gemini/models", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/authorize", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/tokens/exchange", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/consents/check", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/consents/grant", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/consents/revoke", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/tokens/jwt-bearer", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/tokens/token-exchange", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/tokens/introspect", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/backchannel-logout", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/dpop/validate", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/dpop/nonce", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/client/authenticate", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/tokens/client-credentials", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/kerberos/login", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/saml/metadata/{orgSlug}/{appSlug}", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/device/authorize", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/device/token", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/device/verify", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/device/cancel", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/oauth2/revoke", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/oauth2/introspect", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/cas/login", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/cas/serviceValidate", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/cas/proxyValidate", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/cas/proxy", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/cas/logout", surface: protocol }
+  - { method: "GET", path: "/cas/{organizationSlug}/{applicationSlug}/validate", surface: protocol }
+  - { method: "GET", path: "/cas/{organizationSlug}/{applicationSlug}/serviceValidate", surface: protocol }
+  - { method: "GET", path: "/cas/{organizationSlug}/{applicationSlug}/proxyValidate", surface: protocol }
+  - { method: "GET", path: "/cas/{organizationSlug}/{applicationSlug}/proxy", surface: protocol }
+  - { method: "GET", path: "/cas/{organizationSlug}/{applicationSlug}/p3/serviceValidate", surface: protocol }
+  - { method: "GET", path: "/cas/{organizationSlug}/{applicationSlug}/p3/proxyValidate", surface: protocol }
+  - { method: "POST", path: "/cas/{organizationSlug}/{applicationSlug}/samlValidate", surface: protocol }
+  - { method: "POST", path: "/oauth2/register", surface: protocol }
+  - { method: "GET", path: "/oauth2/register/{clientID}", surface: protocol }
+  - { method: "PUT", path: "/oauth2/register/{clientID}", surface: protocol }
+  - { method: "DELETE", path: "/oauth2/register/{clientID}", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/kerberos/negotiate", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/kerberos/login", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/saml/authn-request/{organizationSlug}/{applicationSlug}", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/saml/redirect/{organizationSlug}/{applicationSlug}", surface: protocol }
+  - { method: "GET", path: "/api/v1/auth/saml/metadata/{organizationSlug}/{applicationId}", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/saml/acs", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/saml/acs/{organizationSlug}/{providerId}", surface: protocol }
+  - { method: "GET", path: "/api/v1/saml/metadata/{applicationId}", surface: protocol }
+  - { method: "POST", path: "/api/v1/saml/sso/{applicationId}", surface: protocol }
+  - { method: "GET", path: "/api/v1/saml/sso/{applicationId}", surface: protocol }
+  - { method: "GET", path: "/api/v1/saml/slo/{applicationId}", surface: protocol }
+  - { method: "POST", path: "/api/v1/saml/slo", surface: protocol }
+  - { method: "GET", path: "/api/v1/saml/slo", surface: protocol }
+  - { method: "GET", path: "/scim/v2/Users", surface: protocol }
+  - { method: "POST", path: "/scim/v2/Users", surface: protocol }
+  - { method: "GET", path: "/scim/v2/Users/{id}", surface: protocol }
+  - { method: "PUT", path: "/scim/v2/Users/{id}", surface: protocol }
+  - { method: "PATCH", path: "/scim/v2/Users/{id}", surface: protocol }
+  - { method: "DELETE", path: "/scim/v2/Users/{id}", surface: protocol }
+  - { method: "GET", path: "/scim/v2/Groups", surface: protocol }
+  - { method: "POST", path: "/scim/v2/Groups", surface: protocol }
+  - { method: "GET", path: "/scim/v2/Groups/{id}", surface: protocol }
+  - { method: "PUT", path: "/scim/v2/Groups/{id}", surface: protocol }
+  - { method: "PATCH", path: "/scim/v2/Groups/{id}", surface: protocol }
+  - { method: "DELETE", path: "/scim/v2/Groups/{id}", surface: protocol }
+  - { method: "GET", path: "/scim/v2/ServiceProviderConfig", surface: protocol }
+  - { method: "GET", path: "/scim/v2/ResourceTypes", surface: protocol }
+  - { method: "GET", path: "/scim/v2/Schemas", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/webauthn/registration/begin", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/webauthn/registration/finish", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/webauthn/authentication/begin", surface: protocol }
+  - { method: "POST", path: "/api/v1/auth/webauthn/authentication/finish", surface: protocol }
+  - { method: "GET", path: "/.well-known/openid-configuration", surface: protocol }
+  - { method: "GET", path: "/.well-known/{application}/openid-configuration", surface: protocol }
+  - { method: "GET", path: "/.well-known/jwks.json", surface: protocol }
+  - { method: "GET", path: "/.well-known/jwks-gm.json", surface: protocol }
+  - { method: "GET", path: "/.well-known/{application}/jwks.json", surface: protocol }
+  - { method: "GET", path: "/.well-known/webfinger", surface: protocol }
+  - { method: "GET", path: "/.well-known/oauth-authorization-server", surface: protocol }
+  - { method: "GET", path: "/.well-known/oauth-protected-resource", surface: protocol }
+  - { method: "GET", path: "/.well-known/{application}/oauth-protected-resource", surface: protocol }
+  - { method: "GET", path: "/.well-known/saml-metadata", surface: protocol }
+  - { method: "GET", path: "/.well-known/scim-configuration", surface: protocol }
+  - { method: "GET", path: "/oauth2/userinfo", surface: protocol }
+
+# ── 公开白名单（方法 + 路径模板）────────────────────────────────────────────
+# 来源：route.Definition.Permission == "public" 的实测枚举；供《开发规范》9.2 引用。
+public_whitelist:
+  - { method: "POST", path: "/api/v1/analytics/web-vitals" }
+  - { method: "GET", path: "/api/v1/applications/by-client-id/{clientId}" }
+  - { method: "GET", path: "/api/v1/applications/resolve" }
+  - { method: "GET", path: "/api/v1/auth/contact" }
+  - { method: "POST", path: "/api/v1/auth/reset-password" }
+  - { method: "POST", path: "/api/v1/auth/signup" }
+  - { method: "GET", path: "/api/v1/auth/captcha-status" }
+  - { method: "GET", path: "/api/v1/auth/captcha" }
+  - { method: "POST", path: "/api/v1/auth/captcha/verify" }
+  - { method: "POST", path: "/api/v1/auth/verify-code" }
+  - { method: "GET", path: "/api/v1/auth/saml/metadata/{orgSlug}/{appSlug}" }
+  - { method: "POST", path: "/api/v1/auth/saml/acs/{organizationSlug}/{providerId}" }
+  - { method: "GET", path: "/api/v1/invitations/verify" }
+  - { method: "POST", path: "/api/v1/payments/notify/{providerType}" }
+  # Third-party IDV callback: providers cannot hold a session, so the webhook
+  # signature is the only authentication (see auth_paths.go).
+  - { method: "POST", path: "/api/v1/idv/callback/{provider}" }
+  - { method: "GET", path: "/api/v1/system/health" }
+  - { method: "GET", path: "/api/v1/system/live" }
+  - { method: "GET", path: "/api/v1/system/cli/{language}" }
+  - { method: "POST", path: "/api/v1/auth/verification-code/send" }
+  - { method: "POST", path: "/api/v1/auth/verification-code/verify" }
+  - { method: "GET", path: "/.well-known/openid-configuration" }
+  - { method: "GET", path: "/.well-known/{application}/openid-configuration" }
+  - { method: "GET", path: "/.well-known/jwks.json" }
+  - { method: "GET", path: "/.well-known/jwks-gm.json" }
+  - { method: "GET", path: "/.well-known/{application}/jwks.json" }
+  - { method: "GET", path: "/.well-known/webfinger" }
+  - { method: "GET", path: "/.well-known/oauth-authorization-server" }
+  - { method: "GET", path: "/.well-known/oauth-protected-resource" }
+  - { method: "GET", path: "/.well-known/{application}/oauth-protected-resource" }
+  - { method: "GET", path: "/.well-known/saml-metadata" }
+  - { method: "GET", path: "/.well-known/scim-configuration" }
+  - { method: "GET", path: "/oauth2/userinfo" }

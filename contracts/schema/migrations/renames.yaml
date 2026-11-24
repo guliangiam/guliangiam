@@ -1,0 +1,18 @@
+# 列改名登记（数据保留的原地 RENAME COLUMN）
+#
+# 增量生成器把 V{N-1} 快照与 V{N} 声明做结构 diff。列改名在结构上表现为
+# 「旧列消失 + 新列出现」，无法与 drop+add 区分；drop 是破坏性变更必须被拒绝，
+# 因此改名必须在此显式登记，生成器才会：① 把旧快照列名映射为新列名后再 diff；
+# ② 在 V{N} 正向脚本生成 ALTER TABLE ... RENAME COLUMN old TO new；
+# ③ 在回滚脚本反向改回；④ 校验登记本身（表/旧列/新列必须真实存在且目标名空闲）。
+#
+# 格式：
+#   renames:
+#     - version: 2                 # 目标迁移版本（= active/V{N}）
+#       table: app_saml_config     # 表 short name（不带 schema 前缀）
+#       from: old_column           # V{N-1} 中的列名
+#       to: new_column             # V{N} 中的列名（不得已存在）
+renames: []
+  # 2026-10-29 squash 后 V1 基线已包含 app_saml_config.is_email_saml_nameid
+  # （原 V2 的 use_email_as_saml_name_id → is_email_saml_nameid 改名已固化在基线里），
+  # 该登记随之失效并删除；后续改名按上面的格式追加到 V{N}。

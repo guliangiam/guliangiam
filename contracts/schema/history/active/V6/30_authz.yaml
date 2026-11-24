@@ -1,0 +1,967 @@
+table_name: guliangiam.roles
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: TEXT
+  nullable: false
+- name: description
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: group_ids
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: role_ids
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: domains
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: users
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_roles_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+- name: idx_roles_org_enabled
+  columns:
+  - organization_id
+  - is_enabled
+  predicate: is_enabled = true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.user_role_bindings
+pk:
+- user_id
+- role_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: role_id
+  type: UUID
+  nullable: false
+- name: source
+  type: VARCHAR(64)
+  nullable: false
+  default: '''manual'''
+- name: starts_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: lifecycle_id
+  type: UUID
+  nullable: true
+indexes:
+- name: idx_user_role_bindings_role_id
+  columns:
+  - role_id
+- name: idx_user_role_bindings_user_id
+  columns:
+  - user_id
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.roles
+  r WHERE r.id = role_id AND r.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: role_id
+  ref_table: guliangiam.roles
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.permissions
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: TEXT
+  nullable: false
+- name: description
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: users
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: groups
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: roles
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: domains
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: resource_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: resources
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: actions
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: effect
+  type: VARCHAR(64)
+  nullable: false
+  default: '''Allow'''
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: submitter
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: approver
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: status
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: model
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: adapter
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: sorter
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: application
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: approve_time
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_permissions_organization_id
+  columns:
+  - organization_id
+- name: idx_permissions_org_enabled
+  columns:
+  - organization_id
+  - is_enabled
+  predicate: is_enabled = true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.groups
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: TEXT
+  nullable: false
+- name: manager
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: contact_email
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: parent_id
+  type: UUID
+  nullable: true
+- name: is_top_group
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: homepage
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: users
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_groups_organization_id_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+- name: idx_groups_parent_id
+  columns:
+  - organization_id
+  - parent_id
+- name: idx_groups_org_enabled
+  columns:
+  - organization_id
+  - is_enabled
+  predicate: is_enabled = true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: parent_id
+  ref_table: guliangiam.groups
+  ref_column: id
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.user_group_memberships
+pk:
+- user_id
+- group_id
+columns:
+- name: user_id
+  type: UUID
+  nullable: false
+- name: group_id
+  type: UUID
+  nullable: false
+indexes:
+- name: idx_user_group_memberships_group_id
+  columns:
+  - group_id
+- name: idx_user_group_memberships_user_id
+  columns:
+  - user_id
+fk_constraints:
+- column: group_id
+  ref_table: guliangiam.groups
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR user_id IN (SELECT id FROM guliangiam.users
+  WHERE organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.casbin_rules
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: enforcer_id
+  type: UUID
+  nullable: false
+- name: ptype
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: v0
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: v1
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: v2
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: v3
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: v4
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: v5
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+constraints:
+- name: uq_casbin_rules_rule
+  type: unique
+  columns:
+  - enforcer_id
+  - ptype
+  - v0
+  - v1
+  - v2
+  - v3
+  - v4
+  - v5
+indexes:
+- name: idx_casbin_rules_ptype
+  columns:
+  - ptype
+fk_constraints:
+- column: enforcer_id
+  ref_table: guliangiam.enforcers
+  on_delete: CASCADE
+---
+table_name: guliangiam.resources
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: application_id
+  type: UUID
+  nullable: true
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''file'''
+- name: tag
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: file_path
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: file_size
+  type: BIGINT
+  nullable: false
+  default: '0'
+- name: mime_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_resources_org_app_name
+  type: unique
+  columns:
+  - organization_id
+  - application_id
+  - name
+indexes:
+- name: idx_resources_type
+  columns:
+  - type
+revision: true
+rls: true
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: SET_NULL
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.models
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: description
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: model_text
+  type: TEXT
+  nullable: false
+- name: owner
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_models_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.adapters
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: description
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''database'''
+- name: server
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: database
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: table_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: password
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: owner
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: use_same_db
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: database_type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''postgresql'''
+- name: host
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: port
+  type: INTEGER
+  nullable: true
+- name: db_user
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: db_password
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: database_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: policy
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'TRUE'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_adapters_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.enforcers
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: description
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: model_id
+  type: UUID
+  nullable: true
+- name: adapter_id
+  type: UUID
+  nullable: true
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: owner
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_enforcers_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+- name: idx_enforcers_is_enabled
+  columns:
+  - is_enabled
+revision: true
+rls: true
+fk_constraints:
+- column: adapter_id
+  ref_table: guliangiam.adapters
+  on_delete: SET_NULL
+- column: model_id
+  ref_table: guliangiam.models
+  on_delete: SET_NULL
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.syncers
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''database'''
+- name: database_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: host
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: port
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: database
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: table_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: password
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ssl_mode
+  type: VARCHAR(64)
+  nullable: false
+  default: '''disable'''
+- name: ssh_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ssh_host
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ssh_port
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: ssh_username
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ssh_password
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: ssh_cert_id
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: sync_interval
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: field_mapping
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: column_mapping
+  type: JSONB
+  nullable: false
+  default: '''[]''::jsonb'
+- name: is_read_only
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: affinity
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: affiliation_table
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: avatar_base_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: error_text
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: last_sync_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_syncers_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+- name: idx_syncers_is_enabled
+  columns:
+  - is_enabled
+  predicate: is_enabled = true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.relation_namespaces
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: relation_defs
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: version
+  type: INTEGER
+  nullable: false
+  default: '1'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+- name: revision_counter
+  type: BIGINT
+  nullable: false
+  default: '0'
+constraints:
+- name: uq_relation_namespaces_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.relation_tuples
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: namespace_id
+  type: UUID
+  nullable: false
+- name: subject
+  type: TEXT
+  nullable: false
+- name: subject_relation
+  type: TEXT
+  nullable: true
+- name: relation
+  type: TEXT
+  nullable: false
+- name: object
+  type: TEXT
+  nullable: false
+- name: zookie
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+constraints:
+- name: uq_relation_tuples_org_ns_sub_rel_obj
+  type: unique
+  columns:
+  - organization_id
+  - namespace_id
+  - subject
+  - relation
+  - object
+indexes:
+- name: idx_relation_tuples_object
+  columns:
+  - object
+- name: idx_relation_tuples_subject
+  columns:
+  - subject
+revision: true
+rls: true
+fk_constraints:
+- column: namespace_id
+  ref_table: guliangiam.relation_namespaces
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE

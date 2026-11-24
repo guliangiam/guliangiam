@@ -1,0 +1,918 @@
+table_name: guliangiam.sessions
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Session primary key (UUID)
+- name: user_id
+  type: UUID
+  nullable: false
+  comment: Owner user
+- name: application_id
+  type: UUID
+  nullable: false
+  comment: Client application the session was issued for
+- name: session_state
+  type: VARCHAR(64)
+  nullable: false
+  default: '''active'''
+  comment: 'Lifecycle: active / revoked / expired / idle_timeout'
+- name: sid
+  type: TEXT
+  nullable: true
+  comment: Opaque session identifier used for session management lookups
+- name: device_info
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+  comment: Client device fingerprint + OS/browser detail snapshot captured at login
+- name: ip
+  type: INET
+  nullable: true
+  comment: IP address observed at session creation / last-seen refresh
+- name: user_agent
+  type: TEXT
+  nullable: true
+  comment: Raw User-Agent header captured at session creation
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+  comment: Hard expiration timestamp; session becomes unusable after this point
+- name: revoked_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Explicit revocation timestamp (admin revoke or logout); NULL when active
+- name: last_seen_at
+  comment: Last observed activity timestamp for session restore, idle timeout, and
+    device management flows.
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Session creation timestamp
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last row modification timestamp
+- name: authentication_level
+  type: VARCHAR(20)
+  nullable: false
+  default: '''password'''
+  comment: 'How the user authenticated when this session was created: password / mfa / fido2. Used by concurrent-session policy (admin session exemption requires level >= mfa).'
+- name: assurance_level
+  type: VARCHAR(10)
+  nullable: false
+  default: '''aal1'''
+  comment: 'NIST SP 800-63B authenticator assurance level: aal1 (password only) / aal2 (MFA or FIDO2 satisfied). step-up raises only the current session.'
+- name: is_privileged
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+  comment: Session elevated through an approved IGA access request
+- name: lifecycle_id
+  type: UUID
+  nullable: true
+  comment: IGA lifecycle that authorizes the privileged session
+- name: ticket_id
+  type: UUID
+  nullable: true
+  comment: Access request that authorized the privileged session
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter
+constraints:
+- name: uq_sessions_sid
+  type: unique
+  columns:
+  - sid
+- name: ck_sessions_state
+  type: check
+  expr: session_state IN ('active', 'idle', 'expired', 'revoked')
+- name: ck_sessions_assurance_level
+  type: check
+  expr: assurance_level IN ('aal1', 'aal2')
+indexes:
+- name: idx_sessions_expires_at
+  columns:
+  - expires_at
+- name: idx_sessions_user_active
+  columns:
+  - user_id
+  - expires_at
+  predicate: revoked_at IS NULL
+- name: idx_sessions_application_id
+  columns:
+  - application_id
+- name: idx_sessions_user_app_active
+  columns:
+  - user_id
+  - application_id
+  - expires_at
+  predicate: revoked_at IS NULL
+- name: idx_sessions_user_expires_revoked
+  columns:
+  - user_id
+  - expires_at
+  - revoked_at
+- name: idx_sessions_expires_revoked
+  columns:
+  - expires_at
+  - revoked_at
+- name: idx_sessions_org_app_created
+  columns:
+  - user_id
+  - application_id
+  - created_at DESC
+- name: idx_sessions_user_id_created
+  columns:
+  - user_id
+  - created_at DESC
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.access_tokens
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Access token primary key (UUID)
+- name: user_id
+  type: UUID
+  nullable: false
+  comment: Token owner user
+- name: application_id
+  type: UUID
+  nullable: false
+  comment: Client application the token was issued for
+- name: token_hash
+  comment: SHA-256 hash of the token value used for lookup and revocation.
+  type: TEXT
+  nullable: false
+- name: token_prefix
+  comment: Non-sensitive prefix shown in management UIs instead of exposing the full
+    token value.
+  type: TEXT
+  nullable: false
+- name: device_secret_hash
+  type: TEXT
+  nullable: true
+  comment: SHA-256 of the bound device secret; set only for Proof-of-Possession tokens
+- name: device_secret_expires_in
+  type: INTEGER
+  nullable: false
+  default: '0'
+  comment: Seconds until device_secret_hash expires; 0 when not bound
+- name: scopes
+  type: TEXT[]
+  nullable: false
+  default: '''{}'''
+  comment: Space-separated OAuth scopes granted to this token
+- name: audience
+  type: TEXT[]
+  nullable: false
+  default: '''{}'''
+  comment: Intended API audiences (JWT aud claim)
+- name: metadata
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+  comment: Extension attribute bag; may contain authorization_code_id, dpop_jkt, org_idp
+    context etc.
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+  comment: Token lifetime end; unix timestamp in seconds
+- name: revoked_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Revocation timestamp; NULL when token is active
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Token issuance timestamp
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last row modification timestamp
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter
+constraints:
+- name: uq_access_tokens_hash
+  type: unique
+  columns:
+  - token_hash
+indexes:
+- name: idx_access_tokens_authorization_code_id
+  columns:
+  - (metadata ->> 'authorizationCodeId')
+  predicate: metadata ? 'authorizationCodeId'
+- name: idx_access_tokens_expires_at
+  columns:
+  - expires_at
+- name: idx_access_tokens_user_active
+  columns:
+  - user_id
+  - expires_at
+  predicate: revoked_at IS NULL
+- name: idx_access_tokens_application_id
+  columns:
+  - application_id
+- name: idx_access_tokens_expires_at_not_revoked
+  columns:
+  - expires_at
+  predicate: revoked_at IS NULL
+- name: idx_access_tokens_device_secret_hash
+  columns:
+  - device_secret_hash
+  predicate: device_secret_hash IS NOT NULL
+- name: idx_tokens_app_expires
+  columns:
+  - application_id
+  - expires_at
+  - revoked_at
+- name: idx_access_tokens_user_app
+  columns:
+  - user_id
+  - application_id
+- name: idx_access_tokens_user_id_created
+  columns:
+  - user_id
+  - created_at DESC
+- name: idx_access_tokens_application_id_created
+  columns:
+  - application_id
+  - created_at DESC
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.refresh_tokens
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Refresh token primary key (UUID)
+- name: user_id
+  type: UUID
+  nullable: false
+  comment: Token owner user
+- name: application_id
+  type: UUID
+  nullable: false
+  comment: Client application the token was issued for
+- name: token_hash
+  type: TEXT
+  nullable: false
+  comment: SHA-256 of the refresh token; stored instead of plaintext
+- name: token_prefix
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: First N chars of plaintext token shown in admin UIs for identification
+- name: device_secret_hash
+  type: TEXT
+  nullable: true
+  comment: Bound-device proof hash; refresh token rotation verifies same device
+- name: device_secret_expires_in
+  type: INTEGER
+  nullable: false
+  default: '0'
+  comment: Seconds until device_secret_hash expires
+- name: scopes
+  type: TEXT[]
+  nullable: false
+  default: '''{}'''
+  comment: Scopes this refresh token is restricted to (narrowest of parent access
+    token)
+- name: audience
+  type: TEXT[]
+  nullable: false
+  default: '''{}'''
+  comment: Audience carried forward from the access token family
+- name: access_token_id
+  type: UUID
+  nullable: true
+  comment: The access token this refresh token was first minted with (link for revocation
+    chains)
+- name: family_id
+  type: UUID
+  nullable: true
+  comment: Rotating-token family UUID; shared across token rotation generations for
+    reuse detection
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+  comment: Hard expiration; refresh rejected after this point even if unused
+- name: revoked_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Revocation timestamp; part of reuse-detection flow (rotation marks previous
+    gen revoked)
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: First-generation issuance timestamp
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last row modification timestamp
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter
+constraints:
+- name: uq_refresh_tokens_hash
+  type: unique
+  columns:
+  - token_hash
+indexes:
+- name: idx_refresh_tokens_family_id
+  columns:
+  - family_id
+  predicate: family_id IS NOT NULL
+- name: idx_refresh_tokens_access_token_id
+  columns:
+  - access_token_id
+- name: idx_refresh_tokens_user_id
+  columns:
+  - user_id
+- name: idx_refresh_tokens_expires_at_not_revoked
+  columns:
+  - expires_at
+  predicate: revoked_at IS NULL
+- name: idx_refresh_tokens_application_id
+  columns:
+  - application_id
+- name: idx_refresh_tokens_hash
+  columns:
+  - token_hash
+  predicate: token_hash IS NOT NULL
+- name: idx_refresh_tokens_family_revoked
+  columns:
+  - family_id
+  - revoked_at
+  predicate: family_id IS NOT NULL
+- name: idx_refresh_tokens_user_app
+  columns:
+  - user_id
+  - application_id
+- name: idx_refresh_tokens_user_id_created
+  columns:
+  - user_id
+  - created_at DESC
+- name: idx_refresh_tokens_application_id_created
+  columns:
+  - application_id
+  - created_at DESC
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: access_token_id
+  ref_table: guliangiam.access_tokens
+  on_delete: SET_NULL
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+- column: family_id
+  ref_table: guliangiam.refresh_tokens
+  ref_column: id
+  on_delete: CASCADE
+  on_update: CASCADE
+---
+table_name: guliangiam.login_challenges
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: true
+  comment: Tenant org of the user attempting login
+- name: user_id
+  type: UUID
+  nullable: true
+  comment: User being authenticated (populated after account identification step)
+- name: application_id
+  type: UUID
+  nullable: true
+  comment: Client app that started the login flow
+- name: challenge_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: 'MFA factor requested: totp / webauthn / sms / email / push / qr'
+- name: status
+  comment: Current login challenge state such as pending, push_pending, approved,
+    or rejected.
+  type: VARCHAR(64)
+  nullable: false
+  default: '''pending'''
+- name: method_type
+  comment: MFA method currently associated with the challenge when state transitions
+    need method-specific handling.
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: verified_at
+  comment: Timestamp when an external approval path marked the challenge approved.
+  type: TIMESTAMPTZ
+  nullable: true
+- name: identity_provider
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: IdP identifier for federated MFA; empty for local factors
+- name: identity_sub
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: IdP subject claim for federated MFA correlation
+- name: redirect_url
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+  comment: Post-login callback URL; stored at challenge creation, sent to the approval
+    channel
+- name: device_info
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+  comment: Device fingerprint at challenge initiation
+- name: ip
+  type: INET
+  nullable: true
+  comment: Request IP at challenge creation
+- name: user_agent
+  type: TEXT
+  nullable: true
+  comment: User-Agent header at challenge creation
+- name: metadata
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+  comment: Attribute bag for factor-specific state (e.g. TOTP window, WebAuthn cred ID)
+- name: expires_at
+  comment: Expiration timestamp for the pending MFA login challenge.
+  type: TIMESTAMPTZ
+  nullable: false
+- name: resolved_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Timestamp when challenge transitioned to approved/rejected state
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Challenge initiation timestamp
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last state transition timestamp
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter
+constraints:
+- name: ck_login_challenges_status
+  type: check
+  expr: status IN ('pending', 'push_pending', 'approved', 'rejected')
+indexes:
+- name: idx_auth_login_challenges_user_id
+  columns:
+  - user_id
+- name: idx_auth_login_challenges_expires_at
+  columns:
+  - expires_at
+- name: idx_auth_login_challenges_status
+  columns:
+  - status
+- name: idx_login_challenges_application_id
+  columns:
+  - application_id
+revision: true
+rls: true
+fk_constraints:
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+comment: Pending MFA login challenges created after password verification and consumed
+  by second-step MFA verification.
+---
+table_name: guliangiam.webauthn_credentials
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: credential_id
+  type: BYTEA
+  nullable: false
+- name: public_key
+  type: BYTEA
+  nullable: false
+- name: attestation_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: transport
+  type: VARCHAR(255)[]
+  nullable: false
+  default: '''{}'''
+- name: sign_count
+  type: BIGINT
+  nullable: false
+  default: '0'
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: aaguid
+  type: UUID
+  nullable: true
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''active'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_webauthn_credentials_user_id
+  columns:
+  - user_id
+- name: idx_webauthn_credentials_aaguid
+  columns:
+  - aaguid
+  predicate: aaguid IS NOT NULL
+- name: uq_webauthn_credentials_credential_id
+  columns:
+  - credential_id
+  unique: true
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+constraints:
+- name: ck_webauthn_credentials_status
+  type: check
+  expr: status IN ('active', 'revoked', 'deactivated')
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.webauthn_challenges
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: challenge_hash
+  comment: SHA-256 (hex) of the challenge issued by begin. The plaintext challenge
+    is never persisted, so a database leak cannot be replayed as a valid ceremony.
+  type: TEXT
+  nullable: false
+- name: ceremony_type
+  comment: registration or authentication — the two ceremony kinds share one table
+    but must not be interchangeable at finish. No TEXT default (check-schema-defaults.py
+    freezes the legacy count of TEXT defaults; the service always sets this column).
+  type: TEXT
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: true
+- name: relying_party_id
+  comment: RP ID captured at begin; finish verifies the assertion against this value
+    rather than against whatever the client sends. No TEXT default for the same reason
+    as ceremony_type.
+  type: TEXT
+  nullable: false
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+- name: consumed_at
+  comment: Set exactly once by the atomic consume UPDATE. NULL means pending — the
+    one-time guarantee is the RowsAffected=0 check on that conditional update.
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_webauthn_challenges_user_id
+  columns:
+  - user_id
+- name: idx_webauthn_challenges_expires_at
+  columns:
+  - expires_at
+constraints:
+- name: ck_webauthn_challenges_ceremony_type
+  type: check
+  expr: ceremony_type IN ('registration', 'authentication', 'web3_authentication')
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.users
+  u WHERE u.id = user_id AND u.organization_id = guliangiam.current_organization_id())
+fk_constraints:
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+
+- column: organization_id
+  ref_table: guliangiam.organizations
+  ref_column: id
+  on_delete: CASCADE
+  on_update: CASCADE
+---
+table_name: guliangiam.trusted_devices
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Trusted device primary key (UUIDv7 generated by the application)
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant that owns the trust record; also the RLS anchor
+- name: user_id
+  type: UUID
+  nullable: false
+  comment: User this device is trusted for
+- name: device_credential_id
+  type: TEXT
+  nullable: false
+  comment: SHA-256 digest of the client device credential, stored as 64 lowercase hex characters; the plaintext credential is never persisted
+- name: device_public_key
+  type: BYTEA
+  nullable: false
+  comment: Device public key (PKIX DER) used to verify the trust ceremony signature
+- name: ua_hash
+  type: TEXT
+  nullable: false
+  comment: SHA-256 hex of the User-Agent observed at registration; device trust is bound to the client profile, never to an IP address
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Registration timestamp
+- name: last_seen_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last time the device presented a valid trust proof
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+  comment: Hard expiration (created_at + 30 days); expired rows are no longer trusted
+- name: revoked_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Revocation timestamp; NULL while the device is trusted
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter
+indexes:
+- name: idx_trusted_devices_user_active
+  columns:
+  - user_id
+  - expires_at
+  predicate: revoked_at IS NULL
+- name: idx_trusted_devices_org_user
+  columns:
+  - organization_id
+  - user_id
+- name: idx_trusted_devices_expires_at
+  columns:
+  - expires_at
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR (organization_id = guliangiam.current_organization_id()
+  AND EXISTS (SELECT 1 FROM guliangiam.users u WHERE u.id = user_id AND u.organization_id
+  = guliangiam.current_organization_id()))
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+---
+table_name: guliangiam.remember_me_families
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Remember-me family primary key (UUID)
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant that owns the family
+- name: user_id
+  type: UUID
+  nullable: false
+  comment: User the family restores
+- name: application_id
+  type: UUID
+  nullable: true
+  comment: Application the family was issued for
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+  comment: Hard family expiration (issued_at + 30 days)
+- name: revoked_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Revocation timestamp; reuse detection revokes the whole family
+- name: revoke_reason
+  type: TEXT
+  nullable: true
+  comment: logout / reuse_detected / admin / user
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Issuance timestamp
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last row modification timestamp
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter
+indexes:
+- name: idx_remember_me_families_user_active
+  columns:
+  - user_id
+  - expires_at
+  predicate: revoked_at IS NULL
+- name: idx_remember_me_families_org_user
+  columns:
+  - organization_id
+  - user_id
+- name: idx_remember_me_families_expires_at
+  columns:
+  - expires_at
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR (organization_id = guliangiam.current_organization_id()
+  AND EXISTS (SELECT 1 FROM guliangiam.users u WHERE u.id = user_id AND u.organization_id
+  = guliangiam.current_organization_id()))
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+- column: application_id
+  ref_table: guliangiam.applications
+  on_delete: SET_NULL
+---
+table_name: guliangiam.remember_me_tokens
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+  comment: Remember-me token primary key (UUID)
+- name: family_id
+  type: UUID
+  nullable: false
+  comment: Rotating family this token belongs to
+- name: organization_id
+  type: UUID
+  nullable: false
+  comment: Tenant that owns the token (RLS anchor)
+- name: token_hash
+  type: TEXT
+  nullable: false
+  comment: SHA-256 hex of the plaintext token; plaintext is returned only once
+- name: token_prefix
+  type: TEXT
+  nullable: false
+  comment: Non-sensitive prefix for management UIs
+- name: consumed_at
+  type: TIMESTAMPTZ
+  nullable: true
+  comment: Single-use consumption timestamp; non-NULL means already rotated
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: false
+  comment: Token expiration (mirrors the family expiration)
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Issuance timestamp
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+  comment: Last row modification timestamp
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+  comment: Optimistic concurrency counter
+constraints:
+- name: uq_remember_me_tokens_hash
+  type: unique
+  columns:
+  - token_hash
+indexes:
+- name: idx_remember_me_tokens_family
+  columns:
+  - family_id
+- name: idx_remember_me_tokens_expires_at
+  columns:
+  - expires_at
+  predicate: consumed_at IS NULL
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+- column: family_id
+  ref_table: guliangiam.remember_me_families
+  on_delete: CASCADE
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE

@@ -1,0 +1,52 @@
+# llm_metering_events — AI Gateway Outbox 审计落表
+#
+# 这张表是所有 llm_* aggregate_type outbox 事件的统一审计 sink。
+# Outbox Worker 投递成功后（DeliveryHandler.Handle 返回 nil），
+# auditLogHandler 会把事件写入本表 —— 相当于 "已投递" 的审计副本。
+#
+# 三个 aggregate_type 的 payload 差异很大，用 JSONB 存原始 payload，
+# 同时 top-level 落出 org_id / provider_id 等常用维度方便聚合查询。
+#
+# RLS: FORCE ROW LEVEL SECURITY (所有 llm_* 表带 FORCE)
+---
+table_name: guliangiam.llm_metering_events
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: outbox_id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: true
+- name: aggregate_type
+  type: VARCHAR(50)
+  nullable: false
+- name: aggregate_id
+  type: UUID
+  nullable: true
+- name: event_type
+  type: VARCHAR(100)
+  nullable: false
+- name: provider_id
+  type: UUID
+  nullable: true
+- name: model_id
+  type: UUID
+  nullable: true
+- name: payload_json
+  type: JSONB
+  nullable: false
+- name: recorded_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+indexes:
+  - name: idx_llm_metering_events_org
+    columns: [organization_id, recorded_at DESC]
+  - name: idx_llm_metering_events_provider
+    columns: [provider_id, recorded_at DESC]
+  - name: idx_llm_metering_events_event_type
+    columns: [event_type]

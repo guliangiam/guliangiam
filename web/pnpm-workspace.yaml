@@ -1,0 +1,36 @@
+allowBuilds:
+  "@reown/appkit": true
+  cypress: true
+  es5-ext: true
+  esbuild: true
+  vue-demi: true
+minimumReleaseAgeExclude:
+  - "@axe-core/playwright@4.14.0"
+  - "@tanstack/react-virtual@3.14.21 || 3.14.24"
+  - "@tanstack/virtual-core@3.19.6 || 3.19.9"
+  - "@vitest/mocker@5.0.5"
+  - "@vitest/spy@5.0.5"
+  - i18next@26.4.7
+  - react-i18next@17.0.19
+  - vitest@5.0.5
+  - "@scalar/agent-chat@0.12.48"
+  - "@scalar/api-client@3.23.5"
+  - "@scalar/api-reference-react@0.9.85"
+  - "@scalar/api-reference@1.76.2"
+  - "@scalar/asyncapi-to-markdown@0.2.4"
+  - "@scalar/blocks@0.6.2"
+  - "@scalar/oas-utils@0.20.17"
+  - "@scalar/openapi-to-markdown@1.7.2"
+  - "@scalar/sidebar@0.12.5"
+  - "@scalar/snippetz@0.10.13"
+  - "@scalar/types@0.25.2"
+  - "@scalar/workspace-store@0.69.2"
+  - "@sentry/browser-utils@11.10.0"
+  - "@sentry/browser@11.10.0"
+  - "@sentry/core@11.10.0"
+  - "@sentry/feedback@11.10.0"
+  - "@sentry/react@11.10.0"
+  - "@sentry/replay-canvas@11.10.0"
+  - "@sentry/replay@11.10.0"
+  - "@types/node@26.6.6"
+  - cypress@16.2.1

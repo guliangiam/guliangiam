@@ -1,0 +1,40 @@
+.gl-feedback-launcher {
+  position: fixed;
+  right: var(--gl-space-6, 24px);
+  bottom: var(--gl-space-6, 24px);
+  /* Above page content, below antd popups/modals (zIndexPopupBase 1000) so the
+     launcher never covers a dialog the user is interacting with. */
+  z-index: 900;
+}
+
+.gl-feedback-launcher__btn.ant-btn {
+  height: 48px;
+  padding-inline: var(--gl-space-5, 20px);
+  border-radius: var(--gl-radius-full, 999px);
+  font-weight: 600;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--gl-color-primary) 38%, transparent);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.gl-feedback-launcher__btn.ant-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--gl-color-primary) 48%, transparent);
+}
+
+.gl-feedback-launcher__btn.ant-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 575px) {
+  .gl-feedback-launcher {
+    right: var(--gl-space-4, 16px);
+    bottom: var(--gl-space-4, 16px);
+  }
+
+  .gl-feedback-launcher__btn.ant-btn {
+    height: 44px;
+    padding-inline: var(--gl-space-4, 16px);
+  }
+}

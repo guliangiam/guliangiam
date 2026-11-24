@@ -1,0 +1,718 @@
+# AI 网关 Schema — 9 张表
+# 注：llm_usage_logs 按月分区，gen_schema.py 当前版本不支持 partition 关键字，
+#   分区由迁移脚本手动创建（CREATE TABLE ... PARTITION BY RANGE）。
+---
+table_name: guliangiam.llm_providers
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: provider_type
+  type: VARCHAR(50)
+  nullable: false
+- name: base_url
+  type: VARCHAR(500)
+  nullable: false
+- name: api_key_sealed
+  type: TEXT
+  nullable: false
+- name: api_key_fingerprint
+  type: VARCHAR(64)
+  nullable: false
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''active'''
+- name: request_timeout_ms
+  type: INTEGER
+  nullable: false
+  default: '30000'
+- name: max_retries
+  type: INTEGER
+  nullable: false
+  default: '2'
+- name: priority
+  type: INTEGER
+  nullable: false
+  default: '100'
+- name: weight
+  type: INTEGER
+  nullable: false
+  default: '1'
+- name: rpm_limit
+  type: INTEGER
+  nullable: true
+- name: tpm_limit
+  type: INTEGER
+  nullable: true
+- name: supported_protocols
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: preferred_protocol
+  type: VARCHAR(30)
+  nullable: false
+  default: '''openai'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_llm_providers_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+  predicate: deleted_at IS NULL
+- name: ck_llm_providers_status
+  type: check
+  expr: status IN ('active', 'disabled', 'testing')
+- name: ck_llm_providers_provider_type
+  type: check
+  expr: provider_type IN ('openai', 'anthropic', 'gemini', 'deepseek', 'glm', 'kimi', 'qwen', 'seed', 'ollama', 'vllm', 'custom')
+- name: ck_llm_providers_preferred_protocol
+  type: check
+  expr: preferred_protocol IN ('openai', 'anthropic', 'gemini')
+indexes:
+- name: idx_llm_providers_org
+  columns:
+  - organization_id
+- name: idx_llm_providers_status
+  columns:
+  - status
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_models
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: provider_id
+  type: UUID
+  nullable: false
+- name: provider_model_name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: capabilities
+  type: JSONB
+  nullable: true
+  default: '''{}'''
+- name: max_context_tokens
+  type: INTEGER
+  nullable: true
+- name: max_output_tokens
+  type: INTEGER
+  nullable: true
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''active'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_llm_models_status
+  type: check
+  expr: status IN ('active', 'deprecated')
+indexes:
+- name: idx_llm_models_provider
+  columns:
+  - provider_id
+- name: idx_llm_models_org
+  columns:
+  - organization_id
+- name: uq_llm_models_provider_model
+  type: unique
+  columns:
+  - provider_id
+  - provider_model_name
+  predicate: deleted_at IS NULL
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: provider_id
+  ref_table: guliangiam.llm_providers
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_model_aliases
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: alias
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''active'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_llm_aliases_status
+  type: check
+  expr: status IN ('active', 'disabled')
+- name: uq_llm_aliases_org_alias
+  type: unique
+  columns:
+  - organization_id
+  - alias
+  predicate: deleted_at IS NULL
+indexes:
+- name: idx_llm_aliases_org
+  columns:
+  - organization_id
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_routes
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: alias_id
+  type: UUID
+  nullable: false
+- name: model_id
+  type: UUID
+  nullable: false
+- name: weight
+  type: INTEGER
+  nullable: false
+  default: '1'
+- name: priority
+  type: INTEGER
+  nullable: false
+  default: '100'
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''active'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_llm_routes_status
+  type: check
+  expr: status IN ('active', 'disabled')
+indexes:
+- name: idx_llm_routes_alias
+  columns:
+  - alias_id
+- name: idx_llm_routes_model
+  columns:
+  - model_id
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: alias_id
+  ref_table: guliangiam.llm_model_aliases
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: model_id
+  ref_table: guliangiam.llm_models
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_api_keys
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: key_prefix
+  type: VARCHAR(20)
+  nullable: false
+- name: key_hash
+  type: VARCHAR(128)
+  nullable: false
+- name: allowed_aliases
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: rpm_limit
+  type: INTEGER
+  nullable: true
+- name: tpm_limit
+  type: INTEGER
+  nullable: true
+- name: monthly_budget
+  type: DECIMAL(19, 4)
+  nullable: true
+- name: currency
+  type: VARCHAR(3)
+  nullable: true
+  default: '''USD'''
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''active'''
+- name: expires_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_llm_api_keys_status
+  type: check
+  expr: status IN ('active', 'revoked', 'expired')
+indexes:
+- name: idx_llm_api_keys_org
+  columns:
+  - organization_id
+- name: uq_llm_api_keys_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+  predicate: deleted_at IS NULL
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_quota_policies
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: scope
+  type: VARCHAR(20)
+  nullable: false
+- name: scope_ref
+  type: UUID
+  nullable: true
+- name: limit_type
+  type: VARCHAR(20)
+  nullable: false
+- name: limit_value
+  type: DECIMAL(19, 4)
+  nullable: false
+- name: reset_cycle
+  type: VARCHAR(20)
+  nullable: false
+  default: '''monthly'''
+- name: status
+  type: TEXT
+  nullable: false
+  default: '''active'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: ck_llm_quota_scope
+  type: check
+  expr: scope IN ('organization', 'api_key', 'alias')
+- name: ck_llm_quota_reset_cycle
+  type: check
+  expr: reset_cycle IN ('daily', 'monthly')
+- name: ck_llm_quota_status
+  type: check
+  expr: status IN ('active', 'disabled')
+indexes:
+- name: idx_llm_quota_org
+  columns:
+  - organization_id
+- name: idx_llm_quota_scope_ref
+  columns:
+  - scope
+  - scope_ref
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_price_versions
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: model_id
+  type: UUID
+  nullable: false
+- name: version_no
+  type: INTEGER
+  nullable: false
+  default: '1'
+- name: input_price_per_1m
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: output_price_per_1m
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: currency
+  type: VARCHAR(3)
+  nullable: false
+  default: '''USD'''
+- name: effective_from
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_llm_price_model_version
+  type: unique
+  columns:
+  - model_id
+  - version_no
+  predicate: deleted_at IS NULL
+indexes:
+- name: idx_llm_price_model
+  columns:
+  - model_id
+- name: idx_llm_price_effective
+  columns:
+  - effective_from
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: model_id
+  ref_table: guliangiam.llm_models
+  on_delete: RESTRICT
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_provider_health
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: provider_id
+  type: UUID
+  nullable: false
+- name: state
+  type: TEXT
+  nullable: false
+  default: '''healthy'''
+- name: consecutive_failures
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: open_until
+  type: TIMESTAMPTZ
+  nullable: true
+- name: last_checked_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: last_latency_ms
+  type: INTEGER
+  nullable: true
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+constraints:
+- name: ck_llm_health_state
+  type: check
+  expr: state IN ('healthy', 'degraded', 'open', 'half_open')
+indexes:
+- name: uq_llm_health_provider
+  type: unique
+  columns:
+  - provider_id
+rls: false
+fk_constraints:
+- column: provider_id
+  ref_table: guliangiam.llm_providers
+  on_delete: CASCADE
+  on_update: CASCADE
+---
+table_name: guliangiam.llm_usage_logs
+pk: id
+# 注：此表按月分区，gen_schema.py 当前不支持 partition 关键字。
+# 迁移脚本需手动执行：CREATE TABLE llm_usage_logs_partition_of (...) PARTITION BY RANGE (created_at);
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: api_key_id
+  type: UUID
+  nullable: true
+- name: alias_id
+  type: UUID
+  nullable: false
+- name: provider_id
+  type: UUID
+  nullable: false
+- name: model_id
+  type: UUID
+  nullable: false
+- name: price_version_id
+  type: UUID
+  nullable: true
+- name: protocol_face
+  type: VARCHAR(30)
+  nullable: false
+- name: attempt_no
+  type: INTEGER
+  nullable: false
+  default: '1'
+- name: input_tokens
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: output_tokens
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: total_tokens
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: cost_amount
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: currency
+  type: VARCHAR(3)
+  nullable: false
+  default: '''USD'''
+- name: status
+  type: TEXT
+  nullable: false
+- name: error_code
+  type: VARCHAR(100)
+  nullable: true
+- name: ttft_ms
+  type: INTEGER
+  nullable: true
+- name: total_latency_ms
+  type: INTEGER
+  nullable: true
+- name: upstream_request_id
+  type: VARCHAR(255)
+  nullable: true
+- name: failover_from
+  type: VARCHAR(255)
+  nullable: true
+- name: request_id
+  type: VARCHAR(255)
+  nullable: false
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+constraints:
+- name: ck_llm_usage_status
+  type: check
+  expr: status IN ('succeeded', 'failed', 'timeout')
+- name: ck_llm_usage_protocol_face
+  type: check
+  expr: protocol_face IN ('openai', 'anthropic', 'gemini')
+indexes:
+- name: idx_llm_usage_org
+  columns:
+  - organization_id
+- name: idx_llm_usage_alias
+  columns:
+  - alias_id
+- name: idx_llm_usage_provider
+  columns:
+  - provider_id
+- name: idx_llm_usage_api_key
+  columns:
+  - api_key_id
+- name: idx_llm_usage_created
+  columns:
+  - created_at
+soft_delete: false
+revision: false
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: api_key_id
+  ref_table: guliangiam.llm_api_keys
+  on_delete: SET_NULL
+  on_update: CASCADE
+- column: alias_id
+  ref_table: guliangiam.llm_model_aliases
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: provider_id
+  ref_table: guliangiam.llm_providers
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: model_id
+  ref_table: guliangiam.llm_models
+  on_delete: RESTRICT
+  on_update: CASCADE
+- column: price_version_id
+  ref_table: guliangiam.llm_price_versions
+  on_delete: SET_NULL
+  on_update: CASCADE

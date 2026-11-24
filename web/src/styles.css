@@ -1,0 +1,3037 @@
+@layer scalar-base, scalar-theme, scalar-config, theme, base, components, utilities;
+
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  font-display: swap;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  box-sizing: border-box;
+
+  /* ── Color Palette ── */
+  /* 这组值在 JS 侧镜像为 src/app/theme/brand-palette.ts，由 scripts/gen_brand_palette.py 生成
+     （门禁 scripts/check-token-parity.py）；改色只需改这里并重新生成。 */
+  --gl-color-primary: #0b8073;
+  --gl-color-primary-hover: #0b7a67;
+  --gl-color-primary-active: #096b5c;
+  /* 实心主色底上的前景文本色（WCAG AA）：浅色深主色配白字，暗黑亮主色配深字。 */
+  --gl-color-on-primary: #ffffff;
+  /* 派生色：跟随 --gl-color-primary（主题编辑器可覆盖），不手写第二处。 */
+  --gl-color-primary-bg: color-mix(in srgb, var(--gl-color-primary) 8%, transparent);
+  --gl-color-success: #1f9d6c;
+  --gl-color-success-bg: rgba(11, 122, 103, 0.08);
+  --gl-color-success-text: #0b6d5c;
+  --gl-color-warning: #c67a22;
+  --gl-color-warning-bg: rgba(198, 122, 34, 0.08);
+  --gl-color-error: #cf2e2e;
+  --gl-color-error-bg: rgba(184, 54, 46, 0.08);
+  --gl-color-error-text: #9f2b25;
+  --gl-color-text: #102a2c;
+  --gl-color-text-secondary: rgba(16, 42, 44, 0.66);
+  --gl-color-text-tertiary: #5f7076;
+  --gl-color-text-inverse: #f0faf8;
+  --gl-color-bg: #f8fbfb;
+  --gl-color-bg-elevated: #ffffff;
+  /* 固定列/斑马纹专用：合成不透明色（alpha=1），避免横向滚动时透出下层单元格。 */
+  --gl-color-primary-bg-solid: color-mix(
+    in srgb,
+    var(--gl-color-primary) 8%,
+    var(--gl-color-bg-elevated)
+  );
+  --gl-color-zebra-bg: color-mix(in srgb, #000 1%, var(--gl-color-bg-elevated));
+  --gl-color-bg-code: rgba(7, 44, 48, 0.96);
+  --gl-color-border: rgba(16, 42, 44, 0.08);
+  --gl-color-border-strong: rgba(16, 42, 44, 0.12);
+
+  /* ── Spacing Scale ── */
+  --gl-space-0: 0px;
+  --gl-space-1: 4px;
+  --gl-space-2: 8px;
+  --gl-space-3: 12px;
+  --gl-space-4: 16px;
+  --gl-space-5: 20px;
+  --gl-space-6: 24px;
+  --gl-space-8: 32px;
+  --gl-space-10: 40px;
+  --gl-space-12: 48px;
+
+  /* ── Typography ── */
+  --gl-font-size-xs: 12px;
+  --gl-font-size-sm: 13px;
+  --gl-font-size-base: 14px;
+  --gl-font-size-lg: 16px;
+  --gl-font-size-xl: 20px;
+  --gl-font-size-2xl: 22px;
+  --gl-font-size-3xl: 26px;
+  --gl-font-size-4xl: 28px;
+  --gl-font-weight-normal: 400;
+  --gl-font-weight-medium: 500;
+  --gl-font-weight-semibold: 600;
+  --gl-font-weight-bold: 700;
+  --gl-line-height: 1.5;
+  --gl-font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+
+  /* ── Radius ── */
+  --gl-radius-sm: 6px;
+  --gl-radius-md: 10px;
+  --gl-radius-lg: 14px;
+  --gl-radius-xl: 18px;
+  --gl-radius-2xl: 24px;
+  --gl-radius-full: 999px;
+
+  /* ── Shadows ── */
+  --gl-shadow-sm: 0 1px 3px rgba(12, 48, 50, 0.06);
+  --gl-shadow-md: 0 4px 16px rgba(12, 48, 50, 0.08);
+  --gl-shadow-lg: 0 22px 60px rgba(12, 48, 50, 0.08);
+  --gl-shadow-sidebar: 0 24px 60px rgba(7, 44, 48, 0.22);
+
+  /* ── Transitions ── */
+  --gl-transition-fast: 150ms ease;
+  --gl-transition-normal: 250ms ease;
+  --gl-transition-slow: 350ms ease;
+
+  /* ── Shell ── */
+  --gl-shell-bg: rgba(255, 255, 255, 0.78);
+  --gl-shell-border: rgba(16, 42, 44, 0.08);
+  --gl-card-shadow: 0 22px 60px rgba(12, 48, 50, 0.08);
+  --gl-panel-bg: rgba(255, 255, 255, 0.84);
+
+  /* ── Sidebar ── */
+  --gl-sidebar-bg: linear-gradient(180deg, #ffffff, #f9fafb);
+  --gl-sidebar-text: rgba(0, 0, 0, 0.88);
+  --gl-sidebar-text-secondary: rgba(0, 0, 0, 0.55);
+  --gl-sidebar-text-tertiary: rgba(0, 0, 0, 0.38);
+  --gl-sidebar-border: rgba(0, 0, 0, 0.06);
+  --gl-sidebar-hover-bg: rgba(0, 0, 0, 0.04);
+  --gl-sidebar-active: rgba(0, 0, 0, 0.06);
+  --gl-sidebar-group-color: rgba(0, 0, 0, 0.45);
+
+  /* ── Page Background ── */
+  --gl-page-bg: linear-gradient(180deg, #f8fbfb 0%, #eef4f1 100%);
+  --gl-page-bg-accent-1: radial-gradient(
+    circle at top left,
+    rgba(10, 180, 160, 0.14),
+    transparent 28%
+  );
+  --gl-page-bg-accent-2: radial-gradient(
+    circle at top right,
+    rgba(242, 166, 90, 0.16),
+    transparent 24%
+  );
+}
+
+/* ── Dark Mode ── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --gl-color-primary: #2ec4b6;
+  --gl-color-primary-hover: #3dd5c7;
+  --gl-color-primary-active: #4de0d3;
+  --gl-color-on-primary: #102a2c;
+  --gl-color-primary-bg: color-mix(in srgb, var(--gl-color-primary) 12%, transparent);
+  --gl-color-success: #3ddc84;
+  --gl-color-success-bg: rgba(61, 220, 132, 0.12);
+  --gl-color-success-text: #3ddc84;
+  --gl-color-warning: #f0a030;
+  --gl-color-warning-bg: rgba(240, 160, 48, 0.12);
+  --gl-color-error: #f06060;
+  --gl-color-error-bg: rgba(240, 96, 96, 0.12);
+  --gl-color-error-text: #f06060;
+  --gl-color-text: #e8e8e8;
+  /* WCAG 1.4.3 Contrast — increase opacity for safer margin (B-06) */
+  --gl-color-text-secondary: rgba(232, 232, 232, 0.65);
+  /* WCAG 1.4.3 Contrast — increase tertiary for safer margin (B-05) */
+  --gl-color-text-tertiary: #949494;
+  --gl-color-text-inverse: #121212;
+  --gl-color-bg: #121212;
+  --gl-color-bg-elevated: #1f1f1f;
+  --gl-color-primary-bg-solid: color-mix(
+    in srgb,
+    var(--gl-color-primary) 12%,
+    var(--gl-color-bg-elevated)
+  );
+  --gl-color-zebra-bg: color-mix(in srgb, #fff 3%, var(--gl-color-bg-elevated));
+  --gl-color-bg-code: #0e0e0e;
+  --gl-color-border: rgba(255, 255, 255, 0.08);
+  --gl-color-border-strong: rgba(255, 255, 255, 0.14);
+  --gl-shell-bg: rgba(31, 31, 31, 0.92);
+  --gl-shell-border: rgba(255, 255, 255, 0.08);
+  --gl-sidebar-bg: linear-gradient(180deg, rgba(24, 24, 24, 0.98), rgba(18, 18, 18, 0.96));
+  --gl-card-shadow: 0 22px 60px rgba(0, 0, 0, 0.3);
+  --gl-sidebar-text-secondary: rgba(255, 255, 255, 0.64);
+  --gl-sidebar-text-tertiary: rgba(255, 255, 255, 0.45);
+  --gl-sidebar-border: rgba(255, 255, 255, 0.08);
+  --gl-sidebar-hover-bg: rgba(255, 255, 255, 0.1);
+  --gl-sidebar-active: rgba(255, 255, 255, 0.16);
+  --gl-sidebar-group-color: rgba(255, 255, 255, 0.55);
+  --gl-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --gl-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --gl-shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.3);
+  --gl-shadow-sidebar: 0 24px 60px rgba(0, 0, 0, 0.4);
+  --gl-panel-bg: rgba(31, 31, 31, 0.88);
+  --gl-page-bg: linear-gradient(180deg, #121212 0%, #0a0a0a 100%);
+  --gl-page-bg-accent-1: radial-gradient(
+    circle at top left,
+    rgba(255, 255, 255, 0.03),
+    transparent 28%
+  );
+  --gl-page-bg-accent-2: radial-gradient(
+    circle at top right,
+    rgba(255, 255, 255, 0.02),
+    transparent 24%
+  );
+  --gl-sidebar-text: rgba(255, 255, 255, 0.88);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--gl-page-bg-accent-1), var(--gl-page-bg-accent-2), var(--gl-page-bg);
+  color: var(--gl-color-text);
+}
+
+a {
+  color: inherit;
+}
+
+/* ── App Shell ── */
+.gl-app-shell {
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--gl-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-2);
+  overflow: hidden;
+}
+
+.gl-app-shell.ant-layout {
+  background: transparent;
+}
+
+/* ── Sidebar ── */
+/*
+   AppShell 有两种侧边栏结构：
+
+   1. 桌面 inline 模式（>1024px）：
+      Sider.gl-sidebar (flex-col, height:100%)
+        ├── nav (block 默认) ← 需要 flex:1 / min-height:0 把链传下去
+        │     ├── sidebarBrand
+        │     ├── MenuSearch
+        │     └── Menu (flex:1, overflow-y:auto)
+        └── .gl-sidebar__toggle
+
+   2. 移动 Drawer 模式（≤1024px）：
+      Drawer
+        └── nav.gl-sidebar (本身就是 flex-col)
+              ├── sidebarBrand
+              ├── MenuSearch
+              └── Menu (flex:1, overflow-y:auto)
+
+   两种结构都需要 Menu 的祖先链上每一层都满足：
+   - flex 容器（column 方向）
+   - flex:1（或默认 flex:1 1 0%）
+   - min-height: 0 ← 关键！flex 默认 min-height:auto 会撑破滚动
+   这样 Menu 的 flex:1 + overflow-y:auto 才能生效。
+*/
+.gl-sidebar {
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--gl-sidebar-border);
+  border-radius: var(--gl-radius-2xl);
+  background: var(--gl-sidebar-bg) !important;
+  box-shadow: var(--gl-shadow-sidebar);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.gl-sidebar.ant-layout-sider {
+  background: var(--gl-sidebar-bg) !important;
+}
+
+/* ✅ 关键修复！Ant Design Sider 内部有一层 .ant-layout-sider-children wrapper。
+   之前的 .gl-sidebar > nav 选择器完全命不中，因为 inline 模式下 nav 不是 Sider
+   的直接子元素 — 中间包了这层 wrapper。这层默认不是 flex container，
+   所以必须设 flex:1 + minH:0 + flex-col + overflow:hidden 打通链。 */
+.gl-sidebar .ant-layout-sider-children {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* nav 在两种模式下都是 flex container：
+   - inline: nav 在 .ant-layout-sider-children 内
+   - drawer: nav 本身就是 .gl-sidebar
+   用 descendant selector 兼容两种结构。 */
+.gl-sidebar nav {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* toggle 在 inline 模式下位于 .ant-layout-sider-children 内，不要 flex-shrink */
+.gl-sidebar .ant-layout-sider-children > .gl-sidebar__toggle {
+  flex-shrink: 0;
+}
+
+/* Drawer 模式下，Drawer body 也必须是 flex column + full height */
+.gl-sidebar-drawer .ant-drawer-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.gl-sidebar__brand {
+  padding: var(--gl-space-6) var(--gl-space-5) var(--gl-space-5);
+  color: var(--gl-sidebar-text);
+  text-align: center;
+  border-bottom: 1px solid var(--gl-sidebar-border);
+}
+
+.gl-sidebar__brand-collapsed {
+  font-size: var(--gl-font-size-xl);
+  font-weight: var(--gl-font-weight-bold);
+  color: var(--gl-sidebar-text);
+  text-align: center;
+  padding: var(--gl-space-4) 0;
+}
+
+.gl-sidebar__eyebrow {
+  margin-bottom: var(--gl-space-2);
+  color: var(--gl-sidebar-text-secondary);
+  font-size: var(--gl-font-size-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gl-sidebar__title {
+  font-size: var(--gl-font-size-3xl);
+  font-weight: var(--gl-font-weight-bold);
+}
+
+.gl-sidebar__org {
+  margin-top: var(--gl-space-2);
+  color: var(--gl-sidebar-text);
+  font-size: var(--gl-font-size-sm);
+  font-weight: var(--gl-font-weight-medium);
+  background: var(--gl-sidebar-hover-bg);
+  border-radius: var(--gl-radius-md);
+  padding: var(--gl-space-1) var(--gl-space-3);
+  display: inline-block;
+}
+
+.gl-sidebar__toggle {
+  padding: var(--gl-space-2) var(--gl-space-3);
+  border-top: 1px solid var(--gl-sidebar-border);
+  text-align: center;
+}
+
+.gl-sidebar__toggle-btn {
+  color: var(--gl-sidebar-text-secondary) !important;
+  transition: color var(--gl-transition-fast);
+}
+
+.gl-sidebar__toggle-btn:hover {
+  color: var(--gl-sidebar-text) !important;
+}
+
+/* ── Menu Search ── */
+/* ── Command Palette (A3) ────────────────────────────────────── */
+
+/* Trigger button — sits in header between brand and meta */
+.gl-command-palette-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+  height: 32px;
+  padding: 0 var(--gl-space-3);
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-lg, 8px);
+  background: var(--gl-color-bg-elevated, #fff);
+  color: var(--gl-color-text-tertiary);
+  font: inherit;
+  font-size: var(--gl-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--gl-transition-fast);
+  flex: 1;
+  max-width: 420px;
+  min-width: 200px;
+}
+
+.gl-command-palette-trigger:hover {
+  border-color: var(--gl-color-primary);
+  background: var(--gl-color-primary-bg);
+  color: var(--gl-color-text);
+}
+
+.gl-command-palette-trigger__icon {
+  font-size: var(--gl-font-size-base);
+}
+
+.gl-command-palette-trigger__text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.gl-command-palette-trigger__kbd {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--gl-color-bg);
+  border: 1px solid var(--gl-color-border);
+  color: var(--gl-color-text-tertiary);
+  font-family: inherit;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* Header 三栏布局：左-brand / 中-trigger / 右-meta */
+.gl-header__center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--gl-space-4);
+  max-width: 520px;
+}
+
+@media (max-width: 1024px) {
+  .gl-header__center {
+    display: none;
+  }
+}
+
+/* Modal 外壳：antd 6 的 Modal styles 语义键不含 content，外壳样式只能走 CSS */
+.gl-command-palette .ant-modal-content {
+  border-radius: var(--gl-radius-lg);
+  border: 1px solid var(--gl-color-border-strong, rgba(16, 42, 44, 0.12));
+  box-shadow: 0 20px 60px -10px rgba(10, 20, 22, 0.25);
+  overflow: hidden;
+}
+
+/* Modal 内输入 */
+.gl-command-palette__input-wrap {
+  padding: var(--gl-space-3) var(--gl-space-4);
+  border-bottom: 1px solid var(--gl-color-border);
+  background: var(--gl-color-bg-elevated);
+}
+
+.gl-command-palette__search-icon {
+  font-size: var(--gl-font-size-lg);
+  color: var(--gl-color-text-tertiary);
+}
+
+.gl-command-palette .ant-input-lg {
+  font-size: var(--gl-font-size-lg);
+  font-weight: 500;
+}
+
+/* Section header */
+.gl-command-palette__section-label {
+  padding: var(--gl-space-3) var(--gl-space-4) var(--gl-space-1);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gl-color-text-tertiary);
+  background: var(--gl-color-bg);
+  border-top: 1px solid var(--gl-color-border);
+  border-bottom: 1px solid var(--gl-color-border);
+  margin-top: 1px;
+}
+
+/* Item */
+.gl-command-palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-3);
+  padding: 10px var(--gl-space-4);
+  cursor: pointer;
+  transition: background var(--gl-transition-fast);
+  position: relative;
+}
+
+.gl-command-palette__item:hover {
+  background: var(--gl-color-primary-bg);
+}
+
+.gl-command-palette__item.is-active {
+  background: var(--gl-color-primary-bg);
+}
+
+.gl-command-palette__item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--gl-color-primary);
+  border-radius: 0 2px 2px 0;
+}
+
+.gl-command-palette__item-icon {
+  width: 20px;
+  text-align: center;
+  color: var(--gl-color-text-tertiary);
+  font-size: var(--gl-font-size-base);
+  flex-shrink: 0;
+}
+
+.gl-command-palette__item-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.gl-command-palette__item-label {
+  font-size: var(--gl-font-size-base);
+  color: var(--gl-color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gl-command-palette__item-sub {
+  font-size: var(--gl-font-size-xs);
+  color: var(--gl-color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Empty state */
+.gl-command-palette__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gl-space-8) var(--gl-space-4);
+  text-align: center;
+}
+
+/* Footer hints */
+.gl-command-palette__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gl-space-4);
+  padding: var(--gl-space-2) var(--gl-space-4);
+  border-top: 1px solid var(--gl-color-border);
+  background: var(--gl-color-bg);
+  font-size: var(--gl-font-size-xs);
+  color: var(--gl-color-text-tertiary);
+}
+
+.gl-command-palette__footer kbd {
+  display: inline-block;
+  padding: 0 5px;
+  margin-right: 2px;
+  font-size: 11px;
+  font-family: inherit;
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+  border-radius: 3px;
+  line-height: 1.6;
+}
+
+/* Ant Design List inside palette — remove default padding */
+.gl-command-palette .ant-list {
+  padding: 0;
+}
+
+.gl-command-palette .ant-list-items {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 旧 sidebar 入口样式移除 — 保持安全（MenuSearch 已移到 Header） */
+
+.gl-sidebar .ant-menu {
+  background: transparent;
+  color: var(--gl-sidebar-text);
+  border-inline-end: none !important;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.gl-sidebar .ant-menu-item,
+.gl-sidebar .ant-menu-submenu-title {
+  margin-inline: var(--gl-space-2);
+  height: 40px;
+  line-height: 40px;
+  border-radius: var(--gl-radius-md);
+  transition: all var(--gl-transition-fast);
+}
+
+.gl-sidebar .ant-menu-item:hover,
+.gl-sidebar .ant-menu-submenu-title:hover {
+  background: var(--gl-sidebar-hover-bg) !important;
+  color: var(--gl-sidebar-text);
+}
+
+.gl-sidebar .ant-menu-item-selected {
+  background: var(--gl-sidebar-active) !important;
+  color: var(--gl-sidebar-text) !important;
+  position: relative;
+}
+
+.gl-sidebar .ant-menu-item-selected::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--gl-color-primary);
+  box-shadow: 0 0 8px rgba(46, 196, 182, 0.5);
+}
+
+/* SubMenu title styling (root-level navigation groups) */
+.gl-sidebar .ant-menu-submenu-title {
+  color: var(--gl-sidebar-text) !important;
+  font-size: 15px !important;
+  font-weight: var(--gl-font-weight-semibold) !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  height: 48px !important;
+  line-height: 48px !important;
+  margin-top: var(--gl-space-3);
+  margin-bottom: var(--gl-space-1);
+  border-bottom: 1px solid var(--gl-sidebar-border);
+  position: relative;
+  padding-inline: var(--gl-space-4) !important;
+}
+
+.gl-sidebar .ant-menu-submenu-title:hover {
+  color: var(--gl-sidebar-text) !important;
+  background: var(--gl-sidebar-hover-bg) !important;
+  border-radius: var(--gl-radius-md);
+}
+
+/* Root-level submenu icon visibility and size */
+.gl-sidebar .ant-menu-submenu-title .ant-menu-item-icon,
+.gl-sidebar .ant-menu-submenu-title > .anticon:first-child {
+  display: inline-flex !important;
+  font-size: 18px !important;
+  width: 18px;
+  height: 18px;
+  margin-inline-end: var(--gl-space-3) !important;
+}
+
+/* Root-level submenu arrow (expand/collapse indicator) */
+.gl-sidebar .ant-menu-submenu-arrow {
+  color: var(--gl-sidebar-text-tertiary) !important;
+  font-size: 10px !important;
+  right: 16px !important;
+}
+
+/* Expanded root submenu title */
+.gl-sidebar .ant-menu-submenu-open > .ant-menu-submenu-title {
+  color: var(--gl-sidebar-text) !important;
+  background: var(--gl-sidebar-hover-bg) !important;
+  border-radius: var(--gl-radius-md);
+}
+
+/* Selected child under an open root group */
+.gl-sidebar .ant-menu-submenu-selected > .ant-menu-submenu-title {
+  color: var(--gl-sidebar-text) !important;
+}
+
+/* SubMenu item indentation */
+.gl-sidebar .ant-menu-submenu .ant-menu-item {
+  padding-left: var(--gl-space-8) !important;
+  margin-inline: var(--gl-space-2);
+}
+
+/* Collapsed sidebar styles */
+.gl-sidebar--inline.ant-layout-sider-collapsed .gl-sidebar__brand {
+  padding: var(--gl-space-3) var(--gl-space-2);
+}
+
+.gl-sidebar--inline.ant-layout-sider-collapsed .ant-menu-item,
+.gl-sidebar--inline.ant-layout-sider-collapsed .ant-menu-submenu-title {
+  margin-inline: var(--gl-space-1);
+}
+
+/* Smooth sidebar width transition */
+.gl-sidebar--inline {
+  transition: all var(--gl-transition-normal) !important;
+}
+
+.gl-sidebar--inline .ant-layout-sider-children {
+  transition: all var(--gl-transition-normal) !important;
+  background: var(--gl-sidebar-bg) !important;
+}
+
+/* ── Body (Sidebar + Content row) ── */
+.gl-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 0;
+  /* flex child trick: enable grandchild overflow */
+  gap: var(--gl-space-5);
+}
+
+.gl-body.ant-layout {
+  flex-direction: row;
+  background: transparent;
+}
+
+/* ── Top Nav Layout ── */
+.gl-app-shell--top {
+  flex-direction: column;
+}
+
+.gl-app-shell--top .gl-header {
+  border-radius: var(--gl-radius-2xl) var(--gl-radius-2xl) 0 0;
+}
+
+.gl-header__left {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-4);
+}
+
+.gl-header__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-3);
+  margin-right: var(--gl-space-4);
+  min-width: 0;
+}
+
+.gl-header__brand-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Rectangular brand logo (replaces the old circular avatar): height is bounded to the
+   header content box so it never exceeds the top bar; width follows the image's intrinsic
+   ratio; object-fit: contain shows the whole logo without cropping or distortion. */
+.gl-header__brand-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: 240px;
+  object-fit: contain;
+  border-radius: var(--gl-radius-sm);
+}
+
+.gl-header__brand-icon .ant-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  background: var(--gl-color-primary);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.25);
+}
+
+.gl-header__brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gl-header__brand-eyebrow {
+  color: var(--gl-color-text-secondary);
+  font-size: var(--gl-font-size-xs);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.gl-header__brand-title {
+  font-size: var(--gl-font-size-xl);
+  font-weight: var(--gl-font-weight-bold);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.gl-header__brand-caret {
+  font-size: 10px;
+  color: var(--gl-color-text-secondary);
+  opacity: 0.5;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.gl-header__brand:hover .gl-header__brand-caret {
+  opacity: 1;
+  transform: translateY(1px);
+}
+
+.gl-top-nav {
+  padding: 0 var(--gl-space-6);
+  border: 1px solid var(--gl-shell-border);
+  border-top: none;
+  border-radius: 0 0 var(--gl-radius-2xl) var(--gl-radius-2xl);
+  background: var(--gl-shell-bg);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--gl-card-shadow);
+}
+
+.gl-top-nav .ant-menu {
+  background: transparent;
+  border-bottom: none;
+}
+
+.gl-top-nav .ant-menu-horizontal {
+  line-height: 48px;
+  padding: var(--gl-space-1) 0;
+  gap: var(--gl-space-1);
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.gl-top-nav .ant-menu-horizontal::-webkit-scrollbar {
+  display: none;
+}
+
+/* Top nav menu items spacing & hover */
+.gl-top-nav .ant-menu-item,
+.gl-top-nav .ant-menu-submenu-title {
+  border-radius: var(--gl-radius-md);
+  padding-inline: 16px !important;
+  margin-inline: 2px;
+  height: 40px;
+  line-height: 40px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
+}
+
+.gl-top-nav .ant-menu-item:hover,
+.gl-top-nav .ant-menu-submenu-title:hover,
+.gl-top-nav .ant-menu-item-active {
+  background: var(--gl-color-primary-bg) !important;
+  color: var(--gl-color-primary) !important;
+}
+
+/* Top nav SubMenu: group labels */
+.gl-top-nav .ant-menu-submenu-title {
+  font-weight: var(--gl-font-weight-medium);
+}
+
+/* Top nav selected item */
+.gl-top-nav .ant-menu-item-selected {
+  background: var(--gl-color-primary) !important;
+  color: #fff !important;
+  font-weight: var(--gl-font-weight-medium);
+}
+
+/* Top nav SubMenu dropdown (pop-up) */
+.gl-top-nav .ant-menu-submenu-open,
+.gl-top-nav .ant-menu-submenu-title-active {
+  background: var(--gl-color-primary-bg) !important;
+  color: var(--gl-color-primary) !important;
+}
+
+/* Fix horizontal submenu arrow alignment */
+.gl-top-nav .ant-menu-submenu-title .ant-menu-submenu-arrow {
+  right: 8px;
+}
+
+/* Dropdown pop-up panel for horizontal submenu */
+.ant-menu-submenu-popup {
+  border-radius: var(--gl-radius-lg) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid var(--gl-shell-border) !important;
+  padding: 6px !important;
+  min-width: 180px;
+}
+
+.ant-menu-submenu-popup .ant-menu-item {
+  border-radius: var(--gl-radius-md);
+  padding-inline: 12px !important;
+  height: 36px;
+  line-height: 36px;
+  margin: 2px 0;
+}
+
+.ant-menu-submenu-popup .ant-menu-item:hover {
+  background: var(--gl-color-primary-bg) !important;
+  color: var(--gl-color-primary) !important;
+}
+
+.ant-menu-submenu-popup .ant-menu-item-selected {
+  background: var(--gl-color-primary) !important;
+  color: #fff !important;
+}
+
+/* ── Content ── */
+.gl-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-0);
+  align-items: stretch;
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/*
+  主显示区统一宽度：所有页面（列表/详情/表单）都渲染在这个容器内，
+  超宽屏不再无限拉伸，窄屏自动回落到 100%。页面自身的 maxWidth
+  只用于内容级居中（如 960px 设置面板），不再作为页面宽度的来源。
+*/
+.gl-content__inner {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding-bottom: var(--gl-space-4);
+}
+
+/*
+  内容宽度三档语义类（复用 .gl-content__inner 骨架，不另起第二套容器）：
+  - 默认 / .gl-content__inner            列表、表格页 1600px
+  - .gl-content__inner--form             表单、详情页 1200px
+  - .gl-content__inner--reading          阅读型设置页（协议/条款/长文档设置）960px
+  两种用法：与 .gl-content__inner 同元素组合（覆盖 max-width），
+  或作为页面级包装元素单独使用（自带 width/margin 居中）。
+*/
+.gl-content__inner--form,
+.gl-content__inner--reading {
+  width: 100%;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.gl-content__inner--form {
+  max-width: 1200px;
+}
+
+.gl-content__inner--reading {
+  max-width: 960px;
+}
+
+/* 三档宽度共用同一条窄视口回退规则，避免各自维护 1024px 断点。 */
+@media (max-width: 1024px) {
+  .gl-content__inner,
+  .gl-content__inner--form,
+  .gl-content__inner--reading {
+    max-width: 100%;
+  }
+}
+
+/* antd 用一条零高「测量行」计算列宽；它带 aria-hidden 但仍含可聚焦节点，
+   会让 axe 报 aria-hidden-focus。visibility:hidden 让该行彻底移出可聚焦树。 */
+.ant-table-measure-row {
+  visibility: hidden;
+}
+
+/* 固定列在滚动时必须保持不透明背景，否则横向滚动会透出下层单元格。
+   Ant Design 6 使用 fix-start / fix-end；同时保留 v5 的 fix-left / fix-right 选择器。 */
+.ant-table-cell-fix-left,
+.ant-table-cell-fix-right,
+.ant-table-cell-fix-start,
+.ant-table-cell-fix-end {
+  background: var(--gl-color-bg-elevated);
+}
+
+.ant-table-cell-fix-left-last::after,
+.ant-table-cell-fix-right-first::after {
+  box-shadow: inset 6px 0 6px -6px var(--gl-color-border-strong);
+}
+
+.ant-table-cell-fix-right-first::after {
+  box-shadow: inset -6px 0 6px -6px var(--gl-color-border-strong);
+}
+
+/* ── Header ── */
+.gl-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gl-space-4);
+  padding: var(--gl-space-5) var(--gl-space-6);
+  border: 1px solid var(--gl-shell-border);
+  border-radius: var(--gl-radius-2xl);
+  background: var(--gl-shell-bg);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--gl-card-shadow);
+}
+
+.gl-header__title {
+  margin: 0;
+  font-size: var(--gl-font-size-4xl);
+  line-height: 1.1;
+}
+
+.gl-header__subtitle {
+  margin-top: var(--gl-space-1);
+  color: var(--gl-color-text-secondary);
+  font-size: var(--gl-font-size-base);
+}
+
+.gl-header__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-3);
+}
+
+/* 昵称菜单触发区：用 text Button 承载头像+昵称，保证键盘可聚焦与 role=button 语义 */
+.gl-header__user {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+  height: auto;
+  padding: var(--gl-space-1) var(--gl-space-2);
+}
+
+.gl-header__user-name {
+  font-weight: 500;
+  line-height: 1.2;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Panel ── */
+.gl-panel {
+  border: 1px solid var(--gl-shell-border);
+  border-radius: var(--gl-radius-2xl);
+  background: var(--gl-panel-bg);
+  box-shadow: var(--gl-card-shadow);
+  backdrop-filter: blur(12px);
+}
+
+/* ── Resource Page ── */
+.gl-resource-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-5);
+}
+
+/* ── Hero ── */
+.gl-hero {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: var(--gl-space-1);
+  align-items: start;
+}
+
+.gl-hero__main,
+.gl-hero__side {
+  padding: var(--gl-space-5) var(--gl-space-6);
+}
+
+.gl-hero__side .gl-metric-card {
+  padding: 0;
+  min-height: auto;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  text-align: center;
+}
+
+.gl-hero__side .gl-metric-card__value {
+  font-size: var(--gl-font-size-2xl);
+}
+
+.gl-hero__main h2,
+.gl-resource-card__header h2 {
+  margin: 0;
+  font-size: var(--gl-font-size-3xl);
+}
+
+.gl-hero__main p,
+.gl-resource-card__header p {
+  margin: var(--gl-space-3) 0 0;
+  color: var(--gl-color-text-secondary);
+}
+
+/* ── Metrics ── */
+.gl-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gl-space-4);
+}
+
+.gl-metric-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--gl-space-3) var(--gl-space-4);
+  min-height: 80px;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.gl-metric-card--clickable {
+  cursor: pointer;
+}
+
+.gl-metric-card--clickable:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--gl-card-shadow),
+    0 4px 12px rgba(22, 119, 255, 0.12);
+  border-color: var(--gl-color-primary) !important;
+}
+
+.gl-metric-card--clickable:active {
+  transform: translateY(0);
+}
+
+.gl-metric-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+}
+
+.gl-metric-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--gl-radius-md);
+  background: var(--gl-color-primary-bg);
+  color: var(--gl-color-primary);
+  font-size: var(--gl-font-size-base);
+  flex-shrink: 0;
+}
+
+.gl-metric-card__body {
+  margin-top: var(--gl-space-1);
+}
+
+.gl-metric-card__label {
+  color: var(--gl-color-text-secondary);
+  font-size: var(--gl-font-size-sm);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gl-metric-card__value {
+  margin-top: 2px;
+  font-size: var(--gl-font-size-xl);
+  font-weight: var(--gl-font-weight-bold);
+  line-height: 1.2;
+  color: var(--gl-color-text);
+}
+
+.gl-metric-card__delta {
+  margin-top: 2px;
+  color: var(--gl-color-success-text);
+  font-size: var(--gl-font-size-xs);
+}
+
+/* ── Resource Card ── */
+.gl-resource-card {
+  padding: var(--gl-space-5);
+  /* JS 动态写入：由 ResourceFormPage 通过 ResizeObserver 测量 header 实际高度后赋值，
+     用于子导航 / 分区标题 / 锚点的 sticky 偏移与 scroll-margin-top 计算。 */
+  --gl-sticky-header-height: 80px;
+}
+
+.gl-resource-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gl-space-4);
+  margin-bottom: var(--gl-space-5);
+  /* Sticky header: 标题+按钮区域固定，表格/表单内容滚动。
+     z-index 50 保证它始终压在分区副导航（40）和分区标题（30）之上。 */
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--gl-panel-bg);
+  backdrop-filter: blur(12px);
+  padding: var(--gl-space-3) 0;
+  /* 防止内部内容被 backdrop-filter 产生合成层，造成滚动性能抖动 */
+  will-change: transform;
+}
+
+.gl-resource-card__toolbar {
+  display: flex;
+  gap: var(--gl-space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* antd Space 默认不换行；列表工具栏在窄屏会把组织筛选、导入/导出按钮
+   顶出卡片右边界（overflow 被卡片裁掉）。统一允许工具栏内 Space 换行。 */
+.gl-resource-card__toolbar .ant-space {
+  flex-wrap: wrap;
+  max-width: 100%;
+  row-gap: var(--gl-space-2);
+}
+
+.gl-resource-card__toolbar .ant-space-item {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .gl-resource-card__toolbar,
+  .gl-resource-card__toolbar .ant-space {
+    width: 100%;
+  }
+}
+
+/* ── Batch Action Bar ── */
+.gl-batch-action-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gl-space-3);
+  padding: var(--gl-space-2) var(--gl-space-4);
+  margin-bottom: var(--gl-space-4);
+  background: var(--gl-color-primary-bg);
+  border: 1px solid var(--gl-color-border-strong);
+  border-radius: var(--gl-radius-sm);
+}
+
+.gl-batch-action-bar__clear {
+  margin-left: auto;
+}
+
+/* ── JSON Editor (read-only) ── */
+.gl-json-editor-readonly {
+  margin: 0;
+  padding: var(--gl-space-2) var(--gl-space-3);
+  overflow: auto;
+  background: var(--gl-color-bg);
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-sm);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-font-size-sm);
+  line-height: var(--gl-line-height);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── Provider icons ── */
+.gl-provider-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+}
+
+/* ── Form Grid ── */
+.gl-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--gl-space-5);
+}
+
+.gl-form-grid .ant-form-item:has(textarea),
+.gl-form-grid .ant-form-item:last-child,
+.gl-form-grid .ant-form-item.gl-form-item-full {
+  grid-column: 1 / -1;
+}
+
+/* 区块/标签页等容器不能被两列网格劈成左右两半：否则 Tabs 内容只剩半页宽，
+   Provider 页的 FormSection 会左右交错排列，右侧编辑器还会被相邻行覆盖而无法输入。 */
+.gl-form-grid > :not(.ant-form-item) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* 两栏字段布局：只在 FormSection 显式声明 columns=2 时启用。
+   默认纵向堆叠的区块不受影响；文本域与 gl-form-item-full 字段仍独占整行。 */
+.gl-form-section__body--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--gl-space-5);
+  align-items: start;
+}
+
+.gl-form-section__body--grid > * {
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
+.gl-form-section__body--grid > .ant-form-item:not(.gl-form-item-full):not(:has(textarea)) {
+  grid-column: auto;
+}
+
+@media (max-width: 767px) {
+  .gl-form-section__body--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gl-form-section__body--grid > .ant-form-item {
+    grid-column: 1 / -1;
+  }
+}
+
+/* 表单控件统一撑满栅格单元：InputNumber / Picker / Select 默认宽度不一致，
+   会在两列栅格里出现参差不齐的控件宽度。 */
+.gl-form-grid .ant-form-item {
+  min-width: 0;
+  margin-bottom: var(--gl-space-4);
+}
+
+.gl-form-grid .ant-input-number,
+.gl-form-grid .ant-picker,
+.gl-form-grid .ant-select,
+.gl-form-grid .ant-input-affix-wrapper,
+.gl-form-grid .ant-cascader-picker {
+  width: 100%;
+}
+
+.gl-form-grid .ant-form-item-explain-error {
+  font-size: var(--gl-font-size-xs);
+  line-height: 1.4;
+}
+
+/* 表单头部操作区在窄屏下换行，避免按钮被裁切 */
+.gl-resource-card__header > .ant-space {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.gl-resource-card__search {
+  min-width: 260px;
+}
+
+/* ── Subnav ── */
+.gl-subnav {
+  padding: var(--gl-space-3);
+}
+
+/* ── Model Editor ── */
+.gl-model-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-3);
+}
+
+.gl-model-editor__toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gl-space-3);
+}
+
+.gl-model-editor__toolbar .ant-space {
+  margin-top: var(--gl-space-2);
+}
+
+.gl-model-editor__alert {
+  margin-bottom: var(--gl-space-1);
+}
+
+.gl-model-editor__issues {
+  margin: 0;
+  padding-left: var(--gl-space-5);
+}
+
+.gl-model-editor__textarea {
+  min-height: 420px;
+  width: 100%;
+  padding: var(--gl-space-4);
+  border: 1px solid var(--gl-color-border-strong);
+  border-radius: var(--gl-radius-lg);
+  background: var(--gl-color-bg-code);
+  color: var(--gl-color-text-inverse);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-font-size-sm);
+  line-height: 1.7;
+  resize: vertical;
+}
+
+.gl-model-editor__textarea:focus {
+  outline: 2px solid var(--gl-color-primary-bg);
+  outline-offset: 1px;
+}
+
+/* ── Policy ── */
+.gl-policy-summary {
+  margin-bottom: var(--gl-space-3);
+}
+
+.gl-policy-filter {
+  min-width: 128px;
+}
+
+.gl-policy-search {
+  min-width: 220px;
+}
+
+.gl-policy-hint {
+  margin-top: var(--gl-space-3);
+  margin-bottom: 0;
+}
+
+/* ── Connection Feedback ── */
+.gl-connection-feedback {
+  padding: var(--gl-space-4);
+  border-radius: var(--gl-radius-xl);
+  border: 1px solid transparent;
+  font-size: var(--gl-font-size-base);
+}
+
+.gl-connection-feedback--success {
+  border-color: rgba(11, 122, 103, 0.18);
+  background: var(--gl-color-success-bg);
+  color: var(--gl-color-success-text);
+}
+
+.gl-connection-feedback--error {
+  border-color: rgba(184, 54, 46, 0.16);
+  background: var(--gl-color-error-bg);
+  color: var(--gl-color-error-text);
+}
+
+/* ── Chart ── */
+.gl-chart {
+  min-height: 360px;
+}
+
+.gl-chart-card__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gl-space-3) var(--gl-space-5);
+  margin-bottom: var(--gl-space-3);
+  color: var(--gl-color-text-tertiary);
+  font-size: var(--gl-font-size-sm);
+}
+
+.gl-chart-card__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+}
+
+.gl-chart-card__legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--gl-radius-full);
+}
+
+.gl-chart-card__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gl-chart-card__grid-line {
+  stroke: var(--gl-color-border-strong);
+  stroke-width: 1;
+}
+
+.gl-chart-card__axis-label {
+  fill: var(--gl-color-text-tertiary);
+  font-size: var(--gl-font-size-xs);
+}
+
+/* ── Empty State ── */
+.gl-empty-state {
+  padding: var(--gl-space-12) var(--gl-space-8);
+  text-align: center;
+  color: var(--gl-color-text-tertiary);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gl-space-3);
+}
+
+.gl-empty-state__icon {
+  font-size: 40px;
+  opacity: 0.4;
+  color: var(--gl-color-text-tertiary);
+}
+
+.gl-empty-state__title {
+  font-size: var(--gl-font-size-lg);
+  font-weight: var(--gl-font-weight-medium);
+  color: var(--gl-color-text-secondary);
+}
+
+.gl-empty-state__desc {
+  font-size: var(--gl-font-size-sm);
+  color: var(--gl-color-text-tertiary);
+  max-width: 400px;
+}
+
+/* ── Form Section ── */
+.gl-form-section {
+  /* 方案二（参考《组织配置页布局方案对比》§4.3「分区区分」）：
+     每个子菜单的配置区域独立封装为完整子卡片，
+     通过统一的边框 + 圆角 + 阴影 + 卡片间距实现不同配置区域的视觉区隔。
+     所有子卡片共用同一组令牌，保证全局视觉一致。 */
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-lg);
+  box-shadow: var(--gl-shadow-sm);
+  padding: var(--gl-space-5) var(--gl-space-6);
+  /* 统一卡片间距的唯一来源（24px，与分区容器 gap 对齐）：
+     相邻卡片之间的间距只由本条声明决定，调用点不再写 marginTop。 */
+  margin: 0 0 var(--gl-space-6);
+}
+
+.gl-form-section__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gl-space-4);
+  margin-bottom: var(--gl-space-4);
+  padding-bottom: var(--gl-space-3);
+  /* 分区标题不做吸顶固定（滚动页中的子标题跟随内容滚动）；
+     卡片内部仅保留标题与内容之间的浅色分隔，区隔职责由卡片边框承担。 */
+  border-bottom: 1px solid var(--gl-color-border);
+}
+
+.gl-form-section__title {
+  font-size: var(--gl-font-size-lg);
+  font-weight: var(--gl-font-weight-semibold);
+  color: var(--gl-color-text);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+}
+
+.gl-form-section__toggle {
+  font-size: var(--gl-font-size-xs);
+  color: var(--gl-color-text-secondary);
+  display: inline-flex;
+  align-items: center;
+}
+
+.gl-form-section__desc {
+  font-size: var(--gl-font-size-sm);
+  color: var(--gl-color-text-tertiary);
+  margin-top: var(--gl-space-1);
+  margin-bottom: 0;
+}
+
+.gl-form-section__body {
+  animation: gl-section-expand var(--gl-transition-normal);
+}
+
+.gl-form-section__body[hidden] {
+  display: none;
+}
+
+@keyframes gl-section-expand {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+
+  to {
+    opacity: 1;
+    max-height: 2000px;
+  }
+}
+
+/* ── 字段帮助提示（? 图标） ──
+   全系统统一：图标位置、尺寸、颜色、焦点环与悬停反馈只在这里定义。 */
+.gl-help-slot,
+.gl-help-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gl-space-1);
+}
+
+.gl-help-slot {
+  margin-left: var(--gl-space-1);
+}
+
+.gl-help-tip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--gl-space-1);
+  padding: 0;
+  color: var(--gl-color-text-tertiary);
+  font: inherit;
+  font-size: var(--gl-font-size-sm);
+  line-height: 1;
+  background: none;
+  border: 0;
+  cursor: help;
+  border-radius: var(--gl-radius-sm);
+  transition: color var(--gl-transition-fast);
+}
+
+.gl-help-tip:hover,
+.gl-help-tip:focus-visible {
+  color: var(--gl-color-primary);
+}
+
+.gl-help-tip:focus-visible {
+  outline: 2px solid var(--gl-color-primary);
+  outline-offset: 2px;
+}
+
+/* ── 子菜单整体卡片（TabCard） ──
+   一个标签页/分区只允许一层卡片：卡内功能单元用细横线分隔，
+   不再让每个 FormSection 自带边框/阴影（避免双层堆叠）。 */
+.gl-tab-card {
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-lg);
+  box-shadow: var(--gl-shadow-sm);
+}
+
+.gl-tab-card > .ant-card-body {
+  padding: var(--gl-space-5) var(--gl-space-6);
+}
+
+.gl-tab-card .gl-form-section {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.gl-tab-card .gl-form-section + .gl-form-section {
+  margin-top: var(--gl-space-5);
+  padding-top: var(--gl-space-5);
+  border-top: 1px solid var(--gl-color-border);
+}
+
+.gl-tab-card .gl-form-section__header {
+  border-bottom: 1px solid var(--gl-color-border);
+}
+
+/* 卡片内非 FormSection 的功能单元之间的统一分隔线。 */
+.gl-tab-card__divider.ant-divider {
+  margin: var(--gl-space-5) 0;
+  border-color: var(--gl-color-border);
+}
+
+/* ── Sticky Form Footer ── */
+.gl-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  padding: var(--gl-space-4) 0;
+  margin-top: var(--gl-space-6);
+  background: var(--gl-color-bg-elevated);
+  border-top: 1px solid var(--gl-color-border);
+}
+
+.gl-sticky-footer__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-4);
+}
+
+[data-theme="dark"] .gl-sticky-footer {
+  background: var(--gl-color-bg-elevated);
+}
+
+/* ── Switch with Description ── */
+.gl-switch-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gl-switch-field__desc {
+  font-size: var(--gl-font-size-xs);
+  color: var(--gl-color-text-tertiary);
+  margin-left: 0;
+}
+
+/* ── Page Transition ── */
+.gl-page {
+  animation: gl-page-enter var(--gl-transition-normal);
+}
+
+@keyframes gl-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Audit Detail ── */
+.gl-audit-detail .ant-descriptions-view {
+  overflow: hidden;
+}
+
+.gl-audit-code {
+  margin: 0;
+  padding: var(--gl-space-3);
+  overflow: auto;
+  border-radius: var(--gl-radius-lg);
+  background: var(--gl-color-bg-code);
+  color: var(--gl-color-text-inverse);
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-font-size-xs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Login ── */
+.login-shell-grid {
+  width: 100%;
+}
+
+.login-signin-html-page {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.login-form {
+  min-width: 0;
+}
+
+.login-side-html,
+.login-custom-signin-item {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.login-side-html img,
+.login-side-html svg,
+.login-side-html video,
+.login-side-html iframe,
+.login-custom-signin-item img,
+.login-custom-signin-item svg,
+.login-custom-signin-item video,
+.login-custom-signin-item iframe {
+  max-width: 100%;
+}
+
+.login-side-html table,
+.login-custom-signin-item table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* ── Auth Pages (gl-auth-* system) ── */
+.gl-standalone-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  /* dvh 避免移动端浏览器工具栏导致的 100vh 溢出 */
+  min-height: 100dvh;
+  padding: var(--gl-space-4);
+  background: var(--gl-color-bg);
+}
+
+.gl-auth-background {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+  padding: var(--gl-space-5);
+  position: relative;
+}
+
+.gl-auth-background::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--gl-page-bg-accent-1), var(--gl-page-bg-accent-2), var(--gl-page-bg);
+  z-index: 0;
+}
+
+.gl-auth-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  border-radius: var(--gl-radius-2xl);
+  overflow: hidden;
+  background: var(--gl-color-bg-elevated);
+  box-shadow: var(--gl-shadow-lg);
+  max-width: 980px;
+  width: 100%;
+  min-height: 560px;
+}
+
+.gl-auth-side {
+  flex: 0 0 420px;
+  background: linear-gradient(180deg, rgba(24, 24, 24, 0.98), rgba(18, 18, 18, 0.96));
+  color: rgba(255, 255, 255, 0.88);
+  padding: var(--gl-space-8);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow-x: auto;
+}
+
+.gl-auth-side svg,
+.gl-auth-side video,
+.gl-auth-side iframe {
+  max-width: 100%;
+}
+
+.gl-auth-form {
+  flex: 1;
+  padding: var(--gl-space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-5);
+}
+
+.gl-auth-form__title {
+  font-size: var(--gl-font-size-3xl);
+  font-weight: var(--gl-font-weight-bold);
+  margin: 0;
+}
+
+.gl-auth-form__subtitle {
+  color: var(--gl-color-text-secondary);
+  font-size: var(--gl-font-size-base);
+  margin: 0;
+}
+
+.gl-auth-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--gl-space-3);
+}
+
+.gl-auth-provider-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gl-space-2);
+  height: 40px;
+  border-radius: var(--gl-radius-md);
+  border: 1px solid var(--gl-color-border-strong);
+  background: var(--gl-color-bg-elevated);
+  transition: all var(--gl-transition-fast);
+  cursor: pointer;
+  font-size: var(--gl-font-size-sm);
+  font-weight: var(--gl-font-weight-medium);
+}
+
+.gl-auth-provider-btn:hover {
+  border-color: var(--gl-color-primary);
+  background: var(--gl-color-primary-bg);
+}
+
+.gl-auth-provider-btn img {
+  width: 20px;
+  height: 20px;
+}
+
+.gl-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-3);
+  color: var(--gl-color-text-tertiary);
+  font-size: var(--gl-font-size-sm);
+}
+
+.gl-auth-divider::before,
+.gl-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--gl-color-border);
+}
+
+/* MFA method selector */
+.gl-mfa-methods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-3);
+}
+
+.gl-mfa-method-option {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-3);
+  padding: var(--gl-space-3) var(--gl-space-4);
+  border-radius: var(--gl-radius-md);
+  border: 1px solid var(--gl-color-border);
+  cursor: pointer;
+  transition: all var(--gl-transition-fast);
+}
+
+.gl-mfa-method-option:hover,
+.gl-mfa-method-option--active {
+  border-color: var(--gl-color-primary);
+  background: var(--gl-color-primary-bg);
+}
+
+/* Consent page */
+.gl-consent-scopes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.gl-consent-scopes li {
+  padding: var(--gl-space-2) var(--gl-space-3);
+  border-radius: var(--gl-radius-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+}
+
+.gl-consent-scopes li:nth-child(even) {
+  background: var(--gl-color-primary-bg);
+}
+
+/* Password strength */
+.gl-password-strength {
+  margin-top: var(--gl-space-1);
+}
+
+.gl-password-strength .ant-progress-bg {
+  transition: width var(--gl-transition-fast);
+}
+
+/* ── Table Enhancements ── */
+.gl-resource-card .ant-table {
+  border-radius: var(--gl-radius-lg);
+  overflow: hidden;
+}
+
+.gl-resource-card .ant-table-thead > tr > th {
+  background: var(--gl-color-bg) !important;
+  color: var(--gl-color-text-secondary);
+  font-size: var(--gl-font-size-sm);
+  font-weight: var(--gl-font-weight-semibold);
+  border-bottom: 1px solid var(--gl-color-border-strong);
+  padding: var(--gl-space-3) var(--gl-space-4);
+  white-space: nowrap;
+  height: 48px;
+}
+
+.gl-resource-card .ant-table-tbody > tr > td {
+  padding: var(--gl-space-3) var(--gl-space-4);
+  border-bottom: 1px solid var(--gl-color-border);
+  transition: background var(--gl-transition-fast);
+  height: 56px;
+}
+
+.gl-resource-card .ant-table-tbody > tr:hover > td {
+  background: var(--gl-color-primary-bg) !important;
+}
+
+.gl-resource-card .ant-table-tbody > tr:nth-child(even) > td {
+  background: rgba(0, 0, 0, 0.01);
+}
+
+[data-theme="dark"] .gl-resource-card .ant-table-tbody > tr:nth-child(even) > td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .gl-resource-card .ant-table-thead > tr > th {
+  background: var(--gl-color-bg) !important;
+}
+
+[data-theme="dark"] .ant-card {
+  background: var(--gl-color-bg-elevated);
+  border-color: var(--gl-color-border);
+}
+
+[data-theme="dark"] .ant-input,
+[data-theme="dark"] .ant-input-affix-wrapper,
+[data-theme="dark"] .ant-select-selector,
+[data-theme="dark"] .ant-picker {
+  background: var(--gl-color-bg) !important;
+  border-color: var(--gl-color-border-strong) !important;
+  color: var(--gl-color-text) !important;
+}
+
+[data-theme="dark"] .ant-input-disabled,
+[data-theme="dark"] .ant-select-disabled .ant-select-selector {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--gl-color-text-tertiary) !important;
+}
+
+.gl-resource-card .ant-table-tbody > tr:nth-child(even):hover > td {
+  background: var(--gl-color-primary-bg) !important;
+}
+
+/* ── Editable Table (inline sub-tables) ── */
+.gl-editable-table .ant-table {
+  border-radius: var(--gl-radius-lg);
+  overflow: hidden;
+}
+
+.gl-editable-table .ant-table-thead > tr > th {
+  background: var(--gl-color-bg) !important;
+  color: var(--gl-color-text-secondary);
+  font-size: var(--gl-font-size-sm);
+  font-weight: var(--gl-font-weight-semibold);
+  padding: var(--gl-space-2) var(--gl-space-3);
+  white-space: nowrap;
+}
+
+.gl-editable-table .ant-table-tbody > tr > td {
+  padding: var(--gl-space-2) var(--gl-space-3);
+  border-bottom: 1px solid var(--gl-color-border);
+}
+
+.gl-editable-table .ant-table-tbody > tr:hover > td {
+  background: var(--gl-color-primary-bg) !important;
+}
+
+/* ── Form Actions Bar ── */
+.gl-form-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-3);
+  padding: var(--gl-space-5) 0;
+  border-top: 1px solid var(--gl-color-border);
+  margin-top: var(--gl-space-6);
+}
+
+.gl-form-actions--sticky {
+  position: sticky;
+  bottom: 0;
+  background: var(--gl-color-bg-elevated);
+  backdrop-filter: blur(12px);
+  padding: var(--gl-space-4) var(--gl-space-6);
+  margin: var(--gl-space-6) calc(-1 * var(--gl-space-5)) calc(-1 * var(--gl-space-5));
+  border-radius: 0 0 var(--gl-radius-2xl) var(--gl-radius-2xl);
+  z-index: 10;
+}
+
+/* ── Breadcrumb ── */
+.gl-breadcrumb {
+  padding: var(--gl-space-1) 0;
+  margin-bottom: var(--gl-space-2);
+}
+
+.gl-breadcrumb .ant-breadcrumb-link {
+  font-size: var(--gl-font-size-sm);
+  color: var(--gl-color-text-tertiary);
+}
+
+.gl-breadcrumb .ant-breadcrumb-link a {
+  color: var(--gl-color-text-secondary);
+  transition: color var(--gl-transition-fast);
+}
+
+.gl-breadcrumb .ant-breadcrumb-link a:hover {
+  color: var(--gl-color-primary);
+}
+
+.gl-breadcrumb .ant-breadcrumb-separator {
+  color: var(--gl-color-text-tertiary);
+}
+
+/* Breadcrumb link styles (for clickable breadcrumbs in AppShell) */
+.gl-content nav .ant-breadcrumb a {
+  color: var(--gl-color-text-secondary);
+  transition: color var(--gl-transition-fast);
+}
+
+.gl-content nav .ant-breadcrumb a:hover {
+  color: var(--gl-color-primary);
+}
+
+.gl-content nav .ant-breadcrumb > span:last-child .ant-breadcrumb-link {
+  color: var(--gl-color-text);
+  font-weight: var(--gl-font-weight-medium);
+}
+
+/* ── Tag Enhancements ── */
+.gl-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gl-space-1);
+  font-size: var(--gl-font-size-xs);
+  padding: 1px var(--gl-space-2);
+  border-radius: var(--gl-radius-sm);
+  font-weight: var(--gl-font-weight-medium);
+  line-height: 20px;
+}
+
+/* ── Description List ── */
+.gl-descriptions .ant-descriptions-item-label {
+  color: var(--gl-color-text-tertiary);
+  font-size: var(--gl-font-size-sm);
+}
+
+.gl-descriptions .ant-descriptions-item-content {
+  color: var(--gl-color-text);
+  font-size: var(--gl-font-size-base);
+}
+
+/* ── Collapsible Section ── */
+.gl-collapsible-section {
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-lg);
+  overflow: hidden;
+  transition: border-color var(--gl-transition-fast);
+}
+
+.gl-collapsible-section:hover {
+  border-color: var(--gl-color-border-strong);
+}
+
+.gl-collapsible-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--gl-space-4) var(--gl-space-5);
+  cursor: pointer;
+  background: var(--gl-color-bg);
+  transition: background var(--gl-transition-fast);
+  user-select: none;
+}
+
+.gl-collapsible-section__header:hover {
+  background: var(--gl-color-primary-bg);
+}
+
+.gl-collapsible-section__header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-3);
+}
+
+.gl-collapsible-section__arrow {
+  transition: transform var(--gl-transition-fast);
+  color: var(--gl-color-text-tertiary);
+  font-size: var(--gl-font-size-xs);
+}
+
+.gl-collapsible-section--expanded .gl-collapsible-section__arrow {
+  transform: rotate(90deg);
+}
+
+.gl-collapsible-section__title {
+  font-size: var(--gl-font-size-base);
+  font-weight: var(--gl-font-weight-semibold);
+  color: var(--gl-color-text);
+}
+
+.gl-collapsible-section__badge {
+  font-size: var(--gl-font-size-xs);
+  color: var(--gl-color-text-tertiary);
+  background: var(--gl-color-bg);
+  padding: 1px var(--gl-space-2);
+  border-radius: var(--gl-radius-full);
+}
+
+.gl-collapsible-section__body {
+  padding: var(--gl-space-5);
+  border-top: 1px solid var(--gl-color-border);
+  animation: gl-section-expand var(--gl-transition-normal);
+}
+
+/* ── Stat Card Enhancements ── */
+.gl-stat-card {
+  padding: var(--gl-space-5);
+  border-radius: var(--gl-radius-xl);
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+  transition: all var(--gl-transition-fast);
+}
+
+.gl-stat-card:hover {
+  box-shadow: var(--gl-shadow-md);
+  border-color: var(--gl-color-border-strong);
+}
+
+.gl-stat-card__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--gl-radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--gl-font-size-xl);
+  margin-bottom: var(--gl-space-3);
+}
+
+.gl-stat-card__icon--primary {
+  background: var(--gl-color-primary-bg);
+  color: var(--gl-color-primary);
+}
+
+.gl-stat-card__icon--success {
+  background: var(--gl-color-success-bg);
+  color: var(--gl-color-success);
+}
+
+.gl-stat-card__icon--warning {
+  background: var(--gl-color-warning-bg);
+  color: var(--gl-color-warning);
+}
+
+.gl-stat-card__icon--error {
+  background: var(--gl-color-error-bg);
+  color: var(--gl-color-error);
+}
+
+/* ── Skeleton Loading ── */
+.gl-skeleton-card {
+  padding: var(--gl-space-5);
+}
+
+.gl-skeleton-card .ant-skeleton-title {
+  margin-top: 0;
+}
+
+/* Unified skeleton loading state for all pages */
+.gl-skeleton-page {
+  padding: var(--gl-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gl-space-5);
+}
+
+.gl-skeleton-page .ant-skeleton {
+  width: 100%;
+}
+
+/* Skeleton for detail pages (card with form fields) */
+.gl-skeleton-detail {
+  padding: var(--gl-space-5);
+  border-radius: var(--gl-radius-2xl);
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+}
+
+/* Skeleton for list pages (table with toolbar) */
+.gl-skeleton-list {
+  padding: var(--gl-space-5);
+  border-radius: var(--gl-radius-2xl);
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+}
+
+/* Dark mode skeleton adjustments */
+[data-theme="dark"] .gl-skeleton-detail,
+[data-theme="dark"] .gl-skeleton-list {
+  background: var(--gl-color-bg-elevated);
+  border-color: var(--gl-color-border);
+}
+
+[data-theme="dark"] .ant-skeleton .ant-skeleton-content .ant-skeleton-title {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 25%,
+    rgba(255, 255, 255, 0.1) 37%,
+    rgba(255, 255, 255, 0.06) 63%
+  );
+}
+
+[data-theme="dark"] .ant-skeleton .ant-skeleton-content .ant-skeleton-paragraph > li {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+}
+
+/* ── Copy Button ── */
+.gl-copy-field {
+  display: flex;
+  align-items: center;
+  gap: var(--gl-space-2);
+}
+
+.gl-copy-field__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--gl-font-mono);
+  font-size: var(--gl-font-size-sm);
+  padding: var(--gl-space-1) var(--gl-space-3);
+  background: var(--gl-color-bg);
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-sm);
+  color: var(--gl-color-text);
+}
+
+.gl-copy-field__btn {
+  flex-shrink: 0;
+}
+
+/* ── Responsive: Large Tablet / Small Desktop ── */
+@media (max-width: 1280px) {
+  .gl-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ── Responsive: Tablet ── */
+@media (max-width: 1024px) {
+  .gl-hero {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Sidebar is rendered as a Drawer on < 768px – hide the inline Sider on smaller screens */
+  .gl-sidebar--inline {
+    display: none;
+  }
+}
+
+/* ── Responsive: Small Tablet / Large Phone ── */
+@media (max-width: 768px) {
+  .gl-app-shell {
+    padding: var(--gl-space-3);
+  }
+
+  .gl-main {
+    margin-left: 0;
+    margin-top: var(--gl-space-3);
+  }
+
+  .gl-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .gl-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--gl-space-3);
+  }
+
+  .gl-header,
+  .gl-resource-card__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--gl-space-3);
+  }
+
+  .gl-header__left {
+    gap: var(--gl-space-2);
+  }
+
+  .gl-header__brand {
+    gap: var(--gl-space-2);
+    margin-right: 0;
+  }
+
+  .gl-header__brand-eyebrow,
+  .gl-header__brand-title {
+    max-width: 120px;
+    font-size: var(--gl-font-size-xs);
+  }
+
+  .gl-header__brand-icon .ant-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: var(--gl-font-size-base);
+  }
+
+  .gl-header__brand-logo {
+    height: 32px;
+    max-width: 180px;
+  }
+
+  .gl-header__center {
+    width: 100%;
+  }
+
+  .gl-header__meta {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .gl-header__drawer-btn {
+    margin-right: 4px;
+  }
+
+  .gl-model-editor__toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .gl-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .login-content {
+    padding: var(--gl-space-3) !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+  }
+
+  .login-panel,
+  .login-panel.login-panel-compact {
+    width: 100% !important;
+  }
+
+  .login-shell-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: var(--gl-space-4) !important;
+  }
+
+  .gl-auth-panel {
+    flex-direction: column;
+    max-width: 480px;
+    min-height: auto;
+  }
+
+  .gl-auth-side {
+    flex: none;
+    min-height: 120px;
+  }
+
+  .gl-auth-provider-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Responsive: Phone ── */
+@media (max-width: 640px) {
+  .gl-app-shell {
+    padding: var(--gl-space-2);
+  }
+
+  .gl-header__title {
+    font-size: var(--gl-font-size-lg);
+  }
+
+  .gl-header__meta {
+    flex-wrap: wrap;
+  }
+
+  .gl-resource-card__search {
+    min-width: 100%;
+  }
+
+  .gl-header__brand-eyebrow {
+    display: none;
+  }
+
+  .gl-header__brand-icon .ant-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: var(--gl-font-size-xs);
+    box-shadow: none;
+  }
+
+  .gl-header__brand-logo {
+    height: 28px;
+    max-width: 160px;
+  }
+
+  .gl-metrics {
+    gap: var(--gl-space-2);
+  }
+
+  .gl-metric-card {
+    padding: var(--gl-space-2) var(--gl-space-3);
+    min-height: 64px;
+  }
+
+  .gl-metric-card__value {
+    font-size: var(--gl-font-size-base);
+  }
+
+  .gl-metric-card__icon {
+    width: 24px;
+    height: 24px;
+    font-size: var(--gl-font-size-xs);
+  }
+
+  .side-image {
+    min-height: auto !important;
+    padding: var(--gl-space-5) !important;
+  }
+
+  .panel-logo {
+    max-width: min(180px, 100%);
+    max-height: 56px;
+  }
+}
+
+/* ── Responsive: Very Small Phone ── */
+@media (max-width: 480px) {
+  .gl-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .gl-header__left {
+    gap: var(--gl-space-1);
+  }
+
+  .gl-header__brand {
+    gap: var(--gl-space-1);
+  }
+
+  .gl-resource-card {
+    padding: var(--gl-space-3);
+  }
+
+  .gl-resource-card .ant-card-body {
+    padding: var(--gl-space-3);
+  }
+
+  .gl-resource-card__header,
+  .gl-resource-card__toolbar {
+    gap: var(--gl-space-2);
+  }
+
+  .gl-resource-card__toolbar .ant-space {
+    width: 100%;
+  }
+}
+
+/* ── Responsive: Narrow Phone ── */
+@media (max-width: 375px) {
+  .gl-resource-card {
+    padding: var(--gl-space-2);
+  }
+
+  .gl-resource-card .ant-card-body {
+    padding: var(--gl-space-2);
+  }
+
+  .gl-resource-card__header {
+    gap: var(--gl-space-2);
+  }
+}
+
+/* ── Semantic Status Tags ── */
+.gl-tag-active {
+  background: var(--gl-color-success-bg);
+  color: var(--gl-color-success-text);
+  border-color: transparent;
+}
+
+.gl-tag-inactive {
+  background: var(--gl-color-bg);
+  color: var(--gl-color-text-tertiary);
+  border-color: var(--gl-color-border);
+}
+
+.gl-tag-pending {
+  background: var(--gl-color-warning-bg);
+  color: var(--gl-color-warning);
+  border-color: transparent;
+}
+
+.gl-tag-error {
+  background: var(--gl-color-error-bg);
+  color: var(--gl-color-error-text);
+  border-color: transparent;
+}
+
+/* ── App Card Grid ── */
+.gl-app-card {
+  transition: all var(--gl-transition-fast);
+  border: 1px solid var(--gl-color-border);
+}
+
+.gl-app-card:hover {
+  border-color: var(--gl-color-primary);
+  box-shadow: var(--gl-shadow-md);
+  transform: translateY(-2px);
+}
+
+/* ── Enhanced List Row Hover ── */
+.gl-resource-table .ant-table-row:hover > td {
+  background: var(--gl-color-primary-bg) !important;
+}
+
+/* ── Fixed Column Opaque Background ──
+   固定列在横向滚动时会覆盖下层单元格；同一条 td 又会命中斑马纹与行 hover 的半透明规则，
+   因此这里用合成不透明色（alpha=1）覆盖，同时保留斑马纹与 hover 的色差。 */
+.gl-resource-card .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-start,
+.gl-resource-card .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-end {
+  background: var(--gl-color-zebra-bg) !important;
+}
+
+[data-theme="dark"]
+  .gl-resource-card
+  .ant-table-tbody
+  > tr:nth-child(even)
+  > td.ant-table-cell-fix-start,
+[data-theme="dark"]
+  .gl-resource-card
+  .ant-table-tbody
+  > tr:nth-child(even)
+  > td.ant-table-cell-fix-end {
+  background: var(--gl-color-zebra-bg) !important;
+}
+
+.gl-resource-card .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.gl-resource-card .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end,
+.gl-editable-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.gl-editable-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end,
+.gl-resource-table .ant-table-row:hover > td.ant-table-cell-fix-start,
+.gl-resource-table .ant-table-row:hover > td.ant-table-cell-fix-end,
+.ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.ant-table-tbody > tr:hover > td.ant-table-cell-fix-end {
+  background: var(--gl-color-primary-bg-solid) !important;
+}
+
+[data-theme="dark"] .gl-resource-card .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+[data-theme="dark"] .gl-resource-card .ant-table-tbody > tr:hover > td.ant-table-cell-fix-end {
+  background: var(--gl-color-primary-bg-solid) !important;
+}
+
+/* ── Form Grid Enhancement ── */
+.gl-form-grid .ant-form-item-label > label {
+  font-weight: var(--gl-font-weight-medium);
+  color: var(--gl-color-text);
+}
+
+.gl-form-grid .ant-form-item-label > label .ant-form-item-required::before {
+  color: var(--gl-color-error);
+}
+
+/* ── Empty State ── */
+.gl-empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: var(--gl-space-8);
+}
+
+/* ── AI Loading Dots Animation ── */
+@keyframes gl-ai-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0.5;
+  }
+
+  30% {
+    transform: translateY(-10px) scale(1.1);
+    opacity: 1;
+  }
+}
+
+/* WCAG 2.3.3 Animation from Interactions — respect reduced motion preference (E-02) */
+@media (prefers-reduced-motion: reduce) {
+  .gl-ai-bounce,
+  [style*="gl-ai-bounce"] {
+    animation: none !important;
+  }
+
+  @keyframes gl-ai-bounce {
+    0%,
+    100% {
+      transform: none;
+      opacity: 1;
+    }
+  }
+}
+
+/* ── Focus-Visible (a11y) ── */
+:focus-visible {
+  outline: 2px solid var(--gl-color-primary);
+  outline-offset: 2px;
+  border-radius: var(--gl-radius-sm);
+}
+
+/* Remove outline for mouse clicks, only show for keyboard navigation */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Ensure interactive elements have visible focus */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--gl-color-primary);
+  outline-offset: 2px;
+}
+
+/* ── Scalar API Reference ── */
+.gl-api-reference {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gl-api-reference--loading,
+.gl-api-reference--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gl-color-text-secondary);
+  font-size: var(--gl-font-size-lg);
+}
+
+.gl-api-reference--error {
+  color: var(--gl-color-error);
+}
+
+/* 暗黑模式下 Scalar 实心按钮（如「部署 API」CTA）默认白底，与全局深灰规范
+   冲突；覆盖其按钮三变量为深灰底 + 浅色字（hover 更亮一档保持状态区分）。 */
+[data-theme="dark"] .gl-api-reference {
+  --scalar-button-1: #2a2a2a;
+  --scalar-button-1-hover: #3a3a3a;
+  --scalar-button-1-color: #e8e8e8;
+}
+
+/* ── Tag 文本对比度（WCAG 2 AA） ─────────────────────────────
+   antd 预设 Tag 的前景色在 12px 字号下对底色达不到 4.5:1（axe
+   color-contrast）。这里只加深/提亮前景色、保留原底色与边框。
+   选择器与 antd 的 `.ant-tag.ant-tag-<color>:not(.ant-tag-disabled).ant-tag-filled`
+   同层级再多一个 :root，确保覆盖且不依赖样式注入顺序；ratio 均 ≥ 4.5:1。 */
+:root .ant-tag.ant-tag-filled.ant-tag-green:not(.ant-tag-disabled),
+:root .ant-tag.ant-tag-filled.ant-tag-success:not(.ant-tag-disabled) {
+  color: #116d1e;
+}
+:root .ant-tag.ant-tag-filled.ant-tag-volcano:not(.ant-tag-disabled) {
+  color: #ad2102;
+}
+:root .ant-tag.ant-tag-filled.ant-tag-orange:not(.ant-tag-disabled) {
+  color: #ad4e00;
+}
+:root .ant-tag.ant-tag-filled.ant-tag-gold:not(.ant-tag-disabled) {
+  color: #8a5a00;
+}
+:root .ant-tag.ant-tag-filled.ant-tag-yellow:not(.ant-tag-disabled) {
+  color: #7c5e00;
+}
+:root .ant-tag.ant-tag-filled.ant-tag-lime:not(.ant-tag-disabled) {
+  color: #3f6600;
+}
+
+/* 表格行内 link 按钮：`--gl-color-primary`(#0b8073) 在浅灰行底(#f3f3f3)上约 4.05:1，
+   12px 字号不满足 AA。改用 primary-active（≥4.5:1）；深色模式下该令牌为亮色，同样达标。 */
+.gl-table-action-link.ant-btn-link,
+.gl-table-action-link.ant-btn-link > span {
+  color: var(--gl-color-primary-active);
+}
+.gl-table-action-link.ant-btn-link:hover,
+.gl-table-action-link.ant-btn-link:hover > span {
+  color: var(--gl-color-primary-hover);
+}
+:root .ant-tag.ant-tag-filled.ant-tag-cyan:not(.ant-tag-disabled) {
+  color: #006d75;
+}
+
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-green:not(.ant-tag-disabled),
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-success:not(.ant-tag-disabled) {
+  color: #73d13d;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-volcano:not(.ant-tag-disabled) {
+  color: #ff7a45;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-orange:not(.ant-tag-disabled) {
+  color: #ffa940;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-gold:not(.ant-tag-disabled) {
+  color: #e8b339;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-yellow:not(.ant-tag-disabled) {
+  color: #f4e14a;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-lime:not(.ant-tag-disabled) {
+  color: #a9d134;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-cyan:not(.ant-tag-disabled) {
+  color: #2fd4c8;
+}
+
+/* 深色主题：危险按钮与其余预设 Tag 的前景色同样需要 ≥4.5:1。
+   - 危险文本/链接按钮用更亮的红（#ff8a8a），实心危险按钮用更深的红底（白字 5.4:1）。
+   - 预设 Tag 的深色底色比浅色主题更暗，补齐 geekblue/red/purple/magenta/blue。 */
+[data-theme="dark"] .ant-btn-dangerous:not(.ant-btn-variant-solid) {
+  color: #ff8a8a;
+}
+[data-theme="dark"] .ant-btn-dangerous.ant-btn-variant-solid {
+  background: #b8433f;
+  border-color: #b8433f;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-red:not(.ant-tag-disabled) {
+  color: #ff8a8a;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-geekblue:not(.ant-tag-disabled) {
+  color: #8fa0ff;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-purple:not(.ant-tag-disabled) {
+  color: #b37feb;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-magenta:not(.ant-tag-disabled) {
+  color: #ff85c0;
+}
+[data-theme="dark"] .ant-tag.ant-tag-filled.ant-tag-blue:not(.ant-tag-disabled) {
+  color: #69b1ff;
+}
+
+/* 应用详情：左侧分组导航 + 组内锚点。
+   所有分组面板都保持挂载（hidden 仅切换可见性），否则未激活分组里的
+   Form.Item 会卸载，校验与草稿保存都会丢字段。 */
+.gl-app-summary-slot {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.gl-app-summary .ant-descriptions-item-label {
+  color: var(--gl-color-text-secondary);
+}
+.gl-app-ia__section {
+  /* 与 gl-section-anchor 同源的动态偏移，保持与 sticky header 同步。 */
+  scroll-margin-top: calc(var(--gl-sticky-header-height, 80px) + var(--gl-space-2));
+}
+
+/* 合并分区的卡片堆叠容器：间距统一由 .gl-form-section 的 margin-bottom 提供，
+   这里不再叠加 gap，避免出现 48px 的双倍间距。 */
+.gl-section-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gl-section-stack > * {
+  min-width: 0;
+}
+
+/* 分区容器：间距唯一来源是 .gl-form-section 的 margin-bottom（24px），
+   容器自身不再写 gap，避免 24 + 24 叠成 48。 */
+.gl-section-anchors {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gl-section-anchors > * {
+  min-width: 0;
+}
+
+/* 兜底：分区内直接以 AntD Card 收尾时也保留统一外边距。 */
+.gl-section-anchor > .ant-card {
+  margin-bottom: var(--gl-space-6);
+}
+
+/* ── 子菜单卡片化：一个分区/标签页 = 一张卡 ──
+   分区锚点本身即整体卡片；内部 FormSection 不再自带卡片外观，
+   多个功能单元之间用 1px 细横线切分（禁止双层卡片堆叠）。 */
+.gl-section-anchor {
+  margin-bottom: var(--gl-space-6);
+  padding: var(--gl-space-5) var(--gl-space-6);
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-lg);
+  box-shadow: var(--gl-shadow-sm);
+}
+
+.gl-section-anchor .gl-form-section,
+.gl-tab-card .gl-form-section,
+.gl-tabs-card .gl-form-section,
+.gl-form-section .gl-form-section {
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.gl-section-anchor .gl-form-section + .gl-form-section,
+.gl-tabs-card .gl-form-section + .gl-form-section,
+.gl-form-section .gl-form-section + .gl-form-section {
+  margin-top: var(--gl-space-5);
+  padding-top: var(--gl-space-5);
+  border-top: 1px solid var(--gl-color-border);
+}
+
+.gl-section-anchor .gl-app-ia__section + .gl-app-ia__section {
+  margin-top: var(--gl-space-5);
+  padding-top: var(--gl-space-5);
+  border-top: 1px solid var(--gl-color-border);
+}
+
+/* 页级 Tabs：每个 tab pane 即整体卡片（需在 Tabs 上显式加 gl-tabs-card，
+   避免影响表单内部的轻量 Tabs）。 */
+.gl-tabs-card > .ant-tabs-content-holder > .ant-tabs-content > .ant-tabs-tabpane {
+  padding: var(--gl-space-5) var(--gl-space-6);
+  background: var(--gl-color-bg-elevated);
+  border: 1px solid var(--gl-color-border);
+  border-radius: var(--gl-radius-lg);
+  box-shadow: var(--gl-shadow-sm);
+}
+
+/* 分区锚点导航 — 各详情 / 配置页分区容器统一滚动偏移 */
+.gl-section-anchor {
+  /* 锚点跳转后必须落在 sticky 头部正下方（无遮挡、无裁切）：
+     rail-top 模式偏移 = card header 高度 + 副导航高度 + 呼吸空间；
+     rail-right / rail-left 副导航在侧边，SectionNavShell 会把
+     ——gl-section-nav-height 写为 0px，此时偏移仅含 header 高度。
+     两个变量均由 JS（ResizeObserver）实时测量写入，
+     适配不同断点、缩放与 header 内容变化。 */
+  scroll-margin-top: calc(
+    var(--gl-sticky-header-height, 80px) + var(--gl-section-nav-height, 0px) + var(--gl-space-2)
+  );
+}
+
+/*
+  详情 / 配置页分区副菜单（SectionNavShell）。
+  一套分区内容只渲染一次，三种落位仅外层栅格与定位不同：DOM 顺序恒为
+  「导航在前、内容在后」，落点由 grid-column 决定，切换方案不重挂载表单。
+    - rail-right：内容左、导航右边缘常驻（桌面默认）
+    - rail-left ：导航左列、内容在右
+    - rail-top  ：导航为内容顶部 sticky 横向条（窄屏强制形态）
+*/
+.gl-section-nav-layout {
+  display: grid;
+  gap: var(--gl-space-6);
+  align-items: start;
+}
+.gl-section-nav-layout--rail-right {
+  grid-template-columns: minmax(0, 1fr) 200px;
+}
+.gl-section-nav-layout--rail-left {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+.gl-section-nav-layout--rail-top {
+  grid-template-columns: minmax(0, 1fr);
+}
+.gl-section-nav-layout--rail-right .gl-section-nav {
+  grid-column: 2;
+  grid-row: 1;
+}
+.gl-section-nav-layout--rail-right .gl-section-nav__content {
+  grid-column: 1;
+  grid-row: 1;
+}
+.gl-section-nav-layout--rail-left .gl-section-nav {
+  grid-column: 1;
+  grid-row: 1;
+}
+.gl-section-nav-layout--rail-left .gl-section-nav__content {
+  grid-column: 2;
+  grid-row: 1;
+}
+.gl-section-nav-layout--rail-top .gl-section-nav {
+  grid-column: 1;
+  grid-row: 1;
+}
+.gl-section-nav-layout--rail-top .gl-section-nav__content {
+  grid-column: 1;
+  grid-row: 2;
+}
+.gl-section-nav__content {
+  min-width: 0;
+}
+/* 常驻竖排导航：sticky 于内容区（滚动容器 .gl-content），
+   条目过多时内部滚动；offset 从 sticky card header 下方起算 */
+.gl-section-nav-layout--rail-right .gl-section-nav,
+.gl-section-nav-layout--rail-left .gl-section-nav {
+  position: sticky;
+  top: calc(var(--gl-sticky-header-height, 80px) + var(--gl-space-4));
+  z-index: 40;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+.gl-section-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gl-section-nav__link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--gl-radius-sm);
+  color: var(--gl-color-text-secondary);
+  text-decoration: none;
+  font: inherit;
+  font-size: 13.5px;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+.gl-section-nav__link:hover {
+  background: var(--ant-color-fill-tertiary, rgba(0, 0, 0, 0.04));
+  color: var(--gl-color-text);
+}
+.gl-section-nav__link:focus-visible {
+  outline: 2px solid var(--gl-color-primary);
+  outline-offset: 2px;
+}
+.gl-section-nav__link[aria-current="location"] {
+  background: var(--ant-color-primary-bg, rgba(22, 119, 255, 0.08));
+  /* 高亮态用正文色而非品牌主色：主色（尤其深色主题的亮青）在 primary-bg
+     底上不满足 4.5:1 文本对比度，靠字重与底色区分激活态即可。 */
+  color: var(--gl-color-text);
+  font-weight: 600;
+}
+/* 顶部横向条：sticky 于 card header 正下方，溢出横向滚动 */
+.gl-section-nav-layout--rail-top .gl-section-nav {
+  position: sticky;
+  top: var(--gl-sticky-header-height, 80px);
+  z-index: 40;
+  background: var(--gl-panel-bg);
+  backdrop-filter: blur(12px);
+  padding-bottom: var(--gl-space-3);
+  margin-bottom: var(--gl-space-2);
+  border-bottom: 1px solid var(--gl-color-border);
+}
+.gl-section-nav-layout--rail-top .gl-section-nav__list {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: var(--gl-space-2);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.gl-section-nav-layout--rail-top .gl-section-nav__link {
+  width: auto;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gl-section-nav__link {
+    transition: none;
+  }
+}

@@ -1,0 +1,126 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.swp
+# Root-level server binaries only; source files such as internal/**/server_test.go
+# must stay tracked.
+/server_*
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Dependency directories (remove the comment below to include it).
+# Root only: web/public/vendor holds the runtime face-api.js asset and is tracked.
+/vendor/
+bin/
+
+.idea/
+*.iml
+.vscode/settings.json
+
+
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+web/.env
+web/.env.local
+
+
+tmp/
+tmpFiles/
+*.tmp
+logs/
+files/
+lastupdate.tmp
+commentsRouter*.go
+
+# ignore build result
+guliangiam
+main
+server
+server_linux_amd64
+server_linux_arm64
+bin/
+web/build/
+web/dist/
+
+# Pre-compiled binaries
+guliangiam-server
+bootstrap.test
+
+# Dependencies: node_modules must never be versioned. Only web/node_modules was
+# ignored before, so the root install was committed and every reinstall showed up
+# as thousands of deletions.
+node_modules/
+web/node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage.*
+*.cover
+
+# Tooling artifacts
+__pycache__/
+*.pyc
+*.profraw
+*.bak
+*.deleted
+# 根目录预编译的 AST SQL 扫描器二进制（源码在 scripts/ast-sql-scanner/）
+/ast-sql-scanner
+# 根目录构建产物（go build -o migrate）
+/migrate
+
+# External reference checkout 
+
+docs/platform-pay/
+# Local tooling state
+.office-claw/
+
+# include helm-chart
+!manifests/guliangiam
+
+# JiuwenSwarm runtime file operation logs (root binary only; cmd/outbox-worker is source)
+.agent_history/
+/outbox-worker
+
+# 本地构建缓存/临时目录
+.gotmp/
+
+# 运行时上传文件（logo/favicon 上传测试产物）
+uploads/
+
+# 本地 HTML 报告构建产物（不入库）
+reports/
+.trae-html-share-packages/
+
+.trae/
+
+.qwen-audit-tmp/
+
+# 数据库备份（含凭据/业务数据，禁止入库）
+.backup/
+
+# Python 本地虚拟环境
+.venv/
+.venv.*/
+
+# 本地临时目录 / 截图（macOS 工具产物）
+.tmp/
+.screenshots/
+
+# 内部 AI 审查提示词（过程产物，不入库）；AGENTS.md 与 CHANGELOG.md 是治理事实源，必须入库
+AGENT_REVIEW_PROMPT.md

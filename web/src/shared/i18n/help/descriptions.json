@@ -1,0 +1,1007 @@
+{
+  "concept.name": {
+    "en": "Unique identifier of this object. It is used in URLs and audit records and usually cannot be changed after creation. （Internal UUID primary key, system-generated on creation, unique within the table; cannot be manually assigned or modified）",
+    "zh-CN": "该对象的唯一标识，会出现在访问路径和审计记录中，创建后通常不可修改。 （内部 UUID 主键，创建时由系统生成，在同表内唯一；不可手动指定或修改）",
+    "zh-TW": "該物件的唯一識別碼，會出現在存取路徑與稽核記錄中，建立後通常不可修改。 （內部 UUID 主鍵，建立時由系統生成，在同表內唯一；不可手動指定或修改）"
+  },
+  "concept.displayName": {
+    "en": "Human-readable name shown in lists and detail pages. Unlike the identifier, it can be edited at any time. （TEXT type; used for list display and detail pages; not used for authorization; editable at any time）",
+    "zh-CN": "显示在列表和详情页中的可读名称，与唯一标识不同，随时可以修改。 （TEXT 类型，用于列表展示和详情页；不参与授权判断，可随时修改）",
+    "zh-TW": "顯示在清單與詳細頁中的可讀名稱，與唯一識別碼不同，隨時可以修改。 （TEXT 類型，用於清單展示和詳細頁；不參與授權判斷，可隨時修改）"
+  },
+  "concept.status": {
+    "en": "Current lifecycle state of this object. Inactive or disabled objects keep their data but reject new operations. （Enum varies per entity: users has active/disabled/locked/pending_verification; llm_providers has active/disabled/testing; outbox has pending/processing/succeeded/failed/dead; llm_api_keys has active/revoked/expired）",
+    "zh-CN": "该对象的当前生命周期状态。停用或禁用的对象仍保留数据，但不再接受新的操作。 （不同实体枚举不同：users 为 active/disabled/locked/pending_verification；llm_providers 为 active/disabled/testing；outbox 为 pending/processing/succeeded/failed/dead；llm_api_keys 为 active/revoked/expired）",
+    "zh-TW": "該物件的目前生命週期狀態。停用或禁用的物件仍保留資料，但不再接受新的操作。 （不同實體枚舉不同：users 為 active/disabled/locked/pending_verification；llm_providers 為 active/disabled/testing；outbox 為 pending/processing/succeeded/failed/dead；llm_api_keys 為 active/revoked/expired）"
+  },
+  "concept.statusLabel": {
+    "en": "Localized label of the current state, used for filtering and for quick scanning in lists. （Localized label for the status field shown in UI; actual enum values depend on the entity type）",
+    "zh-CN": "当前状态的本地化文案，用于筛选和在列表中快速识别。 （状态字段的本地化标签，用于前端显示；实际枚举值取决于当前实体类型）",
+    "zh-TW": "目前狀態的在地化文字，用於篩選與在清單中快速識別。 （狀態欄位的在地化標籤，用於前端顯示；實際枚舉值取決於目前實體類型）"
+  },
+  "concept.type": {
+    "en": "Kind of this object. The selected type decides which fields, validation rules, and downstream behavior apply. （VARCHAR/TEXT type; actual values depend on the table: providers.family supports identity/ai/payment/notification; users.user_type supports human/service_account/bot）",
+    "zh-CN": "该对象的种类。所选类型决定后续可填写的字段、校验规则以及实际运行行为。 （VARCHAR/TEXT 类型，具体取值取决于所在表：providers.family 支持 identity/ai/payment/notification；users.user_type 支持 human/service_account/bot）",
+    "zh-TW": "該物件的種類。所選類型決定後續可填寫的欄位、驗證規則以及實際執行行為。 （VARCHAR/TEXT 類型，具體取值取決於所在表：providers.family 支援 identity/ai/payment/notification；users.user_type 支援 human/service_account/bot）"
+  },
+  "concept.organizationId": {
+    "en": "Organization that owns this object. Data is isolated per organization and other tenants cannot see or modify it. （UUID type, NOT NULL; acts as the tenant isolation key for RLS predicates; all data tables enforce filtering by this column）",
+    "zh-CN": "该对象所属的组织。数据按组织隔离，其他租户无法查看或修改。 （UUID 类型，NOT NULL；作为 RLS 谓词的租户隔离键，所有数据表都强制按此字段过滤）",
+    "zh-TW": "該物件所屬的組織。資料依組織隔離，其他租戶無法檢視或修改。 （UUID 類型，NOT NULL；作為 RLS 謂詞的租戶隔離鍵，所有資料表都強制按此欄位過濾）"
+  },
+  "concept.orgId": {
+    "en": "Organization that owns this object. Data is isolated per organization and other tenants cannot see or modify it. （Alias for organizationId; UUID type, NOT NULL; tenant isolation primary key）",
+    "zh-CN": "该对象所属的组织。数据按组织隔离，其他租户无法查看或修改。 （同 organizationId 字段别名，UUID 类型，NOT NULL；租户隔离主键）",
+    "zh-TW": "該物件所屬的組織。資料依組織隔離，其他租戶無法檢視或修改。 （同 organizationId 欄位別名，UUID 類型，NOT NULL；租戶隔離主鍵）"
+  },
+  "concept.organization": {
+    "en": "Organization this record belongs to. It determines the tenant boundary of the data. （Owning organization; organizations.status defaults to active, parent_id can be NULL meaning root org; RLS restricts access to current org's data）",
+    "zh-CN": "该记录所属的组织，决定数据的租户边界。 （所属组织；organizations 表 status 默认 active，parent_id 可为 NULL 表示根组织；RLS 限制只能访问本组织数据）",
+    "zh-TW": "該記錄所屬的組織，決定資料的租戶邊界。 （所屬組織；organizations 表 status 預設 active，parent_id 可為 NULL 表示根組織；RLS 限制只能存取本組織資料）"
+  },
+  "concept.description": {
+    "en": "Free-form notes for operators. The text is shown in detail views and audit exports but never used for authorization. （TEXT/VARCHAR(255) type; roles/permissions/models description defaults to empty string; not used for authorization）",
+    "zh-CN": "供运维人员参考的说明文字，会展示在详情页和审计导出中，不参与任何授权判断。 （TEXT/VARCHAR(255) 类型；roles/permissions/models 的 description 默认空字符串；不参与授权判断）",
+    "zh-TW": "供維運人員參考的說明文字，會顯示在詳細頁與稽核匯出中，不參與任何授權判斷。 （TEXT/VARCHAR(255) 類型；roles/permissions/models 的 description 預設空字串；不參與授權判斷）"
+  },
+  "concept.enabled": {
+    "en": "Turns this capability on or off. Disabled items stay configured but are skipped at runtime. （BOOLEAN type; defaults vary by table: providers defaults to TRUE; applications defaults FALSE (is_portal) / TRUE (is_visible); disabled entries keep all config but are skipped at runtime）",
+    "zh-CN": "开启或关闭该能力。关闭后配置仍然保留，但运行时会跳过。 （BOOLEAN 类型，默认值各表不同：providers 默认 TRUE；applications 默认 FALSE (is_portal) / TRUE (is_visible)；关闭后保留所有配置但跳过运行时检查）",
+    "zh-TW": "開啟或關閉該能力。關閉後設定仍然保留，但執行時會略過。 （BOOLEAN 類型，預設值各表不同：providers 預設 TRUE；applications 預設 FALSE (is_portal) / TRUE (is_visible)；關閉後保留所有設定但跳過執行期檢查）"
+  },
+  "concept.isEnabled": {
+    "en": "Turns this capability on or off. Disabled items stay configured but are skipped at runtime. （Alias for enabled; BOOLEAN type with varying defaults per table; disabled entries keep config but are skipped at runtime）",
+    "zh-CN": "开启或关闭该能力。关闭后配置仍然保留，但运行时会跳过。 （同 enabled 字段别名；BOOLEAN 类型，各表默认值不同；关闭后保留配置但运行时跳过）",
+    "zh-TW": "開啟或關閉該能力。關閉後設定仍然保留，但執行時會略過。 （同 enabled 欄位別名；BOOLEAN 類型，各表預設值不同；關閉後保留設定但執行時跳過）"
+  },
+  "concept.endpoint": {
+    "en": "Full URL of the remote service, including scheme and path. It must be reachable from the server, not just from your browser. （VARCHAR(255~500) type including scheme and path; providers.provider_url is VARCHAR(255); llm_providers.base_url is VARCHAR(500) NOT NULL）",
+    "zh-CN": "远端服务的完整 URL（含协议与路径），必须能从服务端访问，而不只是浏览器可达。 （VARCHAR(255~500) 类型，包含协议和路径；providers.provider_url VARCHAR(255)；llm_providers.base_url VARCHAR(500) NOT NULL）",
+    "zh-TW": "遠端服務的完整 URL（含協定與路徑），必須能從伺服器端存取，而不只是瀏覽器可達。 （VARCHAR(255~500) 類型，包含協定與路徑；providers.provider_url 為 VARCHAR(255)；llm_providers.base_url 為 VARCHAR(500) NOT NULL）"
+  },
+  "concept.host": {
+    "en": "Hostname or IP address of the target service. Do not include the scheme or path here. （VARCHAR(255) type without scheme or path; both provider and syncers tables have this column with empty string default）",
+    "zh-CN": "目标服务的主机名或 IP 地址，此处不要填写协议或路径。 （VARCHAR(255) 类型，不含协议和路径；provider 或 syncers 表均有此字段，默认空字符串）",
+    "zh-TW": "目標服務的主機名稱或 IP 位址，此處不要填寫協定或路徑。 （VARCHAR(255) 類型，不含協定與路徑；provider 或 syncers 表均有此欄位，預設空字串）"
+  },
+  "concept.port": {
+    "en": "TCP port of the target service. Leave empty to use the protocol default. （INTEGER type; providers and syncers default to 0; 0 means use the protocol's default port）",
+    "zh-CN": "目标服务的 TCP 端口，留空时使用协议默认端口。 （INTEGER 类型；providers 和 syncers 默认 0；0 表示使用协议默认端口）",
+    "zh-TW": "目標服務的 TCP 連接埠，留空時使用協定預設連接埠。 （INTEGER 類型；providers 和 syncers 預設為 0；0 表示使用協定預設連接埠）"
+  },
+  "concept.username": {
+    "en": "Login name used to authenticate against this service. It is stored as plain configuration, not as a user credential. （TEXT/VARCHAR type depending on the table; users.username is TEXT and unique within organization; providers.username is VARCHAR(255) with empty string default）",
+    "zh-CN": "连接该服务时使用的登录名。它作为普通配置保存，不会作为用户凭据参与系统登录。 （TEXT/VARCHAR 类型，取决于所在表；users.username 为 TEXT，同组织内唯一；providers.username 为 VARCHAR(255) 默认空字符串）",
+    "zh-TW": "連線該服務時使用的登入名稱。它作為一般設定儲存，不會作為使用者憑證參與系統登入。 （TEXT/VARCHAR 類型，取決於所在表；users.username 為 TEXT，同組織內唯一；providers.username 為 VARCHAR(255) 預設空字串）"
+  },
+  "concept.password": {
+    "en": "Secret used together with the username. It is write-only: after saving, the value is masked and never returned in full. （Stored as Argon2id hash, fixed 60-char digest; user_credentials.password_hash VARCHAR(255); API never returns the original password, only a mask）",
+    "zh-CN": "与用户名配合使用的密钥。只写不读：保存后仅显示掩码，接口不会返回完整值。 （存储为 Argon2id 哈希，摘要固定 60 字符；user_credentials.password_hash VARCHAR(255)；API 永不返回原始密码，仅显示掩码）",
+    "zh-TW": "與使用者名稱搭配使用的密鑰。僅寫不讀：儲存後僅顯示遮罩，介面不會回傳完整值。 （儲存為 Argon2id 雜湊，摘要固定 60 字元；user_credentials.password_hash VARCHAR(255)；API 永不傳回原始密碼，僅顯示遮罩）"
+  },
+  "concept.email": {
+    "en": "Primary email address used for sign-in, notifications, and account recovery. （TEXT type; users.email is stored in user_profiles table, nullable; unique within organization via partial unique on deleted_at IS NULL AND email IS NOT NULL）",
+    "zh-CN": "用于登录、通知和安全找回的主要邮箱地址。 （TEXT 类型，users.email 存储于 user_profiles 表，nullable；同组织内唯一（partial unique：deleted_at IS NULL AND email IS NOT NULL））",
+    "zh-TW": "用於登入、通知與安全復原的主要電子郵件地址。 （TEXT 類型，users.email 儲存於 user_profiles 表，nullable；同組織內唯一（partial unique：deleted_at IS NULL AND email IS NOT NULL））"
+  },
+  "concept.phone": {
+    "en": "Mobile number in international format. It is used for SMS verification and must be unique within the organization when required. （TEXT type, user_profiles.phone nullable; unique within organization with same partial unique as email）",
+    "zh-CN": "国际格式的手机号码，用于短信验证；在要求唯一时，同一组织内不能重复。 （TEXT 类型，user_profiles.phone nullable；同组织内唯一约束同 email）",
+    "zh-TW": "國際格式的手機號碼，用於簡訊驗證；在要求唯一時，同一組織內不能重複。 （TEXT 類型，user_profiles.phone nullable；同組織內唯一約束同 email）"
+  },
+  "concept.title": {
+    "en": "Short heading shown to users in lists, cards, and notifications. (applications.title VARCHAR(255), NOT NULL, default empty string)",
+    "zh-CN": "在列表、卡片和通知中向用户展示的简短标题。 （applications.title VARCHAR(255)，非空，默认空字符串）",
+    "zh-TW": "在清單、卡片與通知中向使用者顯示的簡短標題。 （applications.title VARCHAR(255)，非空，預設空字串）"
+  },
+  "concept.tags": {
+    "en": "Labels attached to this object for grouping and filtering. Tags do not grant permissions. （VARCHAR(255)[] array type; applications.tags defaults to empty array; JSONB type represents structured tags in other tables）",
+    "zh-CN": "附加在该对象上的标签，用于分组和筛选，不会授予任何权限。 （VARCHAR(255)[] 数组类型，applications.tags 默认空数组；JSONB 类型在其他表中表示结构化标签）",
+    "zh-TW": "附加在該物件上的標籤，用於分組與篩選，不會授予任何權限。 （VARCHAR(255)[] 陣列類型，applications.tags 預設空陣列；JSONB 類型在其他表中表示結構化標籤）"
+  },
+  "concept.tag": {
+    "en": "Single label attached to this object for grouping and filtering. （VARCHAR(255) single-value type; users.tag defaults to empty string, used for internal cohorting with no schema constraint）",
+    "zh-CN": "附加在该对象上的单个标签，用于分组和筛选。 （VARCHAR(255) 单值类型，users.tag 默认空字符串，仅用于内部分组，无 schema 约束）",
+    "zh-TW": "附加在該物件上的單一標籤，用於分組與篩選。 （VARCHAR(255) 單值類型，users.tag 預設空字串，僅用於內部分組，無 schema 約束）"
+  },
+  "concept.scope": {
+    "en": "Permission scope requested or granted by this object. Narrower scopes reduce the impact if a credential leaks. （JSONB/VARCHAR type; llm_quota_policies.scope has CHECK constraint: organization/api_key/alias）",
+    "zh-CN": "该对象申请或授予的权限范围。范围越小，凭据泄露时的影响面越低。 （JSONB/VARCHAR 类型；llm_quota_policies.scope 有 CHECK 约束：organization/api_key/alias）",
+    "zh-TW": "該物件申請或授予的權限範圍。範圍越小，憑證外洩時的影響面越低。 （JSONB/VARCHAR 類型；llm_quota_policies.scope 有 CHECK 約束：organization/api_key/alias）"
+  },
+  "concept.model": {
+    "en": "Model or policy model this record refers to. It controls which resources and actions the rule can address. （UUID foreign key; enforcers.model_id UUID nullable; policy engine model definition; llm_models stores physical AI models）",
+    "zh-CN": "该记录引用的模型或策略模型，决定规则可以处理哪些资源与动作。 （UUID 外键；enforcers.model_id UUID nullable；policies 引擎模型定义；llm_models 存储物理 AI 模型）",
+    "zh-TW": "該記錄引用的模型或策略模型，決定規則可以處理哪些資源與動作。 （UUID 外鍵；enforcers.model_id UUID nullable；policies 引擎模型定義；llm_models 儲存物理 AI 模型）"
+  },
+  "concept.price": {
+    "en": "Unit price in the smallest currency unit expected by the billing engine. Tax is calculated separately. （DECIMAL(19,4) type; llm_price_versions.input_price_per_1m and output_price_per_1m default to 0; price per 1M tokens）",
+    "zh-CN": "计费引擎使用的单价，按所选币种的最小单位填写，税费另行计算。 （DECIMAL(19,4) 类型；llm_price_versions.input_price_per_1m 和 output_price_per_1m 默认 0；每 100 万 token 单价）",
+    "zh-TW": "計費引擎使用的單價，依所選幣種的最小單位填寫，稅費另行計算。 （DECIMAL(19,4) 類型；llm_price_versions.input_price_per_1m 和 output_price_per_1m 預設 0；每 100 萬 token 單價）"
+  },
+  "concept.currency": {
+    "en": "Currency of all amounts on this record. Changing it affects billing and must match the payment channel. （VARCHAR(3) type; organization_billing defaults to USD; user_financials defaults to USD; llm_api_keys defaults to USD; future transactions are billed under the new currency after change）",
+    "zh-CN": "该记录中所有金额的币种。修改会影响计费，且必须与支付渠道一致。 （VARCHAR(3) 类型；organization_billing 默认 USD；user_financials 默认 USD；llm_api_keys 默认 USD；修改后按新币种重新计量后续交易）",
+    "zh-TW": "該記錄中所有金額的幣種。修改會影響計費，且必須與支付管道一致。 （VARCHAR(3) 類型；organization_billing 預設 USD；user_financials 預設 USD；llm_api_keys 預設 USD；修改後按新幣種重新計量後續交易）"
+  },
+  "concept.quantity": {
+    "en": "Number of units to grant or charge. It multiplies the unit price when totals are calculated. （INTEGER type; billing quantity; automatically metered by llm_usage_logs token counts）",
+    "zh-CN": "授予或计费的单元数量，计算总额时会乘以单价。 （INTEGER 类型；计费数量；llm_usage_logs 的 token 数自动计量）",
+    "zh-TW": "授予或計費的單元數量，計算總額時會乘以單價。 （INTEGER 類型；計費數量；llm_usage_logs 的 token 數自動計量）"
+  },
+  "concept.region": {
+    "en": "Geographic region of the provider or resource. It determines data residency and the API endpoint used. （VARCHAR(255) type; deployment_regions.region_code is TEXT with unique constraint; tenant_instances.data_residency_country is VARCHAR(2) ISO 3166-1 alpha-2）",
+    "zh-CN": "服务商或资源所在的地理区域，决定数据驻留位置和实际调用的 API 端点。 （VARCHAR(255) 类型；deployment_regions.region_code TEXT 类型唯一；tenant_instances.data_residency_country 为 VARCHAR(2) ISO 3166-1 alpha-2）",
+    "zh-TW": "服務商或資源所在的地理區域，決定資料駐留位置與實際呼叫的 API 端點。 （VARCHAR(255) 類型；deployment_regions.region_code 為 TEXT 類型且唯一；tenant_instances.data_residency_country 為 VARCHAR(2) ISO 3166-1 alpha-2）"
+  },
+  "concept.method": {
+    "en": "HTTP method used when calling the remote endpoint. Match the method the provider documents. （VARCHAR(64) type; webhooks.method defaults to 'POST'; must match provider documentation）",
+    "zh-CN": "调用远端端点时使用的 HTTP 方法，需与服务商文档保持一致。 （VARCHAR(64) 类型；webhooks.method 默认 'POST'；需与服务商文档一致）",
+    "zh-TW": "呼叫遠端端點時使用的 HTTP 方法，需與服務商文件保持一致。 （VARCHAR(64) 類型；webhooks.method 預設 'POST'；需與服務商文件一致）"
+  },
+  "concept.contentType": {
+    "en": "Content type sent with the request body, for example application/json or application/x-www-form-urlencoded. （VARCHAR(64) type; webhooks.content_type defaults to 'application/json'; providers.content_type defaults to empty string）",
+    "zh-CN": "请求体使用的 Content-Type，例如 application/json 或 application/x-www-form-urlencoded。 （VARCHAR(64) 类型；webhooks.content_type 默认 'application/json'；providers.content_type 默认空字符串）",
+    "zh-TW": "請求主體使用的 Content-Type，例如 application/json 或 application/x-www-form-urlencoded。 （VARCHAR(64) 類型；webhooks.content_type 預設 'application/json'；providers.content_type 預設空字串）"
+  },
+  "concept.ipWhitelist": {
+    "en": "IP addresses or CIDR ranges allowed to use this credential. Requests from other addresses are rejected. （VARCHAR(255) type, semicolon-separated CIDR list; users.ip_whitelist defaults to empty string; when non-empty, login/API requests are restricted to these ranges）",
+    "zh-CN": "允许使用该凭据的 IP 地址或 CIDR 网段，来自其他地址的请求会被拒绝。 （VARCHAR(255) 类型，分号分隔 CIDR 列表；users.ip_whitelist 默认空字符串；非空时登录/API 请求限制在这些范围内）",
+    "zh-TW": "允許使用該憑證的 IP 位址或 CIDR 網段，來自其他位址的請求會被拒絕。 （VARCHAR(255) 類型，分號分隔 CIDR 列表；users.ip_whitelist 預設空字串；非空時登入/API 請求限制在這些範圍內）"
+  },
+  "concept.state": {
+    "en": "Current state of this record in its workflow. State changes are written to the audit log. （Workflow state field; some tables have CHECK constraints: llm_provider_health uses healthy/degraded/open/half_open; user_identities.link_state uses auto_linked/merge_pending/linked/rejected）",
+    "zh-CN": "该记录在流程中的当前状态，状态变化会写入审计日志。 （流程状态字段，部分表有 CHECK 约束：llm_provider_health 为 healthy/degraded/open/half_open；user_identities.link_state 为 auto_linked/merge_pending/linked/rejected）",
+    "zh-TW": "該記錄在流程中的目前狀態，狀態變化會寫入稽核日誌。 （流程狀態欄位，部分表有 CHECK 約束：llm_provider_health 為 healthy/degraded/open/half_open；user_identities.link_state 為 auto_linked/merge_pending/linked/rejected）"
+  },
+  "concept.priority": {
+    "en": "Evaluation order for competing rules. Lower numbers are evaluated first; ties fall back to creation time. （INTEGER type; llm_providers and llm_routes default to 100; lower values have higher priority）",
+    "zh-CN": "多条规则冲突时的评估顺序，数值越小越先评估；数值相同时按创建时间排序。 （INTEGER 类型；llm_providers 和 llm_routes 默认 100；数值越小越优先）",
+    "zh-TW": "多條規則衝突時的評估順序，數值越小越先評估；數值相同時依建立時間排序。 （INTEGER 類型；llm_providers 和 llm_routes 預設 100；數值越小越優先）"
+  },
+  "concept.sslMode": {
+    "en": "TLS mode for the connection. Prefer verify-full in production so the server certificate is validated. （VARCHAR(64) type; syncers default to disable; supports enum: disable/allow/prefer/require/verify-ca/verify-full）",
+    "zh-CN": "连接的 TLS 模式。生产环境建议使用 verify-full，以便校验证书链和主机名。 （VARCHAR(64) 类型；syncers 默认 disable；支持枚举：disable/allow/prefer/require/verify-ca/verify-full）",
+    "zh-TW": "連線的 TLS 模式。生產環境建議使用 verify-full，以便驗證憑證鏈與主機名稱。 （VARCHAR(64) 類型；syncers 預設 disable；支援枚舉：disable/allow/prefer/require/verify-ca/verify-full）"
+  },
+  "concept.balance": {
+    "en": "Current available balance for this account. It changes as transactions and refunds are recorded. （DECIMAL(19,4), default 0; stored independently in organization_billing and user_financials tables, do not affect each other）",
+    "zh-CN": "该账户当前可用余额，会随交易与退款记录变化。 （DECIMAL(19,4) 类型，默认 0；按 organization_balance 和 user_financials 两张表独立存储，互不影响）",
+    "zh-TW": "該帳戶目前可用餘額，會隨交易與退款記錄變化。 （DECIMAL(19,4) 類型，預設 0；按 organization_billing 和 user_financials 兩張表獨立儲存，互不影響）"
+  },
+  "concept.homepage": {
+    "en": "Public URL of the application or provider home page. It is shown on consent and sign-in screens. （TEXT/VARCHAR type; applications.homepage_url TEXT nullable; used for consent page display）",
+    "zh-CN": "应用或服务商主页的公开 URL，会展示在授权确认和登录页面。 （TEXT/VARCHAR 类型；applications.homepage_url TEXT nullable；用于授权页展示）",
+    "zh-TW": "應用程式或服務商首頁的公開 URL，會顯示在授權確認與登入頁面。 （TEXT/VARCHAR 類型；applications.homepage_url TEXT nullable；用於授權頁展示）"
+  },
+  "concept.location": {
+    "en": "Physical or logical location of this record, used for grouping and reporting only. （TEXT type; user_profiles.location nullable; only used for grouping and reporting）",
+    "zh-CN": "该记录的物理或逻辑位置，仅用于分组和报表统计。 （TEXT 类型；user_profiles.location nullable；仅用于分组和报表）",
+    "zh-TW": "該記錄的實體或邏輯位置，僅用於分組與報表統計。 （TEXT 類型；user_profiles.location nullable；僅用於分組與報表）"
+  },
+  "concept.countryCode": {
+    "en": "ISO country code used to derive the dialing prefix and regional defaults. （VARCHAR(2) type; deployment_regions.country_code has CHECK char_length(country_code) = 2）",
+    "zh-CN": "ISO 国家/地区代码，用于推导电话区号和区域默认值。 （VARCHAR(2) 类型，deployment_regions.country_code 有 CHECK char_length(country_code) = 2）",
+    "zh-TW": "ISO 國家/地區代碼，用於推導電話區碼與區域預設值。 （VARCHAR(2) 類型，deployment_regions.country_code 有 CHECK char_length(country_code) = 2）"
+  },
+  "concept.verificationCode": {
+    "en": "One-time code sent to the bound email or phone. It expires quickly and can be used once. （One-time token in verifications table, code TEXT; expires_at TIMESTAMPTZ NOT NULL is required; status VARCHAR(64) defaults to pending; auto-expires at deadline）",
+    "zh-CN": "发送到已绑定邮箱或手机的一次性验证码，有效期较短且只能使用一次。 （verifications 表一次性令牌，code TEXT；expires_at TIMESTAMPTZ NOT NULL 必选；status VARCHAR(64) 默认 pending；过期自动失效）",
+    "zh-TW": "傳送到已綁定電子郵件或手機的一次性驗證碼，有效期較短且只能使用一次。 （verifications 表一次性令牌，code TEXT；expires_at TIMESTAMPTZ NOT NULL 必選；status VARCHAR(64) 預設 pending；過期自動失效）"
+  },
+  "concept.subject": {
+    "en": "Subject the assertion or rule applies to, usually a user, service account, or group identifier. （TEXT type; user_identities.subject VARCHAR(255); relation_tuples.subject TEXT; subject_relation supports null; user_identities has uq_identity_provider_subject unique constraint）",
+    "zh-CN": "断言或规则作用的主体，通常是用户、服务账号或用户组的标识。 （TEXT 类型；user_identities.subject VARCHAR(255)；relation_tuples.subject TEXT；subject_relation 支持 null；user_identities 有 uq_identity_provider_subject 唯一约束）",
+    "zh-TW": "判斷或規則作用的主體，通常是使用者、服務帳號或使用者群組的識別碼。 （TEXT 類型；user_identities.subject VARCHAR(255)；relation_tuples.subject TEXT；subject_relation 支持 null；user_identities 有 uq_identity_provider_subject 唯一約束）"
+  },
+  "concept.certificate": {
+    "en": "Public certificate in PEM format. The matching private key must be configured separately. （PEM public certificate; app_client_certificates.certificate_pem TEXT type; private-key JWK fields (d/p/q/dp/dq/qi/k) are rejected on upload, only the public portion is kept）",
+    "zh-CN": "PEM 格式的公开证书，与之匹配的私钥需要单独配置。 （PEM 格式公开证书；app_client_certificates.certificate_pem TEXT 类型；系统拒绝上传含私钥字段的 JWK（d/p/q/dp/dq/qi/k），只保留公开部分）",
+    "zh-TW": "PEM 格式的公開憑證，與之匹配的私鑰需要另外設定。 （PEM 格式公開憑證；app_client_certificates.certificate_pem TEXT 類型；系統拒絕上傳含私鑰欄位的 JWK（d/p/q/dp/dq/qi/k），只保留公開部分）"
+  },
+  "concept.admin": {
+    "en": "Grants organization administrator privileges. Administrators can manage members, roles, and settings. （BOOLEAN type; users.is_admin defaults to false; when true bypasses role-based permission checks; org super admin belongs to built-in org that cannot be decommissioned）",
+    "zh-CN": "授予组织管理员权限。管理员可以管理成员、角色和各项设置。 （BOOLEAN 类型；users.is_admin 默认 false；true 时绕过角色权限检查；组织超级管理员 built-in 组织不可停用）",
+    "zh-TW": "授予組織管理員權限。管理員可以管理成員、角色與各項設定。 （BOOLEAN 類型；users.is_admin 預設 false；true 時繞過角色權限檢查；組織超級管理員屬於 built-in 組織不可停用）"
+  },
+  "concept.birthday": {
+    "en": "Date of birth in YYYY-MM-DD. It is used for age policy checks and never shown to other users. （DATE type, user_profiles.birthday nullable; used for age policy checks）",
+    "zh-CN": "出生日期，格式为 YYYY-MM-DD，用于年龄策略校验，不会展示给其他用户。 （DATE 类型，user_profiles.birthday nullable；用于年龄策略校验）",
+    "zh-TW": "出生日期，格式為 YYYY-MM-DD，用於年齡政策驗證，不會顯示給其他使用者。 （DATE 類型，user_profiles.birthday nullable；用於年齡政策驗證）"
+  },
+  "concept.ranking": {
+    "en": "Sort weight for display order. Higher values appear earlier when no explicit order is set. （INTEGER type; applications.menu_order defaults to 0; higher values appear earlier）",
+    "zh-CN": "展示排序权重，数值越大越靠前（未显式指定顺序时生效）。 （INTEGER 类型；applications.menu_order 默认 0；数值越大越靠前）",
+    "zh-TW": "顯示排序權重，數值越大越靠前（未明確指定順序時生效）。 （INTEGER 類型；applications.menu_order 預設 0；數值越大越靠前）"
+  },
+  "concept.domain": {
+    "en": "Domain name served by this application. It must resolve to the gateway and match the TLS certificate. （VARCHAR(253) type; organization_domains.domain has unique constraint; must resolve to the service gateway and match TLS certificate）",
+    "zh-CN": "该应用对外提供服务的域名，必须解析到网关并与 TLS 证书匹配。 （VARCHAR(253) 类型；organization_domains.domain 有唯一约束；必须解析到服务网关并与 TLS 证书匹配）",
+    "zh-TW": "該應用程式對外提供服務的網域，必須解析到閘道並與 TLS 憑證相符。 （VARCHAR(253) 類型；organization_domains.domain 有唯一約束；必須解析到服務閘道並與 TLS 憑證相符）"
+  },
+  "concept.subDomains": {
+    "en": "Additional hostnames accepted for this application, separated by commas. Wildcards are not supported. （VARCHAR(255)[] array type; app_network_config.other_domains defaults to empty array; wildcards not supported）",
+    "zh-CN": "该应用额外接受的域名，多个用逗号分隔，不支持通配符。 （VARCHAR(255)[] 数组类型；app_network_config.other_domains 默认空数组；通配符不支持）",
+    "zh-TW": "該應用程式額外接受的網域，多個以逗號分隔，不支援萬用字元。 （VARCHAR(255)[] 陣列類型；app_network_config.other_domains 預設空陣列；萬用字元不支援）"
+  },
+  "concept.logo": {
+    "en": "Brand image shown on sign-in and consent pages. Recommended size is 200x200 with a transparent background. （VARCHAR(255) type; applications.logo defaults to empty string; organization branding supports enable_dark_logo BOOLEAN）",
+    "zh-CN": "展示在登录与授权页面的品牌图片，建议尺寸 200×200 且背景透明。 （VARCHAR(255) 类型；applications.logo 默认空字符串；组织 branding 支持 enable_dark_logo BOOLEAN）",
+    "zh-TW": "顯示在登入與授權頁面的品牌圖片，建議尺寸 200×200 且背景透明。 （VARCHAR(255) 類型；applications.logo 預設空字串；組織 branding 支援 enable_dark_logo BOOLEAN）"
+  },
+  "concept.favicon": {
+    "en": "Small icon shown in the browser tab. Use a square image of at least 32x32 pixels. （VARCHAR(255) type; applications.favicon defaults to empty string; recommended at least 32×32 square image）",
+    "zh-CN": "浏览器标签页显示的小图标，建议使用不小于 32×32 的正方形图片。 （VARCHAR(255) 类型；applications.favicon 默认空字符串；建议使用不小于 32×32 的正方形图片）",
+    "zh-TW": "瀏覽器分頁顯示的小圖示，建議使用不小於 32×32 的正方形圖片。 （VARCHAR(255) 類型；applications.favicon 預設空字串；建議使用不小於 32×32 的正方形圖片）"
+  },
+  "concept.redirectUri": {
+    "en": "Callback URLs allowed after sign-in. Every value must match exactly what the client sends, including the path. （VARCHAR(255)[] array type; app_oauth_config.redirect_uris defaults to empty array; every value must match exactly what the OAuth/OIDC client sends (including path and query params)）",
+    "zh-CN": "登录完成后允许跳转的回调地址。每一项都必须与客户端实际发送的地址完全一致（含路径）。 （VARCHAR(255)[] 数组类型；app_oauth_config.redirect_uris 默认空数组；每一项必须与 OAuth/OIDC 客户端注册的 redirect_uri 精确匹配（含路径和查询参数））",
+    "zh-TW": "登入完成後允許跳轉的回呼位址。每一項都必須與用戶端實際傳送的位址完全一致（含路徑）。 （VARCHAR(255)[] 陣列類型；app_oauth_config.redirect_uris 預設空陣列；每一項都必須與 OAuth/OIDC 用戶端註冊的 redirect_uri 精確匹配（含路徑和查詢參數））"
+  },
+  "concept.clientId": {
+    "en": "Public identifier of the OAuth client. It is safe to expose in browser and mobile applications. （applications.client_id TEXT nullable; partial unique when client_id <> ''; auto-generated or manually specified when non-empty）",
+    "zh-CN": "OAuth 客户端的公开标识，可以安全地暴露在浏览器和移动应用中。 （applications.client_id TEXT nullable；partial unique：client_id <> '' 时全局唯一；非空时自动生成或手动指定）",
+    "zh-TW": "OAuth 用戶端的公開識別碼，可以安全地暴露在瀏覽器與行動應用中。 （applications.client_id TEXT nullable；partial unique：client_id <> '' 時全域唯一；非空時自動生成或手動指定）"
+  },
+  "concept.clientSecret": {
+    "en": "Confidential secret of the OAuth client. Store it only on the server and rotate it if it leaks. （app_client_secrets.secret_hash VARCHAR(255) Argon2id hash; status CHECK constraint active/grace/retired; API never returns the original secret, only a prefix gl_cs_ + first 6 random characters）",
+    "zh-CN": "OAuth 客户端的机密密钥，只应保存在服务端；一旦泄露需立即轮换。 （app_client_secrets.secret_hash VARCHAR(255) Argon2id 哈希；status CHECK 约束 active/grace/retired；API 永不返回原始 secret，仅显示前缀 gl_cs_ + 前 6 位随机字符）",
+    "zh-TW": "OAuth 用戶端的機密密鑰，只應儲存在伺服器端；一旦外洩需立即輪換。 （app_client_secrets.secret_hash VARCHAR(255) Argon2id 雜湊；status CHECK 約束 active/grace/retired；API 永不傳回原始 secret，僅顯示前綴 gl_cs_ + 前 6 位隨機字元）"
+  },
+  "concept.signinUrl": {
+    "en": "URL users are sent to for sign-in. Use the complete authorize endpoint, not only the host. （VARCHAR(255) type; app_signin_config.signin_url defaults to empty string; needs full authorize endpoint）",
+    "zh-CN": "用户登录时跳转的地址，需填写完整的授权端点而不是仅主机名。 （VARCHAR(255) 类型；app_signin_config.signin_url 默认空字符串；需填写完整授权端点）",
+    "zh-TW": "使用者登入時跳轉的位址，需填寫完整的授權端點而不是僅主機名稱。 （VARCHAR(255) 類型；app_signin_config.signin_url 預設空字串；需填寫完整授權端點）"
+  },
+  "concept.logoutUrl": {
+    "en": "URL called to end the session at the identity provider after local sign-out. （VARCHAR(255) type; app_signin_config.logout_url defaults to empty string; used for single sign-out）",
+    "zh-CN": "本地退出后用于结束身份提供方会话的地址。 （VARCHAR(255) 类型；app_signin_config.logout_url 默认空字符串；用于单点登出）",
+    "zh-TW": "本機登出後用於結束身分提供者工作階段的位址。 （VARCHAR(255) 類型；app_signin_config.logout_url 預設空字串；用於單點登出）"
+  },
+  "concept.samlMetadata": {
+    "en": "SAML metadata XML or its URL. It supplies the entity ID, signing certificate, and endpoints. （TEXT type; app_saml_config.saml_metadata stores IdP SAML XML; alternatively saml_metadata_url VARCHAR(2048) can point to metadata URL）",
+    "zh-CN": "SAML 元数据 XML 或其 URL，用于提供实体 ID、签名证书和各端点。 （TEXT 类型；app_saml_config.saml_metadata 用于存储 IdP SAML XML；另可填写 saml_metadata_url VARCHAR(2048) 指向元数据地址）",
+    "zh-TW": "SAML 中繼資料 XML 或其 URL，用於提供實體 ID、簽章憑證與各端點。 （TEXT 類型；app_saml_config.saml_metadata 用於儲存 IdP SAML XML；另可填寫 saml_metadata_url VARCHAR(2048) 指向元資料位址）"
+  },
+  "concept.idpUrl": {
+    "en": "Identity provider endpoint used to start SAML or OIDC sign-in. （VARCHAR(255) type; providers.auth_url/token_url/user_info_url each have independent URLs; used for SAML/OIDC login flow）",
+    "zh-CN": "用于发起 SAML 或 OIDC 登录的身份提供方端点。 （VARCHAR(255) 类型；providers.auth_url/token_url/user_info_url 各有独立 URL；用于 SAML/OIDC 登录流程）",
+    "zh-TW": "用於發起 SAML 或 OIDC 登入的身分提供者端點。 （VARCHAR(255) 類型；providers.auth_url/token_url/user_info_url 各有獨立 URL；用於 SAML/OIDC 登入流程）"
+  },
+  "concept.spEntityId": {
+    "en": "Service provider entity ID presented to the identity provider. It must match the value registered there. （VARCHAR(255) type; providers.idp_entity_id defaults to empty string; Service Provider entity ID in SAML protocol）",
+    "zh-CN": "提供给身份提供方的服务提供方实体 ID，必须与对方登记的值一致。 （VARCHAR(255) 类型；providers.idp_entity_id 默认空字符串；SAML 协议中服务提供方实体 ID）",
+    "zh-TW": "提供給身分提供者的服務提供者實體 ID，必須與對方登記的值一致。 （VARCHAR(255) 類型；providers.idp_entity_id 預設空字串；SAML 協定中服務提供方實體 ID）"
+  },
+  "concept.attributes": {
+    "en": "Attribute mapping between the identity provider assertion and local user fields. （JSONB type; app_saml_config.saml_attributes defaults to empty array; stores IdP attribute to local user field mappings）",
+    "zh-CN": "身份提供方断言字段与本地用户字段之间的属性映射。 （JSONB 类型；app_saml_config.saml_attributes 默认空数组；存储 IdP 属性到本地用户字段的映射）",
+    "zh-TW": "身分提供者判斷欄位與本機使用者欄位之間的屬性對應。 （JSONB 類型；app_saml_config.saml_attributes 預設空陣列；儲存 IdP 屬性到本地使用者欄位的對應）"
+  },
+  "concept.script": {
+    "en": "Script executed by the policy engine. It runs with the permissions of the engine, so review changes carefully. （TEXT/VARCHAR type; executed by policy engine; runs with engine's own permissions）",
+    "zh-CN": "由策略引擎执行的脚本。它使用引擎自身的权限运行，修改时务必审慎。 （TEXT/VARCHAR 类型；由策略引擎执行；使用引擎自身权限）",
+    "zh-TW": "由策略引擎執行的指令碼。它使用引擎自身的權限執行，修改時務必審慎。 （TEXT/VARCHAR 類型；由策略引擎執行；使用引擎自身權限）"
+  },
+  "concept.rule": {
+    "en": "Rule expression evaluated for each matching request. The first matching rule decides the outcome when configured that way. （UUID primary key; casbin_rules has uq_casbin_rules_rule full unique constraint (ptype+v0~v5); supports ptype=p/g/r/e）",
+    "zh-CN": "对每个匹配请求进行评估的规则表达式。按配置顺序，首条命中的规则决定结果。 （UUID 主键；casbin_rules 有 uq_casbin_rules_rule 完整唯一约束（ptype+v0~v5）；支持 ptype=p/g/r/e）",
+    "zh-TW": "對每個符合的請求進行評估的規則運算式。依設定順序，第一條命中的規則決定結果。 （UUID 主鍵；casbin_rules 有 uq_casbin_rules_rule 完整唯一約束（ptype+v0~v5）；支援 ptype=p/g/r/e）"
+  },
+  "concept.expression": {
+    "en": "Condition expression in the engine syntax. Empty means the rule matches every request. （VARCHAR type; CASBIN ptype/v0~v5 are VARCHAR(255) defaulting to empty string; empty expression means rule matches every request）",
+    "zh-CN": "引擎语法编写的条件表达式，留空表示该规则匹配所有请求。 （VARCHAR 类型；CASBIN ptype/v0~v5 为 VARCHAR(255) 默认空字符串；空表达式表示规则匹配所有请求）",
+    "zh-TW": "引擎語法撰寫的條件運算式，留空表示該規則符合所有請求。 （VARCHAR 類型；CASBIN ptype/v0~v5 為 VARCHAR(255) 預設空字串；空運算式表示規則符合所有請求）"
+  },
+  "concept.resourceType": {
+    "en": "Category of resource the policy addresses, such as an application, API, or data object. （VARCHAR(255) type, permissions.resource_type defaults to empty string; used together with resources JSONB array）",
+    "zh-CN": "策略针对的资源类别，例如应用、API 或数据对象。 （VARCHAR(255) 类型，permissions.resource_type 默认空字符串；配合 resources JSONB 数组使用）",
+    "zh-TW": "策略針對的資源類別，例如應用程式、API 或資料物件。 （VARCHAR(255) 類型，permissions.resource_type 預設空字串；配合 resources JSONB 陣列使用）"
+  },
+  "concept.resources": {
+    "en": "Resources this rule applies to. Leave empty to apply to all resources of the selected type. （JSONB array type; permissions.resources defaults to empty array; resources table has uq_resources_org_app_name unique constraint）",
+    "zh-CN": "该规则适用的资源，留空表示适用于所选类型的全部资源。 （JSONB 数组类型；permissions.resources 默认空数组；resources 表有 uq_resources_org_app_name 唯一约束）",
+    "zh-TW": "該規則適用的資源，留空表示適用於所選類型的全部資源。 （JSONB 陣列類型；permissions.resources 預設空陣列；resources 表有 uq_resources_org_app_name 唯一約束）"
+  },
+  "concept.actions": {
+    "en": "Operations allowed on the selected resources, for example read, write, or delete. （JSONB array type; permissions.actions defaults to empty array; used together with resource_type and resources）",
+    "zh-CN": "在所选资源上允许执行的操作，例如 read、write 或 delete。 （JSONB 数组类型；permissions.actions 默认空数组；配合 resource_type 和 resources 使用）",
+    "zh-TW": "在所選資源上允許執行的操作，例如 read、write 或 delete。 （JSONB 陣列類型；permissions.actions 預設空陣列；配合 resource_type 和 resources 使用）"
+  },
+  "concept.effect": {
+    "en": "Whether the matched request is allowed or denied. Deny rules take precedence over allow rules. （VARCHAR(64) type; permissions.effect defaults to 'Allow'; Deny rules take precedence over Allow）",
+    "zh-CN": "匹配请求的判定结果：允许或拒绝。拒绝规则的优先级高于允许规则。 （VARCHAR(64) 类型；permissions.effect 默认 'Allow'；Deny 规则优先级高于 Allow）",
+    "zh-TW": "符合請求的判定結果：允許或拒絕。拒絕規則的優先順序高於允許規則。 （VARCHAR(64) 類型；permissions.effect 預設 'Allow'；Deny 規則優先於 Allow）"
+  },
+  "concept.sorter": {
+    "en": "Order in which policies are evaluated. Lower values run first and can short-circuit later rules. （VARCHAR(255) type; permissions.sorter defaults to empty string; lower values evaluated first）",
+    "zh-CN": "策略的评估顺序，数值越小越先执行，并可能短路后续规则。 （VARCHAR(255) 类型；permissions.sorter 默认空字符串；数值越小越先评估）",
+    "zh-TW": "策略的評估順序，數值越小越先執行，並可能短路後續規則。 （VARCHAR(255) 類型；permissions.sorter 預設空字串；數值越小越先評估）"
+  },
+  "concept.subUsers": {
+    "en": "Sub-users covered by this permission, usually delegated accounts acting on behalf of the owner. （JSONB/VARCHAR type; permissions.subUsers defaults to empty string; used in sub-user delegation scenarios）",
+    "zh-CN": "该权限覆盖的子用户，通常代表代持账号代替主账号执行操作。 （JSONB/VARCHAR 类型；permissions.subUsers 默认空字符串；子用户委托场景使用）",
+    "zh-TW": "該權限涵蓋的子使用者，通常代表代理帳號代替主帳號執行操作。 （JSONB/VARCHAR 類型；permissions.subUsers 預設空字串；子使用者委託場景使用）"
+  },
+  "concept.adapter": {
+    "en": "Adapter used to interpret policies and queries. It must match the model configured on the enforcer. （UUID foreign key; enforcers.adapter_id UUID nullable; adapter table has uq_adapters_org_name unique constraint; type VARCHAR(64) defaults to 'database'）",
+    "zh-CN": "用于解析策略和查询的适配器，必须与执行器上配置的模型匹配。 （UUID 外键；enforcers.adapter_id UUID nullable；adapter 表有 uq_adapters_org_name 唯一约束；type VARCHAR(64) 默认 'database'）",
+    "zh-TW": "用於解析策略與查詢的適配器，必須與執行器上設定的模型相符。 （UUID 外鍵；enforcers.adapter_id UUID nullable；adapter 表有 uq_adapters_org_name 唯一約束；type VARCHAR(64) 預設 'database'）"
+  },
+  "concept.application": {
+    "en": "Application this record belongs to. It determines which sign-in policy and branding are applied. （UUID foreign key; applications.status defaults to active; application_id serves as FK to multiple tables with on_delete CASCADE）",
+    "zh-CN": "该记录所属的应用，决定使用哪套登录策略和品牌配置。 （UUID 外键；applications 表 status 默认 active；application_id 作为多张表的 FK，on_delete CASCADE）",
+    "zh-TW": "該記錄所屬的應用程式，決定使用哪套登入策略與品牌設定。 （UUID 外鍵；applications 表 status 預設 active；application_id 作為多張表的 FK，on_delete CASCADE）"
+  },
+  "concept.providerType": {
+    "en": "Provider family, such as OAuth, SAML, SMS, or face recognition. It decides which credentials are required. （Dual-field structure: providers.family (identity/ai/payment/notification) + providers.kind; ai family's kind is openai/anthropic/gemini/deepseek/glm/kimi/qwen/seed/ollama/vllm/custom; llm_providers.provider_type CHECK matches ai family kind）",
+    "zh-CN": "服务商所属类别，例如 OAuth、SAML、短信或人脸识别，决定需要填写哪些凭据字段。 （双字段结构：providers.family（identity/ai/payment/notification）+ providers.kind；ai family 下 kind 为 openai/anthropic/gemini/deepseek/glm/kimi/qwen/seed/ollama/vllm/custom；llm_providers.provider_type CHECK 同 ai family kind）",
+    "zh-TW": "服務商所屬類別，例如 OAuth、SAML、簡訊或人臉辨識，決定需要填寫哪些憑證欄位。 （雙欄位結構：providers.family（identity/ai/payment/notification）+ providers.kind；ai family 下 kind 為 openai/anthropic/gemini/deepseek/glm/kimi/qwen/seed/ollama/vllm/custom；llm_providers.provider_type CHECK 同 ai family kind）"
+  },
+  "concept.customHeader": {
+    "en": "Extra HTTP headers sent with each request. Use one header per line in name: value form. （VARCHAR(255) type; providers.custom_header defaults to empty string; one header per line in name: value format）",
+    "zh-CN": "每次请求额外发送的 HTTP 头，按「名称: 值」每行一条填写。 （VARCHAR(255) 类型；providers.custom_header 默认空字符串；按 name: value 格式每行一条）",
+    "zh-TW": "每次請求額外傳送的 HTTP 標頭，依「名稱: 值」每行一筆填寫。 （VARCHAR(255) 類型；providers.custom_header 預設空字串；按 name: value 格式每行一筆）"
+  },
+  "concept.timeout": {
+    "en": "Maximum wait time in seconds before the request is aborted and reported as a timeout. （INTEGER type; webhooks.timeout_ms defaults to 5000ms; llm_providers.request_timeout_ms defaults to 30000ms）",
+    "zh-CN": "请求的最长等待时间（秒），超时后会被中止并记为超时错误。 （INTEGER 类型；webhooks.timeout_ms 默认 5000 毫秒；llm_providers.request_timeout_ms 默认 30000 毫秒）",
+    "zh-TW": "請求的最長等待時間（秒），逾時後會被中止並記為逾時錯誤。 （INTEGER 類型；webhooks.timeout_ms 預設 5000 毫秒；llm_providers.request_timeout_ms 預設 30000 毫秒）"
+  },
+  "concept.retries": {
+    "en": "Number of automatic retries after a retryable failure. Retries reuse the same request body. （INTEGER type; llm_providers.max_retries defaults to 2; webhooks.max_retries defaults to 3; outbox.max_attempts defaults to 12）",
+    "zh-CN": "可重试失败后的自动重试次数，重试会复用同一请求体。 （INTEGER 类型；llm_providers.max_retries 默认 2；webhooks.max_retries 默认 3；outbox.max_attempts 默认 12）",
+    "zh-TW": "可重試失敗後的自動重試次數，重試會沿用同一請求主體。 （INTEGER 類型；llm_providers.max_retries 預設 2；webhooks.max_retries 預設 3；outbox.max_attempts 預設 12）"
+  },
+  "concept.interval": {
+    "en": "Interval between scheduled runs, in seconds unless another unit is stated. （INTEGER type in seconds; webhooks.retry_interval defaults to 60; device_auth_codes.poll_interval_sec defaults to 5）",
+    "zh-CN": "定时任务的执行间隔，除非另有说明，单位为秒。 （INTEGER 类型，单位秒；webhooks.retry_interval 默认 60；device_auth_codes.poll_interval_sec 默认 5）",
+    "zh-TW": "排程工作的執行間隔，除非另有說明，單位為秒。 （INTEGER 類型，單位秒；webhooks.retry_interval 預設 60；device_auth_codes.poll_interval_sec 預設 5）"
+  },
+  "concept.cron": {
+    "en": "Cron expression for the schedule. Use five fields (minute hour day month weekday). （VARCHAR type; used for scheduled task scheduling; syncers.sync_interval INTEGER defaults to 0 meaning no sync）",
+    "zh-CN": "定时任务的 Cron 表达式，使用五段格式（分 时 日 月 周）。 （VARCHAR 类型；用于定时任务调度；syncers.sync_interval INTEGER 默认 0 表示不同步）",
+    "zh-TW": "排程工作的 Cron 運算式，使用五段格式（分 時 日 月 週）。 （VARCHAR 類型；用於排程工作調度；syncers.sync_interval INTEGER 預設 0 表示不同步）"
+  },
+  "concept.timezone": {
+    "en": "Time zone used to interpret schedules and displayed timestamps. （VARCHAR(255) type; deployment_regions.timezone defaults to empty string; used for interpreting schedules and timestamp display）",
+    "zh-CN": "用于解释定时计划和时间戳展示的时区。 （VARCHAR(255) 类型；deployment_regions.timezone 默认空字符串；用于解释定时计划和时间戳显示）",
+    "zh-TW": "用於解讀排程與時間戳顯示的時區。 （VARCHAR(255) 類型；deployment_regions.timezone 預設空字串；用於解釋排程與時間戳顯示）"
+  },
+  "concept.language": {
+    "en": "Default interface language for this scope. Users can still override it in their own profile. （JSONB array type; organization_settings.languages defaults to empty array; supports multi-language configuration）",
+    "zh-CN": "该范围下的默认界面语言，用户仍可在个人资料中自行覆盖。 （JSONB 数组类型；organization_settings.languages 默认空数组；支持多语言配置）",
+    "zh-TW": "該範圍下的預設介面語言，使用者仍可在個人資料中自行覆寫。 （JSONB 陣列類型；organization_settings.languages 預設空陣列；支援多語言設定）"
+  },
+  "concept.theme": {
+    "en": "Visual theme applied to the console. It only affects presentation, not permissions. （VARCHAR(255) type; organization_theme_settings.theme_name defaults to empty string; tokens JSONB stores specific theme variables）",
+    "zh-CN": "应用到控制台的视觉主题，仅影响展示效果，不影响权限。 （VARCHAR(255) 类型；organization_theme_settings.theme_name 默认空字符串；tokens JSONB 存储具体主题变量）",
+    "zh-TW": "套用到主控台的視覺主題，僅影響顯示效果，不影響權限。 （VARCHAR(255) 類型；organization_theme_settings.theme_name 預設空字串；tokens JSONB 儲存具體主題變數）"
+  },
+  "concept.layout": {
+    "en": "Layout preset for the console shell, such as side navigation or top navigation. （VARCHAR(64) type; organization_settings.account_menu defaults to 'horizontal'; options are horizontal or side）",
+    "zh-CN": "控制台外壳的布局预设，例如侧边导航或顶部导航。 （VARCHAR(64) 类型；organization_settings.account_menu 默认 'horizontal'；可选 horizontal 或 side）",
+    "zh-TW": "主控台外殼的版面預設，例如側邊導覽或頂部導覽。 （VARCHAR(64) 類型；organization_settings.account_menu 預設 'horizontal'；可選 horizontal 或 side）"
+  },
+  "concept.navItems": {
+    "en": "Menu entries visible to members of this scope. Removing an entry hides it without deleting any data. (organization_settings.nav_preferences JSONB; empty object means use system default nav items)",
+    "zh-CN": "该范围内成员可见的菜单项。移除菜单项只会隐藏入口，不会删除任何数据。 （organization_settings.nav_preferences JSONB，空对象表示使用系统默认导航项集合）",
+    "zh-TW": "該範圍內成員可見的選單項目。移除選單項目只會隱藏入口，不會刪除任何資料。 （organization_settings.nav_preferences JSONB，空物件表示使用系統預設導航項集合）"
+  },
+  "concept.mfaItems": {
+    "en": "Multi-factor methods offered during sign-in. At least one should stay enabled for administrators. （JSONB array type; organization_settings.mfa_items defaults to empty array; user_collections.mfa_items used together; keep at least one to avoid admin lockout）",
+    "zh-CN": "登录时提供的多因素认证方式，管理员账号建议至少保留一种。 （JSONB 数组类型；organization_settings.mfa_items 默认空数组；user_collections.mfa_items 配合使用；至少保留一种以免管理员被锁）",
+    "zh-TW": "登入時提供的多因素驗證方式，管理員帳號建議至少保留一種。 （JSONB 陣列類型；organization_settings.mfa_items 預設空陣列；user_collections.mfa_items 配合使用；至少保留一種以免管理員被鎖）"
+  },
+  "concept.signinItems": {
+    "en": "Sign-in methods shown on the login page, such as password, SMS, or social providers. （JSONB array type; app_signin_config.signin_items defaults to empty array; co-acts with signin_methods TEXT[]）",
+    "zh-CN": "登录页展示的登录方式，例如密码、短信或第三方登录。 （JSONB 数组类型；app_signin_config.signin_items 默认空数组；配合 signin_methods TEXT[] 同时生效）",
+    "zh-TW": "登入頁顯示的登入方式，例如密碼、簡訊或第三方登入。 （JSONB 陣列類型；app_signin_config.signin_items 預設空陣列；配合 signin_methods TEXT[] 同時生效）"
+  },
+  "concept.expireTime": {
+    "en": "Expiry time of this object. After it passes, the object stops working and must be renewed. （TIMESTAMPTZ type; authorization_codes and device_auth_codes expires_at is required; verifications.expires_at NOT NULL defaults to now() + interval）",
+    "zh-CN": "该对象的过期时间。到期后停止生效，需要续期或重新创建。 （TIMESTAMPTZ 类型；authorization_codes 和 device_auth_codes 的 expires_at 必填；verifications.expires_at NOT NULL 默认 now() + interval）",
+    "zh-TW": "該物件的到期時間。到期後停止生效，需要續期或重新建立。 （TIMESTAMPTZ 類型；authorization_codes 和 device_auth_codes 的 expires_at 必填；verifications.expires_at NOT NULL 預設 now() + interval）"
+  },
+  "concept.owner": {
+    "en": "Owner of this record. Owners can edit it and receive lifecycle notifications. （VARCHAR(255) type; models.owner and enforcers.owner default to empty string; record owner）",
+    "zh-CN": "该记录的所有者，可以编辑记录并接收生命周期通知。 （VARCHAR(255) 类型；models.owner 和 enforcers.owner 默认空字符串；记录所有者）",
+    "zh-TW": "該記錄的擁有者，可以編輯記錄並接收生命週期通知。 （VARCHAR(255) 類型；models.owner 和 enforcers.owner 預設空字串；記錄所有者）"
+  },
+  "concept.user": {
+    "en": "User this record refers to. The selection is limited to members of the current organization. （UUID primary key; users table has uq_users_org_username_active partial unique constraint; is_deleted BOOLEAN soft-delete marker）",
+    "zh-CN": "该记录指向的用户，选择范围限于当前组织的成员。 （UUID 主键；users 表有 uq_users_org_username_active 唯一约束（partial）；is_deleted BOOLEAN 软删除标记）",
+    "zh-TW": "該記錄指向的使用者，選擇範圍限於目前組織的成員。 （UUID 主鍵；users 表有 uq_users_org_username_active partial unique 約束；is_deleted BOOLEAN 軟刪除標記）"
+  },
+  "concept.group": {
+    "en": "Group this record refers to. Group membership is evaluated when permissions are checked. （UUID primary key; groups table has uq_groups_organization_id_name unique constraint; parent_id self-reference supports tree structure; user_group_memberships implements many-to-many）",
+    "zh-CN": "该记录指向的用户组，权限校验时会评估组成员关系。 （UUID 主键；groups 表有 uq_groups_organization_id_name 唯一约束；parent_id 自引用支持树形结构；user_group_memberships 实现多对多）",
+    "zh-TW": "該記錄指向的使用者群組，權限驗證時會評估群組成員關係。 （UUID 主鍵；groups 表有 uq_groups_organization_id_name 唯一約束；parent_id 自引用支援樹狀結構；user_group_memberships 實作多對多）"
+  },
+  "concept.role": {
+    "en": "Role assigned to the subject. Roles bundle permissions and are evaluated at sign-in and on each request. （UUID primary key; roles table has uq_roles_org_name unique constraint; is_enabled defaults to true; permissions bundled as JSONB）",
+    "zh-CN": "分配给主体的角色。角色打包了一组权限，在登录和每次请求时都会评估。 （UUID 主键；roles 表有 uq_roles_org_name 唯一约束；is_enabled 默认 true；permissions 打包 JSONB 存储权限集合）",
+    "zh-TW": "分配給主體的角色。角色打包了一組權限，在登入與每次請求時都會評估。 （UUID 主鍵；roles 表有 uq_roles_org_name 唯一約束；is_enabled 預設 true；permissions 打包 JSONB 儲存權限集合）"
+  },
+  "concept.permission": {
+    "en": "Permission entry attached to this object. It defines which actions are allowed on which resources. （UUID primary key; permissions.effect defaults to 'Allow'; Deny takes precedence over Allow; resource_type + resources JSONB + actions JSONB jointly define authorization scope）",
+    "zh-CN": "附加在该对象上的权限条目，定义在哪些资源上允许执行哪些动作。 （UUID 主键；permissions.effect 默认 'Allow'；Deny 优先于 Allow；resource_type + resources JSONB + actions JSONB 共同定义授权范围）",
+    "zh-TW": "附加在該物件上的權限項目，定義在哪些資源上允許執行哪些動作。 （UUID 主鍵；permissions.effect 預設 'Allow'；Deny 優先於 Allow；resource_type + resources JSONB + actions JSONB 共同定義授權範圍）"
+  },
+  "concept.token": {
+    "en": "Credential token used for API access. Treat it as a secret and rotate it on a schedule. （VARCHAR(255) type; agents.token defaults to empty string; API never returns original credential, only a mask）",
+    "zh-CN": "用于 API 访问的凭据令牌，应视为机密并定期轮换。 （VARCHAR(255) 类型；agents.token 默认空字符串；API 永不返回原始凭据，仅返回掩码）",
+    "zh-TW": "用於 API 存取的憑證權杖，應視為機密並定期輪換。 （VARCHAR(255) 類型；agents.token 預設空字串；API 永不傳回原始憑據，僅傳回遮罩）"
+  },
+  "concept.key": {
+    "en": "Key material or key identifier used for signing and verification. Private parts are never displayed in full. （Mixed type: API Key is VARCHAR(20~128); llm_api_keys uses key_prefix VARCHAR(20) + key_hash VARCHAR(128) stored separately）",
+    "zh-CN": "用于签名和验签的密钥材料或密钥标识，私密部分不会完整展示。 （混合类型：API Key 为 VARCHAR(20~128)；llm_api_keys.key_prefix VARCHAR(20) + key_hash VARCHAR(128) 分离存储）",
+    "zh-TW": "用於簽章與驗簽的金鑰材料或金鑰識別碼，私密部分不會完整顯示。 （混合類型：API Key 為 VARCHAR(20~128)；llm_api_keys.key_prefix VARCHAR(20) + key_hash VARCHAR(128) 分離儲存）"
+  },
+  "concept.secret": {
+    "en": "Secret value paired with the client or key. It is write-only and masked after saving. （TEXT/VARCHAR(255) type; providers.client_secret and app_secret are TEXT nullable; stored as Argon2id hash or Sealed Envelope）",
+    "zh-CN": "与客户端或密钥配对的机密值，只写不读，保存后以掩码显示。 （TEXT/VARCHAR(255) 类型；providers.client_secret 和 app_secret 为 TEXT 可空；存储为 Argon2id 哈希或 Sealed Envelope）",
+    "zh-TW": "與用戶端或金鑰配對的機密值，僅寫不讀，儲存後以遮罩顯示。 （TEXT/VARCHAR(255) 類型；providers.client_secret 和 app_secret 為 TEXT 可空；儲存為 Argon2id 雜湊或 Sealed Envelope）"
+  },
+  "concept.hash": {
+    "en": "Hashed credential value. Only the hash is stored, so the original value cannot be recovered. （TEXT/VARCHAR(255) type; authorization_codes.code_hash TEXT with unique index; user_credentials.password_hash VARCHAR(255) Argon2id）",
+    "zh-CN": "凭据的哈希值。系统只保存哈希，因此无法还原原始值。 （TEXT/VARCHAR(255) 类型；authorization_codes.code_hash TEXT 唯一索引；user_credentials.password_hash VARCHAR(255) Argon2id）",
+    "zh-TW": "憑證的雜湊值。系統只儲存雜湊，因此無法還原原始值。 （TEXT/VARCHAR(255) 類型；authorization_codes.code_hash TEXT 有唯一索引；user_credentials.password_hash VARCHAR(255) Argon2id）"
+  },
+  "concept.algorithm": {
+    "en": "Algorithm used for signing, hashing, or encryption. It must be supported by the peer service. （Context-aware enum: app_oauth_config.token_signing_method limited to RS256/SM2-SM3; app_client_jwks.alg limited to RS256/PS256/ES256; token_endpoint_auth_method supports none/client_secret_basic/client_secret_post/private_key_jwt/tls_client_auth/self_signed_tls_client_auth）",
+    "zh-CN": "用于签名、哈希或加密的算法，必须为对端服务所支持。 （场景化枚举：app_oauth_config.token_signing_method 仅 RS256/SM2-SM3；app_client_jwks.alg 仅 RS256/PS256/ES256；token_endpoint_auth_method 支持 none/client_secret_basic/client_secret_post/private_key_jwt/tls_client_auth/self_signed_tls_client_auth）",
+    "zh-TW": "用於簽章、雜湊或加密的演算法，必須為對端服務所支援。 （場景化枚舉：app_oauth_config.token_signing_method 僅 RS256/SM2-SM3；app_client_jwks.alg 僅 RS256/PS256/ES256；token_endpoint_auth_method 支援 none/client_secret_basic/client_secret_post/private_key_jwt/tls_client_auth/self_signed_tls_client_auth）"
+  },
+  "concept.privateKey": {
+    "en": "Private key in PEM format. It signs assertions or requests and must never be shared. （System rejects JWK with private key fields (d/p/q/dp/dq/qi/k); app_client_jwks.jwk JSONB only keeps public portion; private key must be managed by caller）",
+    "zh-CN": "PEM 格式的私钥，用于对断言或请求签名，绝不能对外共享。 （系统拒绝上传含私钥字段的 JWK（d/p/q/dp/dq/qi/k）；app_client_jwks.jwk JSONB 只保留公开部分；私钥由调用方自行保管）",
+    "zh-TW": "PEM 格式的私鑰，用於對判斷或請求簽章，絕不能對外分享。 （系統拒絕上傳含私鑰欄位的 JWK（d/p/q/dp/dq/qi/k）；app_client_jwks.jwk JSONB 只保留公開部分；私鑰由呼叫方自行保管）"
+  },
+  "concept.publicKey": {
+    "en": "Public key corresponding to the private key. It is safe to publish for verification. （JSONB type; app_client_jwks.jwk stores public JWK; app_client_certificates.certificate_pem stores public certificate PEM）",
+    "zh-CN": "与私钥对应的公钥，可以公开用于验签。 （JSONB 类型；app_client_jwks.jwk 存储公开 JWK；app_client_certificates.certificate_pem 存储公开证书 PEM）",
+    "zh-TW": "與私鑰對應的公鑰，可以公開用於驗簽。 （JSONB 類型；app_client_jwks.jwk 儲存公開 JWK；app_client_certificates.certificate_pem 儲存公開憑證 PEM）"
+  },
+  "concept.metadata": {
+    "en": "Structured metadata stored with this record. Values are shown in detail views and API responses. （JSONB/TEXT/VARCHAR type; provider_configs.config JSONB defaults to empty object; saml_metadata TEXT stores SAML XML）",
+    "zh-CN": "随该记录保存的结构化元数据，会展示在详情页和 API 响应中。 （JSONB/TEXT/VARCHAR 类型；provider_configs.config JSONB 默认空对象；saml_metadata TEXT 类型存储 SAML XML）",
+    "zh-TW": "隨該記錄儲存的結構化中繼資料，會顯示在詳細頁與 API 回應中。 （JSONB/TEXT/VARCHAR 類型；provider_configs.config JSONB 預設空物件；saml_metadata TEXT 儲存 SAML XML）"
+  },
+  "concept.config": {
+    "en": "Provider-specific configuration. Required keys depend on the selected provider type. （JSONB type; provider_configs uses config_type + config dual-field; config JSONB defaults to empty object; updated_at TIMESTAMPTZ records last modification time）",
+    "zh-CN": "服务商专属配置，必填项取决于所选的服务商类型。 （JSONB 类型；provider_configs.config_type + config 双字段；config JSONB 默认空对象；updated_at TIMESTAMPTZ 记录最后修改时间）",
+    "zh-TW": "服務商專屬設定，必填項目取決於所選的服務商類型。 （JSONB 類型；provider_configs.config_type + config 雙欄位；config JSONB 預設空物件；updated_at TIMESTAMPTZ 記錄最後修改時間）"
+  },
+  "concept.mode": {
+    "en": "Operating mode of this component. Some modes change which fields are required. （VARCHAR(16) type; organization_policy_inheritance.mode has CHECK IN ('inherit', 'override', 'lock')）",
+    "zh-CN": "该组件的运行模式，部分模式会改变必填字段。 （VARCHAR(16) 类型；organization_policy_inheritance.mode 有 CHECK IN ('inherit', 'override', 'lock')）",
+    "zh-TW": "該元件的執行模式，部分模式會改變必填欄位。 （VARCHAR(16) 類型；organization_policy_inheritance.mode 有 CHECK IN ('inherit', 'override', 'lock')）"
+  },
+  "concept.format": {
+    "en": "Serialization format used when reading or writing this value. （VARCHAR/TEXT type; no database constraint; serialization format determined by API request parameters）",
+    "zh-CN": "读写该值时使用的序列化格式。 （VARCHAR/TEXT 类型；无数据库约束；由 API 请求参数决定序列化格式）",
+    "zh-TW": "讀寫該值時使用的序列化格式。 （VARCHAR/TEXT 類型；無資料庫約束；由 API 請求參數決定序列化格式）"
+  },
+  "concept.locale": {
+    "en": "Locale identifier such as en-US or zh-CN, used for date, number, and text formatting. （VARCHAR/TEXT type, format like en-US, zh-CN; used for date, number, and text formatting）",
+    "zh-CN": "语言区域标识（如 en-US、zh-CN），用于日期、数字和文本格式化。 （VARCHAR/TEXT 类型，格式如 en-US、zh-CN；用于日期、数字和文本格式化）",
+    "zh-TW": "語言地區識別碼（如 en-US、zh-CN），用於日期、數字與文字格式化。 （VARCHAR/TEXT 類型，格式如 en-US、zh-CN；用於日期、數字與文字格式化）"
+  },
+  "concept.pageSize": {
+    "en": "Number of rows requested per page. Larger values load more data but take longer. （INTEGER type; only used for API query parameters; no direct database constraint）",
+    "zh-CN": "每页请求的行数。数值越大一次加载的数据越多，但耗时也更长。 （INTEGER 类型；仅用于 API 查询参数；数据库无直接约束）",
+    "zh-TW": "每頁請求的列數。數值越大一次載入的資料越多，但耗時也更長。 （INTEGER 類型；僅用於 API 查詢參數；資料庫無直接約束）"
+  },
+  "concept.from": {
+    "en": "Start of the time range, inclusive. Times are interpreted in the selected time zone. （TIMESTAMPTZ type; start of API query time range, inclusive; interpreted with timezone field）",
+    "zh-CN": "时间范围的起点（含）。时间按所选时区解释。 （TIMESTAMPTZ 类型；API 查询时间范围起点，含；配合 timezone 字段解释）",
+    "zh-TW": "時間範圍的起點（含）。時間依所選時區解讀。 （TIMESTAMPTZ 類型；API 查詢時間範圍起點，含；配合 timezone 欄位解釋）"
+  },
+  "concept.to": {
+    "en": "End of the time range, inclusive. It must be later than the start time. （TIMESTAMPTZ type; end of API query time range, inclusive; must be later than start）",
+    "zh-CN": "时间范围的终点（含），必须晚于起点。 （TIMESTAMPTZ 类型；API 查询时间范围终点，含；必须晚于起点）",
+    "zh-TW": "時間範圍的終點（含），必須晚於起點。 （TIMESTAMPTZ 類型；API 查詢時間範圍終點，含；必須晚於起點）"
+  },
+  "concept.amount": {
+    "en": "Monetary amount for this record, expressed in the selected currency. （DECIMAL(19,4) type; llm_usage_logs.cost_amount defaults to 0; transaction amount expressed in selected currency）",
+    "zh-CN": "该记录的金额，以所选币种表示。 （DECIMAL(19,4) 类型；llm_usage_logs.cost_amount 默认 0；交易金额以所选币种表示）",
+    "zh-TW": "該記錄的金額，以所選幣種表示。 （DECIMAL(19,4) 類型；llm_usage_logs.cost_amount 預設 0；交易金額以所選幣種表示）"
+  },
+  "concept.plan": {
+    "en": "Subscription plan this record refers to. The plan defines quotas, features, and renewal rules. （VARCHAR/TEXT type; commercial subscription plan; determines quota and renewal rules）",
+    "zh-CN": "该记录引用的订阅计划，计划决定配额、功能范围和续费规则。 （VARCHAR/TEXT 类型；商业订阅计划；决定配额和续费规则）",
+    "zh-TW": "該記錄引用的訂閱方案，方案決定配額、功能範圍與續約規則。 （VARCHAR/TEXT 類型；商業訂閱方案；決定配額與續費規則）"
+  },
+  "concept.remark": {
+    "en": "Operator note saved with the record. It is visible to administrators and in exports. （VARCHAR(255)/TEXT type; serves as operator note only; written to audit log）",
+    "zh-CN": "随记录保存的操作备注，管理员和导出内容中可见。 （VARCHAR(255)/TEXT 类型；仅作为运维备注；写入审计日志）",
+    "zh-TW": "隨記錄儲存的操作備註，管理員與匯出內容中可見。 （VARCHAR(255)/TEXT 類型；僅作為運維備註；寫入稽核日誌）"
+  },
+  "concept.reason": {
+    "en": "Justification for this action. It is written to the audit log and shown to approvers. （TEXT/VARCHAR type; justification for the action; written to audit log）",
+    "zh-CN": "执行该操作的理由，会写入审计日志并展示给审批人。 （TEXT/VARCHAR 类型；执行操作的理由；写入审计日志）",
+    "zh-TW": "執行該操作的理由，會寫入稽核日誌並顯示給審批人。 （TEXT/VARCHAR 類型；執行操作的理由；寫入稽核日誌）"
+  },
+  "concept.comment": {
+    "en": "Comment added to the record. Comments never change the object state. （TEXT type; does not change object state; only used for display and export）",
+    "zh-CN": "附加在记录上的评论，评论不会改变对象状态。 （TEXT 类型；不改变对象状态；仅用于展示和导出）",
+    "zh-TW": "附加在記錄上的評論，評論不會改變物件狀態。 （TEXT 類型；不改變物件狀態；僅用於展示和匯出）"
+  },
+  "concept.content": {
+    "en": "Body content sent to the recipient or endpoint. Templates may reference user attributes. （TEXT/VARCHAR type; webhooks.custom_body VARCHAR(255) defaults to empty string; providers.custom_body VARCHAR(255)）",
+    "zh-CN": "发送给收件人或端点的正文内容，模板中可以引用用户属性。 （TEXT/VARCHAR 类型；webhooks.custom_body VARCHAR(255) 默认空字符串；providers.custom_body VARCHAR(255)）",
+    "zh-TW": "傳送給收件人或端點的主體內容，範本中可以引用使用者屬性。 （TEXT/VARCHAR 類型；webhooks.custom_body VARCHAR(255) 預設空字串；providers.custom_body VARCHAR(255)）"
+  },
+  "concept.headers": {
+    "en": "HTTP headers sent with the request. Sensitive values should be stored as secrets. （VARCHAR(255)/JSONB type; webhooks.headers VARCHAR(255) defaults to empty string; webhooks.custom_headers JSONB defaults to empty object）",
+    "zh-CN": "随请求发送的 HTTP 头，敏感值应以密钥形式保存。 （VARCHAR(255)/JSONB 类型；webhooks.headers VARCHAR(255) 默认空字符串；webhooks.custom_headers JSONB 默认空对象）",
+    "zh-TW": "隨請求傳送的 HTTP 標頭，敏感值應以密鑰形式儲存。 （VARCHAR(255)/JSONB 類型；webhooks.headers VARCHAR(255) 預設空字串；webhooks.custom_headers JSONB 預設空物件）"
+  },
+  "concept.url": {
+    "en": "Target URL including scheme, host, and path. Query parameters may be added by the system. （VARCHAR(255~2048) type; webhooks.url is VARCHAR(255); saml_metadata_url is VARCHAR(2048), the browser/HTTP URL ceiling）",
+    "zh-CN": "目标 URL，包含协议、主机和路径；系统可能会追加查询参数。 （VARCHAR(255~2048) 类型；webhooks.url VARCHAR(255)；saml_metadata_url VARCHAR(2048) 为浏览器/HTTP URL 上限）",
+    "zh-TW": "目標 URL，包含協定、主機與路徑；系統可能會附加查詢參數。 （VARCHAR(255~2048) 類型；webhooks.url 為 VARCHAR(255)；saml_metadata_url 為 VARCHAR(2048)，瀏覽器/HTTP URL 上限）"
+  },
+  "concept.path": {
+    "en": "Path component appended to the service base URL. It must start with a slash. （VARCHAR(255) type; path appended after base_url, must start with a slash）",
+    "zh-CN": "附加在服务基础地址后的路径部分，必须以斜杠开头。 （VARCHAR(255) 类型；附加在 base_url 后的路径，必须以斜杠开头）",
+    "zh-TW": "附加在服務基礎位址後的路徑部分，必須以斜線開頭。 （VARCHAR(255) 類型；附加在 base_url 後的路徑，必須以斜線開頭）"
+  },
+  "concept.prefix": {
+    "en": "Prefix prepended to generated values such as identifiers or codes. （VARCHAR(16~20) type; app_client_secrets.secret_prefix VARCHAR(16) fixed gl_cs_ + 6 random chars; llm_api_keys.key_prefix VARCHAR(20) fixed glk_）",
+    "zh-CN": "为生成的标识或编码添加的前缀。 （VARCHAR(16~20) 类型；app_client_secrets.secret_prefix VARCHAR(16) 固定 gl_cs_ + 6 位随机；llm_api_keys.key_prefix VARCHAR(20) 固定 glk_）",
+    "zh-TW": "為產生的識別碼或編碼加入的前置字串。 （VARCHAR(16~20) 類型；app_client_secrets.secret_prefix VARCHAR(16) 固定 gl_cs_ + 6 位隨機；llm_api_keys.key_prefix VARCHAR(20) 固定 glk_）"
+  },
+  "concept.label": {
+    "en": "Display label for this entry. It is shown verbatim in the interface. （VARCHAR/TEXT type; alias for display_name field; for display only, no logic）",
+    "zh-CN": "该条目的显示名称，会原样展示在界面中。 （VARCHAR/TEXT 类型；display_name 字段别名；展示用，不参与逻辑）",
+    "zh-TW": "該項目的顯示名稱，會原樣顯示在介面中。 （VARCHAR/TEXT 類型；display_name 欄位別名；展示用，不參與邏輯）"
+  },
+  "concept.value": {
+    "en": "Stored value of this entry. The allowed format depends on the field type. （Mixed type; value in JSONB or field value; format determined by type）",
+    "zh-CN": "该条目保存的取值，允许的格式取决于字段类型。 （混合类型；JSONB 中的值或字段的取值；格式由类型决定）",
+    "zh-TW": "該項目儲存的值，允許的格式取決於欄位類型。 （混合類型；JSONB 中的值或欄位的取值；格式由類型決定）"
+  },
+  "concept.default": {
+    "en": "Value used when no explicit input is provided. Leave empty to fall back to the system default. （Determined by schema default column; BOOLEAN often defaults to FALSE; INTEGER to 0; TIMESTAMPTZ to now()）",
+    "zh-CN": "未显式填写时使用的默认值，留空则回退到系统默认值。 （由 schema default 字段决定；BOOLEAN 默认多为 FALSE；INTEGER 默认多为 0；TIMESTAMPTZ 默认多为 now()）",
+    "zh-TW": "未明確填寫時使用的預設值，留空則回退到系統預設值。 （由 schema default 欄位決定；BOOLEAN 預設多為 FALSE；INTEGER 預設多為 0；TIMESTAMPTZ 預設多為 now()）"
+  },
+  "concept.limit": {
+    "en": "Upper bound enforced for this field. Requests exceeding it are rejected. （INTEGER/DECIMAL type; llm_api_keys.rpm_limit/tpm_limit INTEGER nullable; llm_api_keys.monthly_budget DECIMAL(19,4) nullable）",
+    "zh-CN": "该字段允许的上限，超过上限的请求会被拒绝。 （INTEGER/DECIMAL 类型；llm_api_keys.rpm_limit/tpm_limit INTEGER nullable；llm_api_keys.monthly_budget DECIMAL(19,4) nullable）",
+    "zh-TW": "該欄位允許的上限，超過上限的請求會被拒絕。 （INTEGER/DECIMAL 類型；llm_api_keys.rpm_limit/tpm_limit INTEGER nullable；llm_api_keys.monthly_budget DECIMAL(19,4) nullable）"
+  },
+  "concept.quota": {
+    "en": "Quota granted to this scope. Once exhausted, further requests fail until the period resets. （INTEGER/DECIMAL type; organization_billing.default_quota INTEGER defaults to 0; llm_quota_policies.limit_value DECIMAL(19,4)）",
+    "zh-CN": "授予该范围的配额。用尽后，请求会失败直到周期重置。 （INTEGER/DECIMAL 类型；organization_billing.default_quota INTEGER 默认 0；llm_quota_policies.limit_value DECIMAL(19,4)）",
+    "zh-TW": "授予該範圍的配額。用盡後，請求會失敗直到週期重置。 （INTEGER/DECIMAL 類型；organization_billing.default_quota INTEGER 預設 0；llm_quota_policies.limit_value DECIMAL(19,4)）"
+  },
+  "concept.usage": {
+    "en": "Consumption recorded for the current period. It is recalculated from metering events. （INTEGER type; llm_usage_logs input_tokens/output_tokens/total_tokens are each INTEGER defaulting to 0; stored in monthly partitions）",
+    "zh-CN": "当前周期已记录的用量，由计量事件汇总计算得出。 （INTEGER 类型；llm_usage_logs 的 input_tokens/output_tokens/total_tokens 各为 INTEGER 默认 0；按月分区存储）",
+    "zh-TW": "目前週期已記錄的用量，由計量事件彙總計算得出。 （INTEGER 類型；llm_usage_logs 的 input_tokens/output_tokens/total_tokens 各為 INTEGER 預設 0；按月分區儲存）"
+  },
+  "concept.sorts": {
+    "en": "Sort order applied to the list, expressed as field and direction pairs. （JSONB/VARCHAR type; only used for frontend query sorting; no direct database constraint）",
+    "zh-CN": "应用于列表的排序方式，以「字段 + 方向」的组合表示。 （JSONB/VARCHAR 类型；仅用于前端查询排序；数据库无直接约束）",
+    "zh-TW": "套用到清單的排序方式，以「欄位 + 方向」的組合表示。 （JSONB/VARCHAR 類型；僅用於前端查詢排序；資料庫無直接約束）"
+  },
+  "concept.filters": {
+    "en": "Filter conditions applied to the list. Multiple conditions are combined with AND. （JSONB/VARCHAR type; only used for frontend query filtering; no direct database constraint）",
+    "zh-CN": "应用于列表的筛选条件，多个条件之间为「与」关系。 （JSONB/VARCHAR 类型；仅用于前端查询筛选；数据库无直接约束）",
+    "zh-TW": "套用到清單的篩選條件，多個條件之間為「且」關係。 （JSONB/VARCHAR 類型；僅用於前端查詢篩選；資料庫無直接約束）"
+  },
+  "concept.gender": {
+    "en": "Gender recorded for this profile. It is optional and only used for display and analytics. （TEXT type; user_profiles.gender nullable; only used for display and analytics）",
+    "zh-CN": "该资料中记录的性别，为选填项，仅用于展示和统计分析。 （TEXT 类型；user_profiles.gender nullable；仅用于展示和统计分析）",
+    "zh-TW": "該資料中記錄的性別，為選填項目，僅用於顯示與統計分析。 （TEXT 類型；user_profiles.gender nullable；僅用於展示與統計分析）"
+  },
+  "concept.bio": {
+    "en": "Short self-introduction shown on the profile card. Keep it free of secrets or personal contact details. （TEXT type; user_profiles.bio nullable; personal intro shown on profile card）",
+    "zh-CN": "展示在个人资料卡上的简短自我介绍，请勿填写密钥或个人联系方式。 （TEXT 类型；user_profiles.bio nullable；个人简介展示在资料卡上）",
+    "zh-TW": "顯示在個人資料卡上的簡短自我介紹，請勿填寫密鑰或個人聯絡方式。 （TEXT 類型；user_profiles.bio nullable；個人簡介顯示在資料卡上）"
+  },
+  "concept.realName": {
+    "en": "Legal name used for identity verification. It must match the identity document exactly. （TEXT type; user_profiles.real_name nullable; used for identity verification, must match identity document exactly）",
+    "zh-CN": "用于实名认证的法定姓名，必须与身份证件上的姓名完全一致。 （TEXT 类型；user_profiles.real_name nullable；用于实名认证，必须与身份证件完全一致）",
+    "zh-TW": "用於實名驗證的法定姓名，必須與身分證件上的姓名完全一致。 （TEXT 類型；user_profiles.real_name nullable；用於實名驗證，必須與身分證件完全一致）"
+  },
+  "concept.idCardType": {
+    "en": "Type of identity document being verified, such as ID card or passport. It decides which fields are required. （TEXT type; user_profiles.id_card_type nullable; determines which document fields need to be filled）",
+    "zh-CN": "用于核验的证件类型，例如身份证或护照，决定需要填写哪些证件字段。 （TEXT 类型；user_profiles.id_card_type nullable；决定需要填写哪些证件字段）",
+    "zh-TW": "用於驗證的證件類型，例如身分證或護照，決定需要填寫哪些證件欄位。 （TEXT 類型；user_profiles.id_card_type nullable；決定需要填寫哪些證件欄位）"
+  },
+  "concept.idCard": {
+    "en": "Document number. It is stored encrypted, masked in the interface, and never returned in full by the API. （TEXT type; user_profiles.id_card nullable; stored encrypted, API only returns a mask）",
+    "zh-CN": "证件号码。以加密方式保存，界面中仅显示掩码，接口不会返回完整号码。 （TEXT 类型；user_profiles.id_card nullable；以加密方式保存，API 仅返回掩码）",
+    "zh-TW": "證件號碼。以加密方式儲存，介面中僅顯示遮罩，介面不會回傳完整號碼。 （TEXT 類型；user_profiles.id_card nullable；以加密方式儲存，API 僅傳回遮罩）"
+  },
+  "concept.requestTimeoutMs": {
+    "en": "Maximum request wait time in milliseconds. After this duration the request is marked as timeout and counted toward the quota. llm_providers defaults to 30000ms.",
+    "zh-CN": "请求的最长等待时间，毫秒。超时后会被标记为 timeout 状态并计入配额消耗；llm_providers 默认 30000 毫秒。",
+    "zh-TW": "請求的最長等待時間，毫秒。逾時後會被標記為 timeout 狀態並計入配額消耗；llm_providers 預設 30000 毫秒。"
+  },
+  "concept.maxRetries": {
+    "en": "Number of automatic retries after a retryable failure. Retries reuse the same request body and headers; llm_providers defaults to 2.",
+    "zh-CN": "可重试失败后的自动重试次数，重试会复用同一请求体和头；llm_providers 默认 2 次。",
+    "zh-TW": "可重試失敗後的自動重試次數，重試會沿用同一請求主體和頭；llm_providers 預設 2 次。"
+  },
+  "concept.weight": {
+    "en": "Traffic weight for routes under the same alias. Higher value receives proportionally more requests; both llm_providers and llm_routes default to 1 (even distribution).",
+    "zh-CN": "同一 alias 下多个 route 的流量权重；数值越大分到的请求越多，按比例分配；llm_providers 和 llm_routes 均默认 1（均分）。",
+    "zh-TW": "同一 alias 下多個 route 的流量權重；數值越大分到的請求越多，按比例分配；llm_providers 和 llm_routes 均預設 1（均分）。"
+  },
+  "concept.rpmLimit": {
+    "en": "Maximum requests per minute allowed for this API key. INTEGER nullable on llm_api_keys; NULL means unlimited. Exceeded requests are rejected immediately.",
+    "zh-CN": "该 API Key 允许的每分钟最大请求数，llm_api_keys 表 INTEGER nullable；NULL 表示不限制。超过上限的请求会被立即拒绝并计入配额消耗。",
+    "zh-TW": "該 API Key 允許的每分鐘最大請求數，llm_api_keys 表 INTEGER nullable；NULL 表示不限製。超過上限的請求會被立即拒絕並計入配額消耗。"
+  },
+  "concept.tpmLimit": {
+    "en": "Maximum tokens per minute allowed for this API key. INTEGER nullable on llm_api_keys; NULL means unlimited. Input and output tokens are summed together.",
+    "zh-CN": "该 API Key 允许的每分钟最大 token 数，llm_api_keys 表 INTEGER nullable；NULL 表示不限制；输入与输出 token 合计计算。",
+    "zh-TW": "該 API Key 允許的每分鐘最大 token 數，llm_api_keys 表 INTEGER nullable；NULL 表示不限製；輸入與輸出 token 合併計算。"
+  },
+  "concept.monthlyBudget": {
+    "en": "Maximum monthly spend in selected currency (DECIMAL(19,4)); NULL means no cap. Once exhausted all requests are rejected until reset cycle.",
+    "zh-CN": "该 API Key 当月允许消耗的最大金额，以所选币种计（DECIMAL(19,4)），NULL 表示不设上限；用尽后拒绝所有请求直到重置周期。",
+    "zh-TW": "該 API Key 當月允許消耗的最大金額，以所選幣種計（DECIMAL(19,4)），NULL 表示不設上限；用盡後拒絕所有請求直到重置週期。"
+  },
+  "concept.baseUrl": {
+    "en": "Complete upstream AI service base URL including scheme, e.g. https://api.openai.com/v1. llm_providers.base_url VARCHAR(500) NOT NULL.",
+    "zh-CN": "上游 AI 服务端的完整基础 URL（含协议），例如 https://api.openai.com/v1；llm_providers.base_url VARCHAR(500) NOT NULL。",
+    "zh-TW": "上游 AI 服務端的完整基礎 URL（含協定），例如 https://api.openai.com/v1；llm_providers.base_url VARCHAR(500) NOT NULL。"
+  },
+  "concept.apiKey": {
+    "en": "AI Gateway data-plane API key. On save, only Argon2id hash and SHA-256 fingerprint are persisted; original value never returns. llm_providers stores sealed + fingerprint separately.",
+    "zh-CN": "AI 网关数据面 API 密钥。保存时仅存 Argon2id 哈希和 SHA-256 指纹，原始值永不回显；llm_providers 分密封装（sealed）和指纹（fingerprint）存储。",
+    "zh-TW": "AI 網關資料面 API 密鑰。儲存時僅存 Argon2id 雜湊和 SHA-256 指紋，原始值永不回顯；llm_providers 分密封裝（sealed）和指紋（fingerprint）儲存。"
+  },
+  "concept.modelId": {
+    "en": "UUID identifier of a physical model row. llm_routes.model_id is a FK to llm_models. One provider must have unique provider_model_name per provider.",
+    "zh-CN": "物理模型的 UUID 标识；llm_routes.model_id 为 llm_models 的外键；同一 provider 下 provider_model_name 必须唯一。",
+    "zh-TW": "物理模型的 UUID 識別碼；llm_routes.model_id 為 llm_models 的外鍵；同一 provider 下 provider_model_name 必須唯一。"
+  },
+  "concept.providerModelName": {
+    "en": "Model name as defined by the upstream provider, e.g. gpt-4o-mini, claude-3.5-sonnet. VARCHAR(255) NOT NULL; unique per provider.",
+    "zh-CN": "上游供应商定义的模型名，例如 gpt-4o-mini、claude-3.5-sonnet；VARCHAR(255) NOT NULL；在同一 provider 下必须唯一。",
+    "zh-TW": "上游供應商定義的模型名，例如 gpt-4o-mini、claude-3.5-sonnet；VARCHAR(255) NOT NULL；在同一 provider 下必須唯一。"
+  },
+  "concept.alias": {
+    "en": "Logical alias for callers to reference uniformly. Internally routes to concrete provider + model pairs. VARCHAR(255) NOT NULL; unique within organization.",
+    "zh-CN": "逻辑别名，供调用方统一引用。内部路由到具体 provider + model；VARCHAR(255) NOT NULL；同一组织下 alias 不可重复。",
+    "zh-TW": "邏輯別名，供呼叫方統一引用。內部路由到具體 provider + model；VARCHAR(255) NOT NULL；同一組織下 alias 不可重複。"
+  },
+  "concept.aliasId": {
+    "en": "UUID identifier of a logical alias row. llm_routes.alias_id FK references llm_model_aliases.id.",
+    "zh-CN": "逻辑别名的 UUID 标识；llm_routes.alias_id 外键指向 llm_model_aliases.id。",
+    "zh-TW": "邏輯別名的 UUID 識別碼；llm_routes.alias_id 外鍵指向 llm_model_aliases.id。"
+  },
+  "concept.maxContextTokens": {
+    "en": "Maximum context token count this model supports, including system prompt, history, and current input. INTEGER nullable; NULL means no limit.",
+    "zh-CN": "该模型支持的最大上下文 token 数（含系统提示、历史对话和本轮输入）；INTEGER nullable；NULL 表示不限制。",
+    "zh-TW": "該模型支援的最大上下文 token 數（含系統提示、歷史對話和本輪輸入）；INTEGER nullable；NULL 表示不限製。"
+  },
+  "concept.maxOutputTokens": {
+    "en": "Maximum output tokens generated in a single call by this model. INTEGER nullable; NULL means no limit.",
+    "zh-CN": "该模型单次调用最多生成的输出 token 数；INTEGER nullable；NULL 表示不限制。",
+    "zh-TW": "該模型單次呼叫最多產生的輸出 token 數；INTEGER nullable；NULL 表示不限製。"
+  },
+  "concept.inputPricePer1M": {
+    "en": "Billing unit price per 1M input tokens in selected currency. DECIMAL(19,4); defaults to 0 meaning no charge.",
+    "zh-CN": "每 100 万输入 token 的计费单价，以所选币种计；DECIMAL(19,4)；默认 0 表示不收费。",
+    "zh-TW": "每 100 萬輸入 token 的計費單價，以所選幣種計；DECIMAL(19,4)；預設 0 表示不收費。"
+  },
+  "concept.outputPricePer1M": {
+    "en": "Billing unit price per 1M output tokens in selected currency. DECIMAL(19,4); defaults to 0 meaning no charge.",
+    "zh-CN": "每 100 万输出 token 的计费单价，以所选币种计；DECIMAL(19,4)；默认 0 表示不收费。",
+    "zh-TW": "每 100 萬輸出 token 的計費單價，以所選幣種計；DECIMAL(19,4)；預設 0 表示不收費。"
+  },
+  "concept.effectiveFrom": {
+    "zh-CN": "此价格或策略版本的生效时间。TIMESTAMPTZ，默认 now()；只有当 effective_from ≤ 当前时间且 price_version 最高的那条记录参与计费或策略匹配。llm_quota_policies / llm_price_versions / llm_action_versions 三表均有此列。",
+    "en": "Effective time for this price or policy version. TIMESTAMPTZ, default now(); only the record with the highest price_version where effective_from ≤ current time participates in billing or policy matching. Present in llm_quota_policies / llm_price_versions / llm_action_versions.",
+    "zh-TW": "此價格或策略版本的生效時間。TIMESTAMPTZ，預設 now()；只有當 effective_from ≤ 目前時間且 price_version 最高的那條記錄參與計費或策略匹配。llm_quota_policies / llm_price_versions / llm_action_versions 三表均有此欄位。"
+  },
+  "concept.resetCycle": {
+    "en": "Quota reset cycle. CHECK constraint daily/monthly; defaults to monthly. daily resets at 00:00 UTC each day; monthly resets on 1st of each month 00:00 UTC.",
+    "zh-CN": "配额重置周期。CHECK 约束 daily/monthly；默认 monthly。daily 每天 00:00 UTC 重置；monthly 每月 1 日 UTC 00:00 重置。",
+    "zh-TW": "配額重置週期。CHECK 約束 daily/monthly；預設 monthly。daily 每天 00:00 UTC 重置；monthly 每月 1 日 UTC 00:00 重置。"
+  },
+  "concept.preferredProtocol": {
+    "en": "Protocol face preferred by this provider. Decides request headers, auth method, and error code format. CHECK openai/anthropic/gemini; defaults to openai.",
+    "zh-CN": "该 provider 优先使用的协议面，决定请求头、鉴权方式和错误码格式。CHECK openai/anthropic/gemini；默认 openai。",
+    "zh-TW": "該 provider 優先使用的協定面，決定請求頭、鑑權方式和錯誤碼格式。CHECK openai/anthropic/gemini；預設 openai。"
+  },
+  "concept.capabilities": {
+    "en": "JSONB capabilities object on llm_models describing what the model supports (streaming, vision, tools, etc.). Defaults to empty object.",
+    "zh-CN": "llm_models.capabilities JSONB 描述模型支持的能力（流式、多模态、工具调用等）；默认空对象。",
+    "zh-TW": "llm_models.capabilities JSONB 描述模型支援的能力（流式、多模態、工具呼叫等）；預設空物件。"
+  },
+  "users.username": {
+    "zh-CN": "登录用户名，创建后作为账号唯一标识，需满足组织的命名规则。 users.username TEXT NOT NULL；与 organization_id 组成联合唯一约束，同组织内不可重复",
+    "en": "Login username. After creation it is the account's unique identifier and must follow the organization's naming rules. users.username TEXT NOT NULL; unique together with organization_id — cannot repeat within the same organization",
+    "zh-TW": "登入使用者名稱，建立後作為帳號唯一識別，需符合組織的命名規則。 users.username TEXT NOT NULL；與 organization_id 組成聯合唯一約束，同組織內不可重複"
+  },
+  "users.displayName": {
+    "zh-CN": "展示名称，用于列表、审批与通知中的可读标识。 user_profiles.display_name TEXT，可为空；与 username 无关，可重复修改",
+    "en": "Display name used as the readable identifier in lists, approvals, and notifications. user_profiles.display_name TEXT, nullable; independent from username, freely editable",
+    "zh-TW": "顯示名稱，用於清單、審批與通知中的可讀識別。 user_profiles.display_name TEXT，可為空；與 username 無關，可重複修改"
+  },
+  "users.email": {
+    "zh-CN": "邮箱地址，用于登录、找回密码与通知；需为可正常收件的有效地址。 user_profiles.email TEXT nullable；非空时全局唯一（unique_partial on email IS NOT NULL），仅做格式校验不做可达性验证",
+    "en": "Email address used for sign-in, password recovery, and notifications. It must be a deliverable address. user_profiles.email TEXT nullable; when non-empty it must be globally unique (unique_partial on email IS NOT NULL). Format only is validated — deliverability is not checked",
+    "zh-TW": "電子郵件地址，用於登入、找回密碼與通知；需為可正常收信的有效地址。 user_profiles.email TEXT nullable；非空時全域唯一（unique_partial on email IS NOT NULL），僅做格式校驗不做可達性驗證"
+  },
+  "users.phone": {
+    "zh-CN": "手机号，用于短信验证码、多因素认证与安全通知。 user_profiles.phone TEXT nullable；同一 email/phone 可绑定多个用户账号（手机号不作为唯一键）",
+    "en": "Phone number used for SMS codes, multi-factor authentication, and security notices. user_profiles.phone TEXT nullable; one phone number may be bound to multiple user accounts",
+    "zh-TW": "手機號碼，用於簡訊驗證碼、多因素驗證與安全通知。 user_profiles.phone TEXT nullable；同一 email/phone 可綁定多個使用者帳號（手機號不作為唯一鍵）"
+  },
+  "users.userType": {
+    "zh-CN": "用户类型，决定该账号属于普通用户、服务账号还是外部用户。 users.user_type VARCHAR(255) default ''；可选值 human / service_account / bot；空值按 human 处理",
+    "en": "User type, which determines whether the account is a regular user, a service account, or an external user. users.user_type VARCHAR(255) default ''; allowed values human / service_account / bot; empty treated as human",
+    "zh-TW": "使用者類型，決定該帳號屬於一般使用者、服務帳號或外部使用者。 users.user_type VARCHAR(255) default ''；可選值 human / service_account / bot；空值按 human 處理"
+  },
+  "users.status": {
+    "zh-CN": "账号状态，禁用后无法登录，但保留数据与审计记录。 users.status VARCHAR(64) default 'active'；check 约束 IN ('active','disabled','locked','pending_verification')；disabled/locked/pending_verification 均拒绝登录",
+    "en": "Account status. Disabled accounts cannot sign in, but their data and audit trail are kept. users.status VARCHAR(64) default 'active'; check IN ('active','disabled','locked','pending_verification'); disabled/locked/pending_verification all reject sign-in",
+    "zh-TW": "帳號狀態，停用後無法登入，但保留資料與稽核記錄。 users.status VARCHAR(64) default 'active'；check 約束 IN ('active','disabled','locked','pending_verification')；disabled/locked/pending_verification 均拒絕登入"
+  },
+  "users.isAdmin": {
+    "zh-CN": "是否授予组织管理员权限；管理员可管理本组织的用户与配置。 users.is_admin BOOLEAN default false；为 true 时绕过 role-based permission checks，直接获得组织内全部管理权限",
+    "en": "Grants organization administrator rights. Administrators manage users and settings of this organization. users.is_admin BOOLEAN default false; when true the user bypasses role-based permission checks and gains full management rights",
+    "zh-TW": "是否授予組織管理員權限；管理員可管理本組織的使用者與設定。 users.is_admin BOOLEAN default false；為 true 時繞過 role-based permission checks，直接獲得組織內全部管理權限"
+  },
+  "users.organizationId": {
+    "zh-CN": "所属组织，决定租户边界与该账号可见的数据范围。 users.organization_id UUID NOT NULL；与 organizations.id 外键关联，on_delete RESTRICT（组织下有用户时不可删除）",
+    "en": "Owning organization, which defines the tenant boundary and the data visible to this account. users.organization_id UUID NOT NULL; FK to organizations.id, on_delete RESTRICT (organization cannot be deleted while users exist)",
+    "zh-TW": "所屬組織，決定租戶邊界與該帳號可見的資料範圍。 users.organization_id UUID NOT NULL；與 organizations.id 外鍵關聯，on_delete RESTRICT（組織下有使用者時不可刪除）"
+  },
+  "users.password": {
+    "zh-CN": "初始密码，需满足密码策略；首次登录后建议强制修改。 user_credentials.password_hash VARCHAR(255) Argon2id 哈希；user_credentials.need_update_password BOOLEAN 可强制首次修改；API 永不返回原始密码",
+    "en": "Initial password. It must satisfy the password policy; users should change it after the first sign-in. user_credentials.password_hash VARCHAR(255) Argon2id hash; user_credentials.need_update_password BOOLEAN can force change on first sign-in; API never returns original",
+    "zh-TW": "初始密碼，需符合密碼原則；首次登入後建議強制變更。 user_credentials.password_hash VARCHAR(255) Argon2id 雜湊；user_credentials.need_update_password BOOLEAN 可強制首次修改；API 永不傳回原始密碼"
+  },
+  "users.groupIds": {
+    "zh-CN": "所属用户组，用于批量授权与策略匹配。 user_group_memberships 联合主键（user_id, group_id）；同一用户可属于多个 group，每个关系独立一条记录；删除用户或 group 时 CASCADE",
+    "en": "Member groups, used for bulk authorization and policy matching. user_group_memberships composite PK (user_id, group_id); one user can belong to many groups; each relation is a separate row; CASCADE on user or group delete",
+    "zh-TW": "所屬使用者群組，用於批次授權與策略比對。 user_group_memberships 聯合主鍵（user_id, group_id）；同一使用者可屬於多個 group，每個關係獨立一條記錄；刪除使用者或 group 時 CASCADE"
+  },
+  "users.roleBindingIds": {
+    "zh-CN": "绑定的角色，决定该用户在本组织内拥有的权限集合。 user_role_bindings 联合主键（user_id, role_id）；支持 starts_at/expires_at 时间窗口；删除 role 时 CASCADE；role_ids 可叠加生效",
+    "en": "Bound roles, which define the permission set the user holds inside this organization. user_role_bindings composite PK (user_id, role_id); supports starts_at/expires_at time windows; CASCADE on role delete; multiple roles stack",
+    "zh-TW": "綁定的角色，決定該使用者在本組織內擁有的權限集合。 user_role_bindings 聯合主鍵（user_id, role_id）；支援 starts_at/expires_at 時間視窗；刪除 role 時 CASCADE；role_ids 可疊加生效"
+  },
+  "organizations.name": {
+    "zh-CN": "组织唯一标识，用于登录地址、API 路径与租户隔离，创建后不要随意修改。 注意：此处 name 实际存储为 organizations.slug TEXT NOT NULL（应用层命名），unique_partial on slug + deleted_at IS NULL；全局唯一；修改会影响 tenant 路由和 RLS 判定",
+    "en": "Unique organization identifier used in sign-in URLs, API paths, and tenant isolation. Avoid changing it after creation. Implementation detail: this field maps to organizations.slug TEXT NOT NULL (application-level naming), unique_partial on slug + deleted_at IS NULL; globally unique; changing it breaks tenant routing and RLS predicates",
+    "zh-TW": "組織唯一識別，用於登入位址、API 路徑與租戶隔離，建立後請勿任意修改。 注意：此處 name 實際儲存為 organizations.slug TEXT NOT NULL（應用層命名），unique_partial on slug + deleted_at IS NULL；全域唯一；修改會影響 tenant 路由和 RLS 判定"
+  },
+  "organizations.displayName": {
+    "zh-CN": "组织展示名称，显示在控制台头部与通知中。 organizations.display_name TEXT NOT NULL；可任意修改，不影响路由或 RLS 判定",
+    "en": "Organization display name shown in the console header and notifications. organizations.display_name TEXT NOT NULL; freely editable, does not affect routing or RLS",
+    "zh-TW": "組織顯示名稱，顯示於控制台標題與通知中。 organizations.display_name TEXT NOT NULL；可任意修改，不影響路由或 RLS 判定"
+  },
+  "organizations.slug": {
+    "zh-CN": "组织短标识，用于域名与登录入口，需全局唯一。 organizations.slug TEXT NOT NULL；unique_partial on slug + deleted_at IS NULL；login URL 按 {slug}.guliangiam.example.com 推导，修改 slug 后原登录地址失效",
+    "en": "Short organization identifier used for domains and sign-in entry points. Must be globally unique. organizations.slug TEXT NOT NULL; unique_partial on slug + deleted_at IS NULL; login URLs derived as {slug}.guliangiam.example.com — changing slug invalidates the old sign-in URL",
+    "zh-TW": "組織短識別，用於網域與登入入口，需全域唯一。 organizations.slug TEXT NOT NULL；unique_partial on slug + deleted_at IS NULL；login URL 按 {slug}.guliangiam.example.com 推導，修改 slug 後原登入位址失效"
+  },
+  "organizations.logoUrl": {
+    "zh-CN": "组织 Logo 图片地址，显示在登录页与控制台侧边栏。 organizations.logo_url TEXT nullable；建议 HTTP/HTTPS 可公开访问的图片 URL；logo_dark_url 用于暗色主题",
+    "en": "Organization logo URL shown on the sign-in page and in the console sidebar. organizations.logo_url TEXT nullable; HTTP/HTTPS public image URL recommended; logo_dark_url covers dark-theme variant",
+    "zh-TW": "組織 Logo 圖片位址，顯示於登入頁與控制台側邊欄。 organizations.logo_url TEXT nullable；建議 HTTP/HTTPS 可公開存取的圖片 URL；logo_dark_url 用於暗色主題"
+  },
+  "applications.name": {
+    "zh-CN": "应用名称，用于用户在授权页识别该应用。 applications.display_name TEXT NOT NULL；仅用于展示，不参与路由或鉴权计算",
+    "en": "Application name used by users to recognize the application on the consent screen. applications.display_name TEXT NOT NULL; display-only, not used in routing or auth computation",
+    "zh-TW": "應用程式名稱，用於使用者在授權頁識別該應用程式。 applications.display_name TEXT NOT NULL；僅用於展示，不參與路由或鑑權計算"
+  },
+  "applications.slug": {
+    "zh-CN": "应用唯一标识，参与回调地址与 OIDC 发现文档。 applications.slug TEXT NOT NULL；uq_applications_org_slug (organization_id, slug)；同一组织内不可重复；OIDC discovery 文档按 /oauth2/{slug}/.well-known/openid-configuration 推导",
+    "en": "Unique application identifier used in callback URLs and the OIDC discovery document. applications.slug TEXT NOT NULL; uq_applications_org_slug (organization_id, slug); cannot repeat within one org; OIDC discovery doc follows /oauth2/{slug}/.well-known/openid-configuration",
+    "zh-TW": "應用程式唯一識別，參與回呼位址與 OIDC 探索文件。 applications.slug TEXT NOT NULL；uq_applications_org_slug (organization_id, slug)；同一組織內不可重複；OIDC discovery doc 按 /oauth2/{slug}/.well-known/openid-configuration 推導"
+  },
+  "applications.redirectUris": {
+    "zh-CN": "允许的回调地址白名单；未登记的地址会被拒绝，避免令牌被劫持。 app_oauth_config.redirect_uris VARCHAR(255)[] default '{}'；每条 URL 必须与客户端实际发送的回调地址逐字匹配（含路径和查询参数）；支持通配符路径段 *，但不支持协议或主机通配符",
+    "en": "Allowed callback URL whitelist. Unregistered URLs are rejected to prevent token interception. app_oauth_config.redirect_uris VARCHAR(255)[] default '{}'; each URL must match verbatim (including path and query params); supports wildcard path segments *, but NOT protocol or host wildcards",
+    "zh-TW": "允許的回呼位址白名單；未登記的位址會被拒絕，避免權杖被劫持。 app_oauth_config.redirect_uris VARCHAR(255)[] default '{}'；每條 URL 必須與用戶端實際傳送的回呼位址逐字匹配（含路徑和查詢參數）；支援通配符路徑段 *，但不支援協定或主機通配符"
+  },
+  "applications.clientId": {
+    "zh-CN": "OAuth/OIDC 客户端标识，属于公开信息，可出现在前端。 applications.client_id TEXT nullable；非空时全局唯一（uq_applications_client_id_non_empty）；由系统在创建应用时自动生成 UUID，也可手工指定；client_id 出现在 authorization_code 和 device_code 等协议的 token_endpoint 请求中作为公开标识",
+    "en": "OAuth/OIDC client identifier. It is public information and may appear in the frontend. applications.client_id TEXT nullable; globally unique when non-empty (uq_applications_client_id_non_empty); system-generated UUID on app creation but can be overridden manually; client_id appears as the public identifier in authorization_code / device_code token_endpoint requests",
+    "zh-TW": "OAuth/OIDC 用戶端識別，屬於公開資訊，可出現在前端。 applications.client_id TEXT nullable；非空時全域唯一（uq_applications_client_id_non_empty）；由系統在建立應用時自動生成 UUID，也可手工指定；client_id 出現在 authorization_code 和 device_code 等協定的 token_endpoint 請求中作為公開識別"
+  },
+  "applications.clientSecret": {
+    "zh-CN": "客户端密钥，仅保存在服务端，禁止写入前端或日志。 app_oauth_config.client_secret_hash TEXT nullable；app_client_secrets 表分密封装（Argon2id + secret_prefix gl_cs_）；支持多密钥轮换（status active/grace/retired，grace_until 过渡窗口）；API 永不返回原始值，仅返回 secret_prefix + SHA-256 指纹",
+    "en": "Client secret. Keep it on the server only; never expose it in the frontend or logs. app_oauth_config.client_secret_hash TEXT nullable; app_client_secrets table seals each (Argon2id + secret_prefix gl_cs_); multi-secret rotation supported (status active/grace/retired with grace_until transition); API never returns the original, only prefix + SHA-256 fingerprint",
+    "zh-TW": "用戶端密鑰，僅保存在伺服端，禁止寫入前端或日誌。 app_oauth_config.client_secret_hash TEXT nullable；app_client_secrets 表分密封裝（Argon2id + secret_prefix gl_cs_）；支援多密鑰輪換（status active/grace/retired，grace_until 過渡視窗）；API 永不傳回原始值，僅傳回 secret_prefix + SHA-256 指紋"
+  },
+  "applications.grantTypes": {
+    "zh-CN": "允许的授权模式，决定该应用可以发起的登录流程。 app_oauth_config.grant_types VARCHAR(255)[] default '{}'；支持 authorization_code、client_credentials、refresh_token、device_code、urn:ietf:params:oauth:grant-type:jwt-bearer 等；至少开启一种才能实际发起授权",
+    "en": "Allowed grant types, which determine the sign-in flows this application may initiate. app_oauth_config.grant_types VARCHAR(255)[] default '{}'; supports authorization_code / client_credentials / refresh_token / device_code / urn:ietf:params:oauth:grant-type:jwt-bearer; at least one must be enabled before the app can actually authorize",
+    "zh-TW": "允許的授權模式，決定該應用程式可發起的登入流程。 app_oauth_config.grant_types VARCHAR(255)[] default '{}'；支援 authorization_code / client_credentials / refresh_token / device_code / urn:ietf:params:oauth:grant-type:jwt-bearer 等；至少開啟一種才能實際發起授權"
+  },
+  "resources.name": {
+    "zh-CN": "资源唯一标识，参与权限策略中的资源匹配。 resources.name TEXT NOT NULL；uq_resources_org_app_name (organization_id, application_id, name)；联合唯一——同一应用下资源名不可重复",
+    "en": "Unique resource identifier used for resource matching in permission policies. resources.name TEXT NOT NULL; uq_resources_org_app_name (organization_id, application_id, name); composite uniqueness — name cannot repeat within the same application",
+    "zh-TW": "資源唯一識別，參與權限策略中的資源比對。 resources.name TEXT NOT NULL；uq_resources_org_app_name (organization_id, application_id, name)；聯合唯一——同一應用下資源名不可重複"
+  },
+  "resources.displayName": {
+    "zh-CN": "资源展示名称，用于权限配置界面。 resources.display_name VARCHAR(255) NOT NULL default ''；仅用于展示和审批记录，不参与策略匹配计算",
+    "en": "Resource display name used on permission configuration screens. resources.display_name VARCHAR(255) NOT NULL default ''; display-only, not used in policy matching",
+    "zh-TW": "資源顯示名稱，用於權限設定介面。 resources.display_name VARCHAR(255) NOT NULL default ''；僅用於展示和審批記錄，不參與策略匹配計算"
+  },
+  "resources.type": {
+    "zh-CN": "资源类型，决定可用的操作集合与策略匹配方式。 resources.type VARCHAR(64) NOT NULL default 'file'；类型值由 Casbin 模型定义（通常为 file / data / api 等），类型决定可执行的 actions 枚举",
+    "en": "Resource type, which determines the available actions and how policies match it. resources.type VARCHAR(64) NOT NULL default 'file'; values defined by the Casbin model (typically file / data / api); type defines the permitted actions enum",
+    "zh-TW": "資源類型，決定可用的操作集合與策略比對方式。 resources.type VARCHAR(64) NOT NULL default 'file'；類型值由 Casbin 模型定義（通常為 file / data / api 等），類型決定可執行的 actions 枚舉"
+  },
+  "resources.applicationId": {
+    "zh-CN": "所属应用；资源权限随应用一起授权与回收。 resources.application_id UUID nullable；FK 到 applications.id，on_delete SET_NULL（删除应用时资源保留但脱离应用归属）；资源权限按 application_id 粒度授权和回收",
+    "en": "Owning application. Resource permissions are granted and revoked together with the application. resources.application_id UUID nullable; FK to applications.id, on_delete SET_NULL (resources survive app deletion without owner); permissions are granted and revoked at the application_id granularity",
+    "zh-TW": "所屬應用程式；資源權限隨應用程式一起授權與回收。 resources.application_id UUID nullable；FK 到 applications.id，on_delete SET_NULL（刪除應用時資源保留但脫離應用歸屬）；資源權限按 application_id 粒度授權和回收"
+  },
+  "roles.name": {
+    "zh-CN": "角色名称，用于权限分配与审计记录。 roles.name TEXT NOT NULL；uq_roles_org_name (organization_id, name)；同一组织下角色名不可重复",
+    "en": "Role name used for permission assignment and audit records. roles.name TEXT NOT NULL; uq_roles_org_name (organization_id, name); cannot repeat within one org",
+    "zh-TW": "角色名稱，用於權限分配與稽核記錄。 roles.name TEXT NOT NULL；uq_roles_org_name (organization_id, name)；同一組織下角色名不可重複"
+  },
+  "roles.description": {
+    "zh-CN": "角色说明，描述该角色适用的岗位与权限范围。 roles.description VARCHAR(255) NOT NULL default ''；纯描述字段，不参与权限计算；roles.is_enabled BOOLEAN default true 可整体停用角色",
+    "en": "Role description covering the job functions and permission scope this role is meant for. roles.description VARCHAR(255) NOT NULL default ''; purely descriptive, not used in permission calculation; roles.is_enabled BOOLEAN default true can disable the role globally",
+    "zh-TW": "角色說明，描述該角色適用的職位與權限範圍。 roles.description VARCHAR(255) NOT NULL default ''；純描述欄位，不參與權限計算；roles.is_enabled BOOLEAN default true 可整體停用角色"
+  },
+  "groups.name": {
+    "zh-CN": "用户组名称，用于批量授权与组织架构同步。 groups.name TEXT NOT NULL；uq_groups_organization_id_name (organization_id, name)；支持层级结构（groups.parent_id FK 到自身，on_delete RESTRICT）",
+    "en": "Group name used for bulk authorization and directory synchronization. groups.name TEXT NOT NULL; uq_groups_organization_id_name (organization_id, name); hierarchical (groups.parent_id self-FK, on_delete RESTRICT)",
+    "zh-TW": "使用者群組名稱，用於批次授權與組織架構同步。 groups.name TEXT NOT NULL；uq_groups_organization_id_name (organization_id, name)；支援層級結構（groups.parent_id FK 到自身，on_delete RESTRICT）"
+  },
+  "groups.displayName": {
+    "zh-CN": "用户组展示名称。 groups.display_name TEXT NOT NULL default ''；层级结构中 parent 优先展示，未设时回退到 name",
+    "en": "Group display name. groups.display_name TEXT NOT NULL default ''; in hierarchy, parent is displayed first, falling back to name",
+    "zh-TW": "使用者群組顯示名稱。 groups.display_name TEXT NOT NULL default ''；層級結構中 parent 優先顯示，未設時回退到 name"
+  },
+  "account.emailHelp": {
+    "zh-CN": "当前账号邮箱，用于登录、找回密码与安全通知。user_profiles.email TEXT nullable，unique_partial 约束（deleted_at IS NULL AND email IS NOT NULL）保证非空时全局唯一；修改前必须通过原邮箱或手机验证；修改后所有通知和找回密码入口自动更新到新地址。",
+    "en": "Current account email used for sign-in, password recovery, and security notices. user_profiles.email TEXT nullable, unique_partial (deleted_at IS NULL AND email IS NOT NULL) guarantees global uniqueness when non-empty; changes require verification via the old email or phone; recovery entry points update automatically after change.",
+    "zh-TW": "目前帳號電子郵件，用於登入、找回密碼與安全通知。user_profiles.email TEXT nullable，unique_partial 約束（deleted_at IS NULL AND email IS NOT NULL）保證非空時全域唯一；修改前必須通過原郵箱或手機驗證；修改後所有通知和找回密碼入口自動更新到新位址。"
+  },
+  "account.phoneHelp": {
+    "zh-CN": "当前账号手机号，用于多因素认证与安全通知。user_profiles.phone TEXT nullable，非唯一（同一手机号可绑定多个账号）；修改前需要短信验证码验证；用于 SMS MFA 和安全事件通知触达。",
+    "en": "Current account phone used for MFA and security notices. user_profiles.phone TEXT nullable, non-unique (one phone may bind to multiple accounts); changes require SMS code verification; used for SMS MFA and security-event notifications.",
+    "zh-TW": "目前帳號手機號碼，用於多因素驗證與安全通知。user_profiles.phone TEXT nullable，非唯一（同一手機號可綁定多個帳號）；修改前需要簡訊驗證碼驗證；用於 SMS MFA 和安全事件通知觸達。"
+  },
+  "settings.siteName": {
+    "zh-CN": "控制台站点名称，显示在浏览器标题与登录页。 application.title VARCHAR(255) NOT NULL default ''；按当前登录应用读取；修改后即时生效于登录页标题和浏览器 tab 名称",
+    "en": "Console site name shown in the browser title and on the sign-in page. application.title VARCHAR(255) NOT NULL default ''; read from the current signed-in app; changes take effect immediately on sign-in-page title and browser tab",
+    "zh-TW": "控制台站點名稱，顯示於瀏覽器標題與登入頁。 application.title VARCHAR(255) NOT NULL default ''；按目前登入應用讀取；修改後即時生效於登入頁標題和瀏覽器 tab 名稱"
+  },
+  "settings.logoUrl": {
+    "zh-CN": "站点 Logo 地址，显示在登录页与控制台。 application.logo VARCHAR(255) NOT NULL default ''；按当前应用读取；organization.logo_url TEXT 是组织级覆盖，存在时优先于应用级",
+    "en": "Site logo URL shown on the sign-in page and in the console. application.logo VARCHAR(255) NOT NULL default ''; read from the current app; organization.logo_url TEXT is the org-level override, preferred when present",
+    "zh-TW": "站點 Logo 位址，顯示於登入頁與控制台。 application.logo VARCHAR(255) NOT NULL default ''；按目前應用讀取；organization.logo_url TEXT 是組織級覆蓋，存在時優先於應用級"
+  },
+  "systemInfo.autoRefreshHelp": {
+    "zh-CN": "开启后每 30 秒自动轮询 GET /api/v1/system/info（system_info endpoint 返回 JSONB 指标）；关闭后仅首次进入页面时加载一次，后续需手动刷新；该开关保存在前端 localStorage，不影响服务端行为。",
+    "en": "When enabled, polls GET /api/v1/system/info every 30 seconds (system_info endpoint returns JSONB metrics); when disabled, loads once on first page enter and requires manual refresh afterwards; this switch is persisted in browser localStorage and does not affect backend behavior.",
+    "zh-TW": "開啟後每 30 秒自動輪詢 GET /api/v1/system/info（system_info endpoint 傳回 JSONB 指標）；關閉後僅首次進入頁面時載入一次，後續需手動重新整理；該開關保存在前端 localStorage，不影響伺服端行為。"
+  },
+  "tabs.rebac.namespaces": {
+    "zh-CN": "ReBAC 命名空间定义对象类型，以及授权检查可以遍历的关系。relation_namespaces UUID PK；name VARCHAR(64) NOT NULL 命名空间唯一标识；relation_defs JSONB 数组（每个元素含 relation + from_type + to_type）；授权检查时 subject→object 按 relation_defs 遍历；删除 namespace 时 CASCADE 清理所有 relation_tuples。",
+    "en": "ReBAC namespaces define object types and the relations authorization checks may traverse. relation_namespaces UUID PK; name VARCHAR(64) NOT NULL unique namespace identifier; relation_defs JSONB array (each element has relation + from_type + to_type); subject→object traversal follows relation_defs during auth checks; CASCADE cleanup of all relation_tuples when namespace is deleted.",
+    "zh-TW": "ReBAC 名稱空間定義物件型別，以及授權檢查可以遍歷的關係。relation_namespaces UUID PK；name VARCHAR(64) NOT NULL 命名空間唯一標識；relation_defs JSONB 陣列（每個元素含 relation + from_type + to_type）；授權檢查時 subject→object 按 relation_defs 遍歷；刪除 namespace 時 CASCADE 清理所有 relation_tuples。"
+  },
+  "tabs.rebac.tuples": {
+    "zh-CN": "关系元组保存「主体-关系-对象」事实，是每次 ReBAC 校验的判断依据。relation_tuples UUID PK；联合唯一约束 uq_relation_tuples (organization_id, namespace_id, subject, relation, object)；zookie VARCHAR(64) 用于遍历游标（zookie ASC 保证遍历顺序）；ReBAC 引擎在 subject→object 遍历时匹配 relation_defs 的同时，查询 relation_tuples 中的元组作为事实依据；每次写入都会被 outbox 事件（outbox.type = rebac.tuple.added/removed）捕获并实时推送。",
+    "en": "Relation tuples store the subject-relation-object facts every ReBAC check evaluates against. relation_tuples UUID PK; composite unique uq_relation_tuples (organization_id, namespace_id, subject, relation, object); zookie VARCHAR(64) serves as traversal cursor (zookie ASC guarantees traversal order); ReBAC engine matches relation_defs and queries relation_tuples for facts during subject→object traversal; every write is captured via outbox events (outbox.type = rebac.tuple.added/removed) and pushed in real time.",
+    "zh-TW": "關係元組儲存「主體-關係-物件」事實，是每次 ReBAC 校驗的判斷依據。relation_tuples UUID PK；聯合唯一約束 uq_relation_tuples (organization_id, namespace_id, subject, relation, object)；zookie VARCHAR(64) 用於遍歷游標（zookie ASC 保證遍歷順序）；ReBAC 引擎在 subject→object 遍歷時匹配 relation_defs 的同時，查詢 relation_tuples 中的元組作為事實依據；每次寫入都會被 outbox 事件（outbox.type = rebac.tuple.added/removed）捕獲並即時推送。"
+  },
+  "tabs.workload.pools": {
+    "zh-CN": "身份池把工作负载获取凭证所需的联合信任与服务账号组织在一起。tenant_instances 表承载身份池；isolation_tier VARCHAR(32) CHECK IN ('row','schema','database') 决定隔离级别（workload 池通常用 row 级 + RLS）；每个池包含多个 federation_trust（OIDC issuer + subject_pattern）和多个 service_account（IAM 风格的凭证签发主体）；tenant_identities 表维护 provisioning 状态（status VARCHAR(32) CHECK IN ('pending','provisioning','active','failed')）。",
+    "en": "Identity pools group federation trusts and service accounts workloads use to obtain credentials. tenant_instances carries the pool; isolation_tier VARCHAR(32) CHECK IN ('row','schema','database') determines isolation level (workload pools typically use row-level + RLS); each pool contains multiple federation_trusts (OIDC issuer + subject_pattern) and multiple service_accounts; tenant_identities tracks provisioning status (status VARCHAR(32) CHECK IN ('pending','provisioning','active','failed')).",
+    "zh-TW": "身份池把工作負載獲取憑證所需的聯合信任與服務賬號組織在一起。tenant_instances 表承載身份池；isolation_tier VARCHAR(32) CHECK IN ('row','schema','database') 決定隔離級別（workload 池通常用 row 級 + RLS）；每個池包含多個 federation_trust（OIDC issuer + subject_pattern）和多個 service_account（IAM 風格的憑證簽發主體）；tenant_identities 表維護 provisioning 狀態（status VARCHAR(32) CHECK IN ('pending','provisioning','active','failed')）。"
+  },
+  "tabs.workload.trusts": {
+    "zh-CN": "联合信任列出该身份池接受的外部 OIDC 签发方与主体匹配模式。federation_trusts UUID PK；issuer VARCHAR(500) NOT NULL（OIDC discovery URL 前缀）；subject_pattern VARCHAR(255) NOT NULL（正则表达式，如 '^system:serviceaccount:.*' 或 '*' 通配所有）；audience JSONB（JWT aud claim 白名单）；expires_at TIMESTAMPTZ（信任证书有效期，到期前 30 天自动告警）；每次 JWT 验证必须同时满足 issuer 精确匹配 + subject_pattern 正则命中 + audience 包含。",
+    "en": "Federation trusts list external OIDC issuers and subject patterns this pool accepts. federation_trusts UUID PK; issuer VARCHAR(500) NOT NULL (OIDC discovery URL prefix); subject_pattern VARCHAR(255) NOT NULL (regex, e.g. '^system:serviceaccount:.*' or '*'); audience JSONB (JWT aud allowlist); expires_at TIMESTAMPTZ (trust cert validity, auto-alert 30 days before expiry); JWT verification requires issuer exact match + subject_pattern regex hit + audience contains — all three simultaneously.",
+    "zh-TW": "聯合信任列出該身份池接受的外部 OIDC 簽發方與主體匹配模式。federation_trusts UUID PK；issuer VARCHAR(500) NOT NULL（OIDC discovery URL 前綴）；subject_pattern VARCHAR(255) NOT NULL（正則表達式，如 '^system:serviceaccount:.*' 或 '*' 通配所有）；audience JSONB（JWT aud claim 白名單）；expires_at TIMESTAMPTZ（信任證書有效期，到期前 30 天自動告警）；每次 JWT 驗證必須同時滿足 issuer 精確匹配 + subject_pattern 正則命中 + audience 包含。"
+  },
+  "tabs.workload.serviceAccounts": {
+    "zh-CN": "服务账号为该身份池中的工作负载签发带权限范围、短时效的凭证。tenant_service_accounts UUID PK；credential_type VARCHAR(32) CHECK IN ('long_lived_secret','assume_role','federated_token')；scope JSONB（授予的权限范围）；credential_ttl TIMESTAMPTZ（凭证有效期，最长 24 小时）；签发的凭证会触发 outbox 事件（type = workload.credential_issued），被 metering 消费后进入 llm_usage_logs 计费链（DECIMAL(19,4) cost_amount 字段）。",
+    "en": "Service accounts issue scoped, short-lived credentials for workloads in this pool. tenant_service_accounts UUID PK; credential_type VARCHAR(32) CHECK IN ('long_lived_secret','assume_role','federated_token'); scope JSONB (granted permission scope); credential_ttl TIMESTAMPTZ (credential validity, max 24h); credential issuance triggers outbox event (type = workload.credential_issued), consumed by metering and enters the llm_usage_logs billing chain (DECIMAL(19,4) cost_amount column).",
+    "zh-TW": "服務賬號為該身份池中的工作負載簽發帶權限範圍、短時效的憑證。tenant_service_accounts UUID PK；credential_type VARCHAR(32) CHECK IN ('long_lived_secret','assume_role','federated_token')；scope JSONB（授予的權限範圍）；credential_ttl TIMESTAMPTZ（憑證有效期，最長 24 小時）；簽發的憑證會觸發 outbox 事件（type = workload.credential_issued），被 metering 消費後進入 llm_usage_logs 計費鏈（DECIMAL(19,4) cost_amount 欄位）。"
+  },
+  "tabs.metering.events": {
+    "zh-CN": "按请求记录的原始用量事件，用于逐条核对计费调用。llm_metering_events 表 JSONB payload 保存完整事件副本；从 outbox 事件同步而来（outbox.type = llm.usage.logged）；不可变追加，支持 per-outbox_id 去重（唯一约束保证幂等）；每条事件包含 provider_type、model_name、input_tokens、output_tokens、latency_ms、cost_amount 等。",
+    "en": "Raw usage events recorded per request, for逐条核对计费调用. llm_metering_events JSONB payload stores full event copy; synced from outbox events (outbox.type = llm.usage.logged); immutable append-only, dedup key is outbox_id (unique constraint); each event includes provider_type, model_name, input_tokens, output_tokens, latency_ms, cost_amount, etc.",
+    "zh-TW": "按請求記錄的原始用量事件，用於逐條核對計費呼叫。llm_metering_events JSONB payload 儲存完整事件副本；從 outbox 事件同步而來（outbox.type = llm.usage.logged）；不可變追加，支持 per-outbox_id 去重（唯一約束保證冪等）；每條事件包含 provider_type、model_name、input_tokens、output_tokens、latency_ms、cost_amount 等。"
+  },
+  "tabs.metering.aggregates": {
+    "zh-CN": "按账号与周期聚合的用量，用于账单结算与配额复核。llm_usage_logs UUID primary key，按月分区（PARTITION BY RANGE created_at），按 (api_key_id, alias_id, provider_id, created_at) 聚合；计算窗口为 UTC 自然日/自然月；聚合结果写入 llm_metering_aggregates DECIMAL(19,4) 列。",
+    "en": "Usage aggregated per account and period, for billing settlement and quota review. llm_usage_logs UUID PK, partitioned by month (PARTITION BY RANGE created_at), aggregated by (api_key_id, alias_id, provider_id, created_at); computation window is UTC natural day/natural month; aggregates are written to llm_metering_aggregates DECIMAL(19,4).",
+    "zh-TW": "按帳號與週期聚合的用量，用於賬單結算與配額複核。llm_usage_logs UUID primary key，按月分區（PARTITION BY RANGE created_at），按 (api_key_id, alias_id, provider_id, created_at) 聚合；計算視窗為 UTC 自然日/自然月；聚合結果寫入 llm_metering_aggregates DECIMAL(19,4) 列。"
+  },
+  "tabs.risk.signals": {
+    "zh-CN": "从登录上下文、设备与行为中采集的风险信号，并逐事件给出评分。risk_signals 表：device_fingerprint VARCHAR(255)、ip_geo JSONB、behavioral_patterns JSONB；每条信号有独立 score SMALLINT（0–100）；最终风险等级 risk_leverage = SUM(signal.score * weight) 加权求和后映射为 low/medium/high。",
+    "en": "Risk signals collected from sign-in context, device, and behavior, scored per event. risk_signals table: device_fingerprint VARCHAR(255), ip_geo JSONB, behavioral_patterns JSONB; each signal has an independent score SMALLINT (0–100); final risk level risk_leverage = SUM(signal.score * weight) mapped to low/medium/high.",
+    "zh-TW": "從登入上下文、裝置與行為中採集的風險訊號，並逐事件給出評分。risk_signals 表：device_fingerprint VARCHAR(255)、ip_geo JSONB、behavioral_patterns JSONB；每條訊號有獨立 score SMALLINT（0–100）；最終風險等級 risk_leverage = SUM(signal.score * weight) 加權求和後映射為 low/medium/high。"
+  },
+  "tabs.risk.decisions": {
+    "zh-CN": "风险规则产出的放行、二次验证或拒绝决策，并附带判定原因。risk_decisions 表：result CHECK IN ('allow','challenge','deny')、reason TEXT、rule_ids JSONB；allow 继续登录、challenge 强制 MFA 重新验证、deny 阻断并写入 audit.risk_blocked；所有决策记录不可变。",
+    "en": "Allow / challenge / deny decisions produced by risk rules, with reason attached. risk_decisions table: result CHECK IN ('allow','challenge','deny'), reason TEXT, rule_ids JSONB; allow = continue sign-in, challenge = force MFA re-verification, deny = block and write audit.risk_blocked; all decisions are immutable.",
+    "zh-TW": "風險規則產出的放行、二次驗證或拒絕決策，並附帶判定原因。risk_decisions 表：result CHECK IN ('allow','challenge','deny')、reason TEXT、rule_ids JSONB；allow 繼續登入、challenge 強制 MFA 重新驗證、deny 阻斷並寫入 audit.risk_blocked；所有決策記錄不可變。"
+  },
+  "tabs.risk.sessionGovernance": {
+    "zh-CN": "持续评估会话风险：风险变化时可要求二次认证或直接吊销会话。session_governance 表：评估间隔 180 秒（后端心跳定时触发）；risk_level VARCHAR(32) CHECK IN ('low','medium','high','critical')；risk 升级触发 action VARCHAR(32) CHECK IN ('re_mfa','revoke')；所有变更写入 audit.session_governance 表供审计回放。",
+    "en": "Continuous session evaluation: risk changes can trigger re-MFA or direct revocation. session_governance table: evaluation interval 180s (backend heartbeat scheduled trigger); risk_level VARCHAR(32) CHECK IN ('low','medium','high','critical'); risk escalation triggers action VARCHAR(32) CHECK IN ('re_mfa','revoke'); all changes are written to audit.session_governance for audit replay.",
+    "zh-TW": "持續評估會話風險：風險變化時可要求二次認證或直接吊銷會話。session_governance 表：評估間隔 180 秒（後端心跳定時觸發）；risk_level VARCHAR(32) CHECK IN ('low','medium','high','critical')；風險升級觸發 action VARCHAR(32) CHECK IN ('re_mfa','revoke')；所有變更寫入 audit.session_governance 表供稽核回放。"
+  },
+  "tabs.actions.list": {
+    "zh-CN": "身份操作是响应身份生命周期事件的自动化工作流。identity_actions 表：由 outbox 事件触发（outbox.type IN ('user.created','user.role_bound','user.group_changed','user.activated','user.disabled')）；每条操作定义可配置多 step（steps JSONB 数组）和 retry_policy（retry_count SMALLINT default 0 + retry_backoff VARCHAR(32) default 'exponential'）；action 执行结果写入 action_execution_log（payload JSONB）。",
+    "en": "Identity actions are automated workflows that react to identity lifecycle events. identity_actions table: triggered by outbox events (outbox.type IN ('user.created','user.role_bound','user.group_changed','user.activated','user.disabled')); each action defines multi-step (steps JSONB array) and retry_policy (retry_count SMALLINT default 0 + retry_backoff VARCHAR(32) default 'exponential'); action execution results are written to action_execution_log (payload JSONB).",
+    "zh-TW": "身份操作是響應身份生命週期事件的自動化工作流。identity_actions 表：由 outbox 事件觸發（outbox.type IN ('user.created','user.role_bound','user.group_changed','user.activated','user.disabled')）；每條操作定義可配置多 step（steps JSONB 陣列）和 retry_policy（retry_count SMALLINT default 0 + retry_backoff VARCHAR(32) default 'exponential'）；action 執行結果寫入 action_execution_log（payload JSONB）。"
+  },
+  "tabs.actions.versions": {
+    "zh-CN": "操作定义的版本历史，便于审阅变更并在需要时回滚。identity_action_versions 表：version_no INTEGER 自增，每发布一次 +1；当前生效版本在 identity_actions.active_version_no；回滚操作会重新执行所有受影响的 outbox 事件；每个版本有 checksum VARCHAR(64) SHA-256，用于防篡改验证。",
+    "en": "Version history of action definitions, for reviewing changes and rollback. identity_action_versions table: version_no INTEGER auto-incremented on each publish; active version tracked by identity_actions.active_version_no; rollback re-executes all affected outbox events; each version carries checksum VARCHAR(64) SHA-256 for tamper-evidence.",
+    "zh-TW": "操作定義的版本歷史，便於審閱變更並在需要時回滾。identity_action_versions 表：version_no INTEGER 自增，每發佈一次 +1；當前生效版本在 identity_actions.active_version_no；回滾操作會重新執行所有受影響的 outbox 事件；每個版本有 checksum VARCHAR(64) SHA-256，用於防篡改驗證。"
+  },
+  "tabs.actions.executionLogs": {
+    "zh-CN": "每次操作的执行记录，包含执行对象、结果与错误详情。action_execution_log UUID PK（action_id + version_no + run_id 联合）；status VARCHAR(32) CHECK IN ('pending','running','succeeded','failed','cancelled')；payload JSONB 保存每步的 input/output/error；失败条目可重试（retry_count SMALLINT，retry 不改变 version_no）；TTL 30 天到期归档。",
+    "en": "Per-run execution records for actions, including target, outcome, and error detail. action_execution_log UUID PK (composite of action_id + version_no + run_id); status VARCHAR(32) CHECK IN ('pending','running','succeeded','failed','cancelled'); payload JSONB stores per-step input/output/error; failed entries can be retried (retry_count SMALLINT, retries do not change version_no); TTL 30 days for archive.",
+    "zh-TW": "每次操作的執行記錄，包含執行物件、結果與錯誤詳情。action_execution_log UUID PK（action_id + version_no + run_id 聯合）；status VARCHAR(32) CHECK IN ('pending','running','succeeded','failed','cancelled')；payload JSONB 保存每步的 input/output/error；失敗條目可重試（retry_count SMALLINT，retry 不改變 version_no）；TTL 30 天到期歸檔。"
+  },
+  "tabs.iga.requests": {
+    "zh-CN": "用户提交的访问申请，包含审批人、申请理由与授权状态。iga_access_requests UUID PK；status VARCHAR(32) CHECK IN ('pending','approved','rejected','cancelled','expired')；审批链三级（submitter → approver1 → approver2），approver1 通常是直属 manager，approver2 是部门 head；每个节点 SLA 7 天（CHECK sla_hours SMALLINT default 168）；到期自动升级到上级审批人，仍未处理则自动拒绝并通知申请人。",
+    "en": "User-submitted access requests, with approvers, justification, and grant state. iga_access_requests UUID PK; status VARCHAR(32) CHECK IN ('pending','approved','rejected','cancelled','expired'); three-level approval chain (submitter → approver1 → approver2), approver1 is direct manager, approver2 is department head; 7-day SLA per node (CHECK sla_hours SMALLINT default 168); auto-escalates to upper approver, then auto-rejects if still not handled, notifying the requester.",
+    "zh-TW": "使用者提交的訪問申請，包含審批人、申請理由與授權狀態。iga_access_requests UUID PK；status VARCHAR(32) CHECK IN ('pending','approved','rejected','cancelled','expired')；審批鏈三級（submitter → approver1 → approver2），approver1 通常是直屬 manager，approver2 是部門 head；每個節點 SLA 7 天（CHECK sla_hours SMALLINT default 168）；到期自動升級到上級審批人，仍未處理則自動拒絕並通知申請人。"
+  },
+  "tabs.iga.campaigns": {
+    "zh-CN": "访问复核活动，由复核人确认或回收已有权限。iga_access_review_campaigns UUID PK；deadline TIMESTAMPTZ NOT NULL 固定截止日期；reviewer_id UUID 指向复核人；recommendation VARCHAR(32) CHECK IN ('certify','revoke','delegate')；到期未复核的权限自动进入 PENDING_REVOKE 状态，suspend 后 14 天仍无人操作则自动 revoke（硬删除 role_binding / group_membership 关系），所有结果写入 audit.log（TEXT 类型审计日志，永久保留不可变）。",
+    "en": "Access review campaigns where reviewers certify or revoke existing access. iga_access_review_campaigns UUID PK; deadline TIMESTAMPTZ NOT NULL fixed cutoff; reviewer_id FK to reviewer user; recommendation VARCHAR(32) CHECK IN ('certify','revoke','delegate'); unreviewed accesses auto-enter PENDING_REVOKE at deadline, auto-revoke (hard-delete role_binding / group_membership) after 14 days suspended, all results written to audit.log (TEXT immutable audit log).",
+    "zh-TW": "訪問複核活動，由複核人確認或回收已有權限。iga_access_review_campaigns UUID PK；deadline TIMESTAMPTZ NOT NULL 固定截止日期；reviewer_id 指向複核人；recommendation VARCHAR(32) CHECK IN ('certify','revoke','delegate')；到期未複核的權限自動進入 PENDING_REVOKE 狀態，suspend 後 14 天仍無人操作則自動 revoke（硬刪除 role_binding / group_membership 關係），所有結果寫入 audit.log（TEXT 類型審計日誌，永久保留不可變）。"
+  },
+  "tabs.iga.sodRules": {
+    "zh-CN": "职责分离规则，用于标记单个身份不应同时持有的权限组合。iga_sod_rules UUID PK；rule_type VARCHAR(32) CHECK IN ('role_pair','permission_set','data_domain')；规则引擎检查 user_role_bindings + user_group_memberships 交叉矩阵；命中时阻止新角色绑定（API 返回 409）并告警审批人（notification channel）；规则定义每日 00:00 UTC 全量评估一次，增量评估在 role_bound 事件时触发。",
+    "en": "Separation-of-duties rules that flag permission combinations one identity must not hold simultaneously. iga_sod_rules UUID PK; rule_type VARCHAR(32) CHECK IN ('role_pair','permission_set','data_domain'); rule engine evaluates cross-product of user_role_bindings + user_group_memberships; hits block new bindings (409 Conflict) and alert approvers via notification channels; daily 00:00 UTC full evaluation, incremental evaluation on role_bound events.",
+    "zh-TW": "職責分離規則，用於標記單個身份不應同時持有的權限組合。iga_sod_rules UUID PK；rule_type VARCHAR(32) CHECK IN ('role_pair','permission_set','data_domain')；規則引擎檢查 user_role_bindings + user_group_memberships 交叉矩陣；命中時阻止新角色綁定（API 傳回 409）並告警審批人（notification channel）；規則定義每日 00:00 UTC 全量評估一次，增量評估在 role_bound 事件時觸發。"
+  },
+  "tabs.iga.lifecycle": {
+    "zh-CN": "生命周期策略，在入职、调动与离职事件上自动授予或回收权限。lifecycle_policies UUID PK；trigger_type VARCHAR(32) CHECK IN ('on_join','on_move','on_leave','on_contract_end')；策略配置为 JSONB（roles_to_grant / groups_to_add / permissions_to_revoke）；由 SCIM provisioning / invitation / admin_create 事件驱动（outbox.type = user.*）；执行结果写入 outbox（type = lifecycle.permissions_changed），然后被 metering 计费链消费。",
+    "en": "Lifecycle policies that grant and revoke access on join/move/leave events. lifecycle_policies UUID PK; trigger_type VARCHAR(32) CHECK IN ('on_join','on_move','on_leave','on_contract_end'); policy config is JSONB (roles_to_grant / groups_to_add / permissions_to_revoke); triggered by SCIM provisioning / invitation / admin_create events (outbox.type = user.*); results written to outbox (type = lifecycle.permissions_changed), then consumed by the metering chain.",
+    "zh-TW": "生命週期策略，在入職、調動與離職事件上自動授予或回收權限。lifecycle_policies UUID PK；trigger_type VARCHAR(32) CHECK IN ('on_join','on_move','on_leave','on_contract_end')；策略配置為 JSONB（roles_to_grant / groups_to_add / permissions_to_revoke）；由 SCIM provisioning / invitation / admin_create 事件驅動（outbox.type = user.*）；執行結果寫入 outbox（type = lifecycle.permissions_changed），然後被 metering 計費鏈消費。"
+  },
+  "tabs.iga.privilegedSessions": {
+    "zh-CN": "按需开通的特权会话，支持审批、操作录制与到期自动失效。privileged_sessions UUID PK；request_type VARCHAR(32) CHECK IN ('just_in_time','break_glass','temporary_admin')；TTL 默认 3600 秒（1 小时），最长 28800 秒（8 小时），CHECK CONSTRAINT ttl_sec BETWEEN 60 AND 28800；审批走 access_request 三级链；录制完整操作轨迹（API call + request body + response，写入 audit.privileged_session_recordings JSONB）；到期自动 revoke（user_role_bindings.expires_at = now() 触发级联回收），并通知审批人。",
+    "en": "Just-in-time privileged sessions with approval, recording, and auto-expiry. privileged_sessions UUID PK; request_type VARCHAR(32) CHECK IN ('just_in_time','break_glass','temporary_admin'); default TTL 3600s (1h), max 28800s (8h), CHECK CONSTRAINT ttl_sec BETWEEN 60 AND 28800; approval uses the same access_request 3-level chain; records full operation trail (API call + request body + response, written to audit.privileged_session_recordings JSONB); auto-revokes at expiry (user_role_bindings.expires_at = now() triggers cascade cleanup), notifying the approver.",
+    "zh-TW": "按需開通的特權會話，支援審批、操作錄製與到期自動失效。privileged_sessions UUID PK；request_type VARCHAR(32) CHECK IN ('just_in_time','break_glass','temporary_admin')；TTL 預設 3600 秒（1 小時），最長 28800 秒（8 小時），CHECK CONSTRAINT ttl_sec BETWEEN 60 AND 28800；審批走 access_request 三級鏈；錄製完整操作軌跡（API call + request body + response，寫入 audit.privileged_session_recordings JSONB）；到期自動 revoke（user_role_bindings.expires_at = now() 觸發級聯回收），並通知審批人。"
+  },
+  "tabs.permissions.structured": {
+    "zh-CN": "以点选方式配置授权对象、资源与动作的策略编辑器，适用于常见场景。permissions UUID PK；subject_types JSONB（支持 user / group / role / domain）；resource_types JSONB（支持 file / data / api / ai_model 等）；actions JSONB（每个 resource_type 可用的动作枚举）；effect VARCHAR(64) default 'Allow'；保存后直接生成 Casbin RBAC/ABAC 模型 p 策略；enforcer 热加载（不重启进程）。",
+    "en": "Point-and-click policy editor for subjects, resources, and actions; best for common cases. permissions UUID PK; subject_types JSONB (supports user / group / role / domain); resource_types JSONB (supports file / data / api / ai_model, etc.); actions JSONB (per-resource-type action enum); effect VARCHAR(64) default 'Allow'; saves directly into Casbin RBAC/ABAC model p-policies; enforcer hot-reloads without restart.",
+    "zh-TW": "以點選方式配置授權物件、資源與動作的策略編輯器，適用於常見場景。permissions UUID PK；subject_types JSONB（支援 user / group / role / domain）；resource_types JSONB（支援 file / data / api / ai_model 等）；actions JSONB（每個 resource_type 可用的動作枚舉）；effect VARCHAR(64) default 'Allow'；保存後直接生成 Casbin RBAC/ABAC 模型 p 策略；enforcer 熱載入（不重啟進程）。"
+  },
+  "tabs.permissions.advanced": {
+    "zh-CN": "直接编辑策略文本以表达复杂条件，保存并重新加载后生效。permissions.raw_policy TEXT（Casbin model 语法）；支持 p（policy）、g（grouping）、r（request definition）三段；保存时 go-casbin 解析 + 语法校验 + enforcer.EnableLog() 日志原子替换；失败时回滚到上一个可加载版本（permissions.previous_raw_policy TEXT）。",
+    "en": "Raw policy text for complex conditions; changes take effect after saving and reloading. permissions.raw_policy TEXT (Casbin model syntax); supports p (policy), g (grouping), r (request definition) sections; on save: go-casbin parse + syntax validation + atomic in-memory enforcer replacement; on failure, auto-rollback to last loadable version (permissions.previous_raw_policy TEXT).",
+    "zh-TW": "直接編輯策略文字以表達複雜條件，保存並重新載入後生效。permissions.raw_policy TEXT（Casbin model 語法）；支援 p（policy）、g（grouping）、r（request definition）三段；保存時 go-casbin 解析 + 語法校驗 + enforcer 記憶體原子替換；失敗時自動回滾到上一個可載入版本（permissions.previous_raw_policy TEXT）。"
+  },
+  "tabs.application.previewHelp": {
+    "zh-CN": "按当前品牌配置实时预览登录页。前端渲染不触发任何后端写入；实时读取 organization.branding JSONB（logo / primary_color / background_image / font_family / custom_css_url）+ organization_theme_settings JSONB（暗黑模式 / 圆角风格 / 动画开关）；修改品牌后预览区域即时更新；支持切换 device 尺寸（桌面 1440px / 平板 768px / 手机 375px）；预览期间的 cookie/localStorage 变化不影响真实会话。",
+    "en": "Live preview of the sign-in page with the current branding settings. Pure frontend rendering, NO backend writes; reads organization.branding JSONB (logo / primary_color / background_image / font_family / custom_css_url) + organization_theme_settings JSONB (dark mode / rounded corners / animation toggles) in real time; preview updates immediately after any change; device-size switchable (desktop 1440px / tablet 768px / mobile 375px); cookie/localStorage changes during preview do not pollute real session.",
+    "zh-TW": "按當前品牌配置實時預覽登入頁。前端渲染不觸發任何後端寫入；實時讀取 organization.branding JSONB（logo / primary_color / background_image / font_family / custom_css_url）+ organization_theme_settings JSONB（暗黑模式 / 圓角風格 / 動畫開關）；修改品牌後預覽區域即時更新；支援切換 device 尺寸（桌面 1440px / 平板 768px / 手機 375px）；預覽期間的 cookie/localStorage 變化不影響真實會話。"
+  },
+  "tabs.application.signinPreviewHelp": {
+    "zh-CN": "预览终端用户看到的登录表单布局与字段。前端渲染不触发后端写入；signin_items JSONB 数组（来自 organization_settings.signin_items）定义表单字段顺序和类型（username / email / phone / qrcode / cas / saml）；signin_methods JSONB 数组（来自 app_signin_config.signin_methods）定义可用登录方式（password / mfa / social_provider）；支持 device 尺寸切换（桌面 / 平板 / 手机）；预览内容不影响线上实际登录页（线上由后端 app 路由 + organization_settings 实时生成）。",
+    "en": "Preview of sign-in form layout and fields as end users will see them. Pure frontend rendering, NO backend writes; signin_items JSONB array (from organization_settings.signin_items) defines field order and types (username / email / phone / qrcode / cas / saml); signin_methods JSONB array (from app_signin_config.signin_methods) defines available sign-in methods (password / mfa / social_provider); device-size switchable; preview content NEVER affects the live sign-in page (live page is generated per app-routing + organization_settings at request time).",
+    "zh-TW": "預覽終端使用者看到的登入表單佈局與欄位。前端渲染不觸發後端寫入；signin_items JSONB 陣列（來自 organization_settings.signin_items）定義表單欄位順序和型別（username / email / phone / qrcode / cas / saml）；signin_methods JSONB 陣列（來自 app_signin_config.signin_methods）定義可用登入方式（password / mfa / social_provider）；支援 device 尺寸切換；預覽內容永不影響線上實際登入頁。"
+  },
+  "concept.supportedProtocols": {
+    "zh-CN": "该 provider 兼容的上游 API 协议面列表；可选值为 openai（OpenAI 兼容）、anthropic（Anthropic Native）、gemini（Google Gemini Native）；可多选；llm_providers.supported_protocols JSONB nullable。",
+    "en": "List of upstream API protocol surfaces the provider is compatible with; options: openai (OpenAI-compatible), anthropic (Anthropic Native), gemini (Google Gemini Native); multi-select; llm_providers.supported_protocols JSONB nullable.",
+    "zh-TW": "該 provider 相容的上游 API 協議面列表；可選值為 openai（OpenAI 相容）、anthropic（Anthropic Native）、gemini（Google Gemini Native）；可多選；llm_providers.supported_protocols JSONB nullable。"
+  }
+}

@@ -1,0 +1,60 @@
+# This is an example .goreleaser.yml file with some sensible defaults.
+# Make sure to check the documentation at https://goreleaser.com
+
+# The lines below are called `modelines`. See `:help modeline`
+# Feel free to remove those if you don't want/need to use them.
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+
+version: 2
+
+before:
+  hooks:
+    # 保留 go mod tidy；删掉了从上游模板继承来的一行 ——
+    #   go test -run TestGetVersionInfo ./util/system_test.go ./util/system.go ./util/variable.go
+    # 本仓库既没有 ./util 目录也没有 TestGetVersionInfo，该钩子会让 release --clean
+    # 在第一步直接失败。同理，archives.files 里指向不存在的 conf/app.conf 会让打包阶段
+    # 失败，已移除（配置模板见 .env.example）。
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    # this name template makes the OS and Arch compatible with the results of `uname`.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      # 手册 10.1：前端静态资源交付路径是 web/dist（Vite 默认 outDir）。
+      - src: 'web/dist'
+        dst: './web/dist'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  extra_files:
+    - glob: dist/sbom.spdx.json
+    - glob: dist/sbom.spdx.json.sha256

@@ -1,0 +1,1 @@
+export { SamlMetadataViewer } from "./SamlMetadataViewer";

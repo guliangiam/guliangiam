@@ -1,0 +1,148 @@
+# ──────────────────────────────────────────────────────────────────────────
+# slo.yaml — SLO / 错误预算机器可读注册表
+#
+# 唯一事实源：本文件（YAML）
+# 渲染层：slo-registry.md（人类可读视图）
+# 消费方：
+#   1. 监控面板、错误预算追踪
+#   2. scripts/check-doc-anchors.py — 文档引用一致性
+#   3. 发布门禁（错误预算耗尽冻结）
+#   4. scripts/check-registry-sync.py — 窗口算术自洽、错误预算算术自洽、
+#      SLI/SLO 指标名必须在 internal/platform/middleware/prometheus.go 中注册
+#
+# 全部 SLI 统一采用 28 天滚动窗口（28×24×60 = 40320 分钟）
+# 度量来源：Prometheus 数据管道（ServiceMonitor）
+# ──────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+window_days: 28
+window_minutes: 40320
+
+# ── SLI 定义 ──────────────────────────────────────────────────────────────
+slis:
+  - id: SLI-1
+    name: 管理面请求成功率
+    numerator: denominator 中 HTTP 状态码 < 500 的响应数
+    denominator: 到达业务路由的 /api/v1/* 请求（排除认证面、协议面端点集合）
+    exclusion: 429 与 4xx 计好事件；WAF/限流中间件层被直接拒绝、未进入业务路由的请求不计入分母
+    metric: guliangiam_http_requests_total{surface="management",status!~"5.."}
+    metric_denom: guliangiam_http_requests_total{surface="management"}
+
+  - id: SLI-2
+    name: 认证面请求成功率
+    numerator: denominator 中状态码 < 500 的响应数
+    denominator: 到达业务路由的 /api/v1/auth/* 页面与会话类端点请求
+    exclusion: 同 SLI-1
+    metric: guliangiam_http_requests_total{surface="authentication",status!~"5.."}
+    metric_denom: guliangiam_http_requests_total{surface="authentication"}
+
+  - id: SLI-2a
+    name: 认证成功率（业务）
+    numerator: "登录成功次数 + 用户凭错类失败次数（密码错误、MFA 失败、账号锁定等）"
+    denominator: 全部登录尝试（guliangiam_auth_login_total）
+    formula: "认证成功率 = 1 − (登录失败且非用户凭错) / 全部登录尝试"
+    note: 凭错类失败视为用户行为，不计为服务故障；服务端故障（5xx、依赖超时、加解密失败）计入坏事件
+    metric: guliangiam_auth_login_total
+    metric_errors: guliangiam_auth_login_errors_total（凭错类剔除）
+
+  - id: SLI-3
+    name: 协议面请求成功率
+    numerator: denominator 中状态码 < 500 的响应数
+    denominator: "到达业务路由的协议面端点请求（家族清单见 surfaces.yaml）：/oauth2/*、/.well-known/*、/cas/*、/scim/v2/*、/api/v1/auth/* 协议端点、/api/v1/saml/*、/api/v1/ai/faces/*"
+    exclusion: 协议标准规定的 4xx（如 invalid_grant）计好事件；同 SLI-1
+    metric: guliangiam_http_requests_total{surface="protocol",status!~"5.."}
+    metric_denom: guliangiam_http_requests_total{surface="protocol"}
+
+# ── 分面 SLO ───────────────────────────────────────────────────────────────
+slos:
+  - surface: management
+    sli: SLI-1
+    availability: 99.5
+    error_budget_minutes: 201.6
+    note: "40320 × 0.005 = 201.6 min（3h21m36s）"
+    metric: guliangiam_http_requests_total{surface="management"}
+
+  - surface: authentication
+    sli: SLI-2
+    availability: 99.9
+    error_budget_minutes: 40.32
+    note: "40320 × 0.001 = 40.32 min（40min19s）"
+    metric: guliangiam_http_requests_total{surface="authentication"}
+
+  - surface: authentication_business
+    sli: SLI-2a
+    availability: 99.9
+    error_budget_minutes: 40.32
+    note: "认证成功率（业务口径）"
+    metric: guliangiam_auth_login_total
+
+  - surface: protocol
+    sli: SLI-3
+    availability: 99.9
+    error_budget_minutes: 40.32
+    note: "40320 × 0.001 = 40.32 min（40min19s）"
+    metric: guliangiam_http_requests_total{surface="protocol"}
+
+# ── 错误预算阈值动作 ───────────────────────────────────────────────────────
+budget_actions:
+  - threshold_percent: 50
+    level: 预警
+    action: 发布经理评估在途发布风险；排查 top 坏事件来源；无需冻结
+    release_gate: 无
+
+  - threshold_percent: 25
+    level: 收紧
+    action: 冻结该面非修复类发布（新特性/重构）；仅允许缺陷修复、安全补丁与合规变更
+    release_gate: 仅修复类
+
+  - threshold_percent: 0
+    level: 冻结（feature freeze）
+    action: 冻结该面全部非修复类发布；仅允许恢复 SLO 的修复、安全应急与合规强制变更；每次豁免须发布经理 + 架构组双人批准并记入台账
+    release_gate: 仅应急修复 + 双人批准
+
+# ── 告警四级响应矩阵 ────────────────────────────────────────────────────────
+alert_levels:
+  - level: 严重（页面）
+    response_sla: 5 分钟内认领响应（7×24）
+    channels: [电话, IM 页面（主 on-call）]
+    escalation:
+      - "5min 未认领 → 自动升级备 on-call"
+      - "15min 未认领 → 值班经理 + 架构组"
+      - "安全类事件同步安全组"
+    triggers:
+      - SLO 快速燃烧（burn rate 阈值见手册 12.8）
+      - "503 率 > 1% 持续 2min"
+      - token.reuse_detected
+      - "审计落盘链路中断（12.6 审计延迟 > 1min 持续恶化）"
+
+  - level: 高
+    response_sla: 30 分钟内响应
+    channels: [工作时间 IM 群, 非工作时间自动升级为页面]
+    escalation:
+      - "30min 未响应 → 升级为严重级"
+      - "连续复发 3 次升级为严重"
+    triggers:
+      - "P99 > 2s 持续 5min"
+      - "登录错误率 > 10% 持续 5min"
+      - authz.enforce_failed
+      - 暴力破解
+      - 审计落盘延迟
+
+  - level: 中
+    response_sla: 下一工作日内响应
+    channels: [邮件, 工单]
+    escalation: "连续 3 个工作日未处置升级为高"
+    triggers:
+      - "并发请求 > 10000"
+      - 加密回退
+      - 密钥轮换超时
+      - SLO 预警/收紧阈值
+
+  - level: 信息
+    response_sla: 无（不触发通知）
+    channels: [日报/周报汇总]
+    escalation: 无升级路径；异常趋势由日报评审提出转级建议
+    triggers:
+      - auth.login_succeeded 量级波动
+      - 单次凭错尖峰

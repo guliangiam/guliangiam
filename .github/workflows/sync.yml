@@ -1,0 +1,40 @@
+# ============================================================
+# 翻译同步（Crowdin）
+#
+# 本次修复的缺陷：
+#   1. 触发条件是 push: master，而本仓库唯一分支是 main —— 该工作流从未执行。
+#   2. 第二步引用 ./web/crowdin.yml，该文件不存在（仓库只有根目录 crowdin.yml）。
+#   3. 环境变量里硬编码 CROWDIN_PROJECT_ID=463556，与 crowdin.yml 的
+#      project_id=491513 冲突 —— 同一个事实有两个来源。现在只认 crowdin.yml。
+# ============================================================
+name: Crowdin Sync
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  synchronize-with-crowdin:
+    name: Sync translations
+    runs-on: ubuntu-latest
+    # 需要 CROWDIN_PERSONAL_TOKEN，fork 上不具备，因此限定本仓库。
+    if: github.repository == 'guliangiam/guliangiam'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Crowdin sync
+        uses: crowdin/github-action@v1
+        with:
+          upload_translations: true
+          download_translations: true
+          push_translations: true
+          commit_message: 'refactor: new Crowdin translations by GitHub Action'
+          localization_branch_name: l10n_crowdin_action
+          create_pull_request: true
+          pull_request_title: 'refactor: new Crowdin translations'
+          crowdin_branch_name: l10n_branch
+          config: './crowdin.yml'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}

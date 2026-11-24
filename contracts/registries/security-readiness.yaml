@@ -1,0 +1,302 @@
+version: 1
+status_values:
+- 已设计
+- 部分实现
+- 已实现
+auth_and_protocol:
+- id: S1
+  capability: WebAuthn ceremony 校验（challenge 唯一/origin/RP ID/counter/user presence/UV/AAGUID/算法等）
+  design_status: 已设计
+  design_anchor: design/auth/webauthn.md
+  impl_status: 部分实现
+  ac:
+  - AC-AUTH-007
+  - AC-AUTH-008
+  - AC-AUTH-009
+  - AC-AUTH-010
+  - internal/platform/webauthn/verify.go
+  - internal/app/auth/webauthn_authenticate.go
+  note: "BE/BS（backup eligibility/state）标志位的解析与落库为缺口；allowCredentials 属主过滤已由 internal/app/auth/webauthn_authenticate.go 的挑战会话用户绑定与凭证属主校验实现。"
+- id: S2
+  capability: WebAuthn 路由独立鉴权（registration:finish 不可匿名调用）
+  design_status: 已设计
+  design_anchor: design/auth/webauthn.md + AC 验收条件
+  impl_status: 已实现
+  ac:
+  - AC-AUTH-009
+- id: S3
+  capability: WebAuthn 凭证状态（active/revoked/deactivated）登录守卫
+  design_status: 已设计
+  design_anchor: contracts/registries/state-machines.yaml（webauthn_credentials 段）
+  impl_status: 已实现
+  ac:
+  - AC-AUTH-008
+- id: S4
+  capability: DPoP nonce 挑战机制（DPoP-Nonce）
+  design_status: 已设计
+  design_anchor: 14.27 (design/protocol/oauth2.md)
+  impl_status: 已实现
+  ac:
+  - AC-AUTH-005
+- id: S5
+  capability: DPoP jti 共享存储（跨副本重放防护）
+  design_status: 已设计
+  design_anchor: design/protocol/oauth2.md §14.27 / ADR-014
+  impl_status: 已实现
+  ac:
+  - AC-AUTH-005
+- id: S6
+  capability: SAML SP 侧 AuthnRequest 校验（Issuer/ACS/Destination/IssueInstant）
+  design_status: 已设计
+  design_anchor: 15.3 (design/auth/saml.md)
+  impl_status: 已实现
+  ac:
+  - AC-PROTO-001
+- id: S7
+  capability: SAML 断言校验（NotBefore/NotOnOrAfter/Audience/Recipient/签名）
+  design_status: 已设计
+  design_anchor: 15.3 (design/auth/saml.md)
+  impl_status: 已实现
+  ac:
+  - AC-PROTO-001
+- id: S8
+  capability: CAS 代理链（PGT/PGTIOU 生成与 pgtUrl 回调）
+  design_status: 已设计
+  design_anchor: 15.4 (design/auth/saml.md CAS Proxy)
+  impl_status: 已实现
+  ac:
+  - AC-PROTO-004
+- id: S9
+  capability: 会话固定防护（登录成功轮换 SessionID）
+  design_status: 已设计
+  design_anchor: 22.2 (会话状态机) / ADR-013
+  impl_status: 已实现
+  ac:
+  - AC-SESSION-001
+- id: S10
+  capability: Cookie __Host- 前缀
+  design_status: 已设计
+  design_anchor: webauthn.md §31.8 / security-model.md §2.20
+  impl_status: 已实现
+  ac:
+  - AC-SESSION-002
+authz_and_tenant:
+- id: S11
+  capability: PEP fail-close（四类放行分支关闭 + 启动自检）
+  design_status: 已设计
+  design_anchor: architecture/security-model.md §2.8
+  impl_status: 已实现
+  ac:
+  - AC-PERM-001
+  - AC-PERM-003
+  - AC-PERM-004
+- id: S12
+  capability: RLS 数据库强制隔离（租户表 ENABLE+FORCE + 非 owner 角色）
+  design_status: 已设计
+  design_anchor: ADR-016 / architecture/data-model.md §3.4 / design/iam/permissions.md / contracts/registries/tenant-isolation.yaml
+  impl_status: 部分实现
+  ac:
+  - AC-RLS-001
+  - AC-RLS-002
+  note: "行级隔离已实现；分类与全局白名单见 contracts/registries/tenant-isolation.yaml。casbin_rules 受信 adapter 白名单依赖 OPEN-API-44 关闭后才能宣称完整隔离；显式跨租户旁路仍按 OPEN-API-42 收敛。"
+- id: S13
+  capability: 强制下线 / 全量撤销 API（管理员应急）
+  design_status: 已设计
+  design_anchor: RISK-007/008/005
+  impl_status: 已实现
+  ac:
+  - AC-RISK-002
+keys_and_audit:
+- id: S14
+  capability: 密钥信封版本化与轮换（key_id/key_version 状态机）
+  design_status: 已设计
+  design_anchor: ADR-015 / 密钥管理 (architecture/security-model.md)
+  impl_status: 已实现
+  ac:
+  - AC-KEY-001
+  - AC-KEY-002
+  - AC-KEY-003
+- id: S15
+  capability: 审计哈希链与锚定（prev_hash/entry_hash/chain_seq + audit_chain_anchors）
+  design_status: 已设计
+  design_anchor: ADR-031 / 审计哈希链 (design/infrastructure/audit.md)
+  impl_status: 已实现
+  ac:
+  - AC-AUDITCHAIN-001
+  - AC-AUDITCHAIN-002
+- id: S16
+  capability: 字段加密无明文降级
+  design_status: 已设计
+  design_anchor: ADR-021 决策 4
+  impl_status: 已实现
+  ac: TestFieldEncryptor_MissingKeyRefusesStartup
+egress_and_input:
+- id: S17
+  capability: SSRF 出站管控（禁内网/元数据/重定向、scheme 白名单）
+  design_status: 已设计
+  design_anchor: design/infrastructure/outbox.md §SSRF + security-model.md §1
+  impl_status: 已实现
+  ac:
+  - AC-SEC-003
+- id: S18
+  capability: Webhook HMAC 双段签名（t=,v1=）+ ±5min 防重放
+  design_status: 已设计
+  design_anchor: 25.5 (design/infrastructure/outbox.md §Worker)
+  impl_status: 已实现
+  ac:
+  - AC-WEBHOOK-001
+- id: S19
+  capability: 生产环境必需密钥缺失时启动失败（fail-close，禁止缺省回落硬编码）
+  design_status: 已设计
+  design_anchor: ADR-021
+  impl_status: 已实现
+  ac:
+  - TestValidateOrPanic_ProductionMissingIssuerURL
+  - TestValidateOrPanic_MissingEncryptionKey
+  note: "原能力绑定 SESSION_HMAC_KEY；该变量随会话 Cookie 退役（OPEN-API-22），锚点更新为通用生产密钥 fail-close 校验测试。"
+
+- id: S20
+  capability: HMAC 签名 payload 不内嵌 AccessToken
+  design_status: 已设计
+  design_anchor: design/infrastructure/outbox.md §统一幂等 签名范围
+  impl_status: 已实现
+  ac:
+  - AC-WEBHOOK-001
+production_hardening:
+- id: S21
+  capability: 生产级可观测性端点（metrics + readiness + liveness）
+  design_status: 已设计
+  design_anchor: architecture/observability.md
+  impl_status: 已实现
+  ac:
+  - internal/platform/db/postgres_lconf.go
+- id: S22
+  capability: CSRF Double Submit Cookie
+  design_status: 已设计
+  design_anchor: architecture/security-model.md
+  impl_status: 已实现
+  ac:
+  - internal/platform/middleware/csrf_test.go
+- id: S23
+  capability: Panic Recovery（结构化 slog + JSON 500 + 审计）
+  design_status: 已设计
+  design_anchor: architecture/observability.md §性能基线
+  impl_status: 已实现
+  ac:
+  - internal/transport/http/middleware/recover.go
+  - internal/platform/recover/recover.go
+- id: S24
+  capability: Server Timeout 三件套 + BodyLimit 两层保护
+  design_status: 已设计
+  design_anchor: architecture/security-model.md §1 安全红线
+  impl_status: 已实现
+  ac:
+  - internal/bootstrap/server.go
+  - internal/bootstrap/runtime.go
+- id: S25
+  capability: CORS Preflight 缓存优化（MaxAge 86400 + env 可配）
+  design_status: 已设计
+  design_anchor: GuliangIAM-开发规范.md §4.16.1
+  impl_status: 已实现
+  ac:
+  - internal/bootstrap/server.go
+- id: S26
+  capability: SSRF Allowlist 集中注册表 + 启动期 fail-fast
+  design_status: 已设计
+  design_anchor: design/infrastructure/outbox.md §SSRF / S17
+  impl_status: 已实现
+  ac:
+  - internal/platform/ssrf/allowlist_registry.go
+- id: S27
+  capability: Request/Command 校验统一化（transport + app 两层 Validatable）
+  design_status: 已设计
+  design_anchor: architecture/system-overview.md / security-model.md §2
+  impl_status: 已实现
+  ac:
+  - internal/transport/http/api/v1/auth/request.go
+- id: S28
+  capability: 合规审计链路（安全边界统一打点）
+  design_status: 已设计
+  design_anchor: architecture/observability.md
+  impl_status: 已实现
+  ac:
+  - internal/platform/outbox/providers/audit/events.go
+- id: S29
+  capability: 混沌测试（fail-close 行为验证）
+  design_status: 已设计
+  design_anchor: architecture/security-model.md §2.8 fail-close 总则
+  impl_status: 已实现
+  ac:
+  - internal/bootstrap/chaos_test.go
+- id: S30
+  capability: 性能基线（Benchmark + Latency Histogram）
+  design_status: 已设计
+  design_anchor: architecture/observability.md §性能基线 + multi-region.md §4
+  impl_status: 已实现
+  ac:
+  - scripts/bench-gate.sh
+- id: S31
+  capability: Casbin Enforcer E2E Benchmark（真实 model + 内存 policy）
+  design_status: 已设计
+  design_anchor: —
+  impl_status: 已实现
+  ac:
+  - internal/infra/casbin/e2e_benchmark_test.go
+  - internal/infra/casbin/cache_benchmark_test.go
+- id: S32
+  capability: Session Lookup E2E Benchmark（多规模 map+RWMutex）
+  design_status: 已设计
+  design_anchor: —
+  impl_status: 已实现
+  ac:
+  - internal/domain/sessions/lookup_benchmark_test.go
+  - internal/domain/sessions/session_benchmark_test.go
+- id: S33
+  capability: CI Benchmark Gate（bench-gate.sh — threshold 20% + --generate + --ci）
+  design_status: 已设计
+  design_anchor: —
+  impl_status: 已实现
+  ac:
+  - scripts/bench-gate.sh
+- id: S34
+  capability: OTel Traces 全链路覆盖（PEP 热点 3 span）
+  design_status: 已设计
+  design_anchor: —
+  impl_status: 部分实现
+  ac:
+  - docs/adr/ADR-031-region-residency-sm-crypto-audit-chain.md
+- id: S35
+  capability: Trace 全链路可视化（ASCII 时间条 + Graphviz DOT + Markdown 报告）
+  design_status: 已设计
+  design_anchor: —
+  impl_status: 部分实现
+  ac:
+  - docs/adr/ADR-031-region-residency-sm-crypto-audit-chain.md
+- id: S36
+  capability: 响应安全头基线（X-Content-Type-Options / Referrer-Policy / Permissions-Policy / CSP）
+  design_status: 已设计
+  design_anchor: architecture/security-model.md
+  impl_status: 部分实现
+  ac:
+  - internal/transport/http/middleware/security_headers.go
+  - internal/transport/http/middleware/security_headers_test.go
+- id: S37
+  capability: 读接口凭据不出网（provider / adapter / RADIUS 密钥以「是否已设置 + 脱敏串」出网，不回显明文）
+  design_status: 已设计
+  design_anchor: architecture/security-model.md
+  impl_status: 已实现
+  ac:
+  - scripts/check-credential-masking.py
+claim_discipline:
+- capability: 安全响应头
+  claim_rule: S36 为'部分实现'——CSP 当前以 Content-Security-Policy-Report-Only 输出（强制模式会拦掉 SAML POST binding 的内联 onload 自动提交），只有在 CSP 以强制模式输出且 Permissions-Policy 与 Referrer-Policy 均已生效时才可声称'完整安全头基线'
+- capability: WebAuthn
+  claim_rule: S1~S3 全部'已实现'前，只能说'WebAuthn 注册/认证流程开发中'
+- capability: DPoP
+  claim_rule: S4、S5 全部'已实现'前，不得声称'DPoP 完整支持'
+- capability: 多租户隔离
+  claim_rule: S12 已实现 → 可声称'数据库级强制隔离（FORCE RLS + 非 owner 角色 + 事务级租户上下文注入）'
+- capability: 审计
+  claim_rule: S15 已实现 → 可声称'审计防篡改（SHA-256 哈希链 + chain_seq 锚定 + WORM 归档校验）'
+- capability: SAML/CAS
+  claim_rule: S6~S8 对应项'已实现'前，协议面端点表述为'开发中'

@@ -1,0 +1,108 @@
+# ──────────────────────────────────────────────────────────────────────────
+# cache.yaml — Redis 缓存、进程内缓存、失效策略机器可读注册表
+#
+# 唯一事实源：本文件（YAML）
+# 渲染层：cache-registry.md（人类可读视图）
+# 消费方：scripts/check-registry-sync.py — 缓存分层字段完整性、进程内缓存上界与
+#         storage 符号可解析、键命名规则（租户维度前置）、红线条数与文本
+#
+# 自《GuliangIAM 项目开发设计报告》8.4/20 迁入
+# ──────────────────────────────────────────────────────────────────────────
+
+version: 1
+
+# ── 缓存分层与 TTL ────────────────────────────────────────────────────────
+layers:
+  - name: 用户/组织/应用/角色/策略读模型
+    source: PostgreSQL
+    ttl: "≤ 60s"
+    jitter: "±10%"
+    invalidation: "事件驱动失效广播（policy.changed / user.updated 等）"
+    failure_behavior: "回源；永不作事实源"
+
+  - name: 会话与 Refresh Token
+    source: "PostgreSQL 权威，Redis 加速"
+    ttl: 不超过绝对超时
+    jitter: "±10%"
+    invalidation: "吊销立即写库并删缓存"
+    failure_behavior: "缓存不可用时回源；撤销结论禁止缓存优先"
+
+  - name: JWKS 与 Provider 元数据
+    source: 密钥表 / Provider 表
+    ttl: 按需
+    jitter: —
+    invalidation: "kid 或配置版本变化即整体失效"
+    failure_behavior: "回源；密钥缺失时拒绝签名相关操作"
+
+  - name: 限流计数与短期挑战
+    source: Redis
+    ttl: 秒到分钟级
+    jitter: —
+    invalidation: 自然过期
+    failure_behavior: "Redis 不可用时退化为保守本地限流（Fail-Close 优先）"
+
+  - name: 内省结果
+    source: access_tokens
+    ttl: 短于令牌剩余寿命
+    jitter: "±10%"
+    invalidation: 撤销时主动删除
+    failure_behavior: "回源；不得因缓存缺失放行已撤销令牌"
+
+  - name: Casbin 策略
+    source: casbin_rules
+    ttl: 短
+    jitter: —
+    invalidation: "policy.changed 广播失效"
+    failure_behavior: "评估失败即拒绝（fail-close）"
+
+  - name: DEK 本地缓存
+    source: "KMS 降级缓存（已解包 DEK）"
+    ttl: "≤ 60s"
+    jitter: —
+    invalidation: "KMS 恢复后强制回源"
+    failure_behavior: "缓存失效时拒绝敏感操作（禁止明文降级）"
+
+# ── 进程内缓存（仅限 2 项） ───────────────────────────────────────────────
+in_process:
+  - name: Casbin Enforcer
+    storage: "sync.RWMutex + map[string]*casbin.Enforcer"
+    invalidation: "InvalidateAll() 手动清除"
+    multi_instance: "策略变更后经 Redis pub/sub 广播失效"
+
+  - name: JWKS
+    storage: JWKSManager
+    invalidation: "内存密钥缓存；JWKS 端点发 Cache-Control: public, max-age=3600"
+    multi_instance: "签名密钥持久化到 KMS；多 kid 轮换并存"
+    note: "max-age=3600 是 HTTP 响应缓存 TTL，不是签名密钥轮换周期"
+
+# ── 缓存键命名规则 ────────────────────────────────────────────────────────
+key_naming_rules:
+  - name: 租户维度前置
+    rule: "所有跨租户缓存键必须含 org:{organization_id}: 前缀"
+    example: "org:{orgId}:user:{userId}"
+
+  - name: 只读查询带版本号
+    rule: "避免更新后短暂读取旧值"
+    example: "org:{orgId}:config:v2"
+
+  - name: 限流键含端点族
+    rule: "支持按端点族独立限流"
+    example: "ratelimit:{surface}:{endpointFamily}:{ip}"
+
+  - name: 安全敏感不缓存
+    rule: "撤销、锁定、禁用状态永远回源"
+    example: —
+
+# ── 四条红线 ──────────────────────────────────────────────────────────────
+redlines:
+  - line: 1
+    text: 缓存永远不是事实源；任何"只写缓存不写库"的路径都视为缺陷
+
+  - line: 2
+    text: 授权决策可以缓存，但缓存键必须包含租户维度，且缓存命中不得绕过认证
+
+  - line: 3
+    text: 撤销与安全类结论不得以缓存优先；缓存不可用时必须回源或拒绝，不得默认放行
+
+  - line: 4
+    text: 缓存雪崩保护：单一键失效不得触发全量回源洪峰，使用单飞（single-flight）+ 抖动 TTL

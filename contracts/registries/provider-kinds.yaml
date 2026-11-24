@@ -1,0 +1,206 @@
+version: 2
+# provider-kinds.yaml — identity family closed-set -> consuming subsystem.
+#
+# Semantics:
+#   routable: true   — the kind has a consumer reference today (legacy/env path
+#                      or an already-wired subsystem; `syslog` is consumed by the
+#                      outbox audit observer).
+#   routable: false  — the kind is declared but no consumer resolves it yet.
+#                      It MUST name a batch; a kind becomes routable only when
+#                      its consumer, config fields and failure semantics land in
+#                      the same change.
+#   managed_via     — the management endpoint that owns this kind when its
+#                      runtime consumer is a dedicated subsystem table rather
+#                      than the unified `providers` row. The unified /providers
+#                      API rejects create, kind/providerType changes,
+#                      activation, secret rotation and connection tests for
+#                      these kinds (422 + meta.managedBy).
+#   consumer_table  — the dedicated table the runtime actually reads for a
+#                      managed_via kind.
+#
+# managed_via/consumer_table are omitted for kinds owned by the unified
+# registry. internal/app/providers/delegated.go holds the code-side
+# kind -> endpoint map, and this file mirrors it; scripts/check-provider-kinds.py
+# compares the two (missing, extra or mismatched ownership fails the gate).
+#
+# This file is the single mapping source. scripts/check-provider-kinds.py
+# compares it with identityKinds in internal/app/providers/kind.go and with the
+# runtime pending map in internal/app/providers/kind_routes.go.
+kinds:
+  - {kind: github, subsystem: legacy, batch: prior, routable: true}
+  - {kind: google, subsystem: legacy, batch: prior, routable: true}
+  - {kind: azure_ad, subsystem: legacy, batch: prior, routable: true}
+  - {kind: azure_ad_b2c, subsystem: legacy, batch: prior, routable: true}
+  - {kind: facebook, subsystem: legacy, batch: prior, routable: true}
+  - {kind: linkedin, subsystem: legacy, batch: prior, routable: true}
+  - {kind: twitter, subsystem: legacy, batch: prior, routable: true}
+  - {kind: gitlab, subsystem: legacy, batch: prior, routable: true}
+  - {kind: gitee, subsystem: legacy, batch: prior, routable: true}
+  - {kind: okta, subsystem: legacy, batch: prior, routable: true}
+  - {kind: wechat, subsystem: legacy, batch: prior, routable: true}
+  - {kind: wechat_mobile, subsystem: legacy, batch: prior, routable: true}
+  - {kind: wechat_miniprogram, subsystem: legacy, batch: prior, routable: true}
+  - {kind: wecom_internal, subsystem: legacy, batch: prior, routable: true}
+  - {kind: wecom_third, subsystem: legacy, batch: prior, routable: true}
+  - {kind: dingtalk, subsystem: legacy, batch: prior, routable: true}
+  - {kind: lark, subsystem: legacy, batch: prior, routable: true}
+  - {kind: feishu, subsystem: legacy, batch: prior, routable: true}
+  - {kind: qq, subsystem: legacy, batch: prior, routable: true}
+  - {kind: weibo, subsystem: legacy, batch: prior, routable: true}
+  - {kind: baidu, subsystem: legacy, batch: prior, routable: true}
+  - {kind: douyin, subsystem: legacy, batch: prior, routable: true}
+  - {kind: kwai, subsystem: legacy, batch: prior, routable: true}
+  - {kind: bilibili, subsystem: legacy, batch: prior, routable: true}
+  - {kind: infoflow_internal, subsystem: legacy, batch: prior, routable: true}
+  - {kind: infoflow_third, subsystem: legacy, batch: prior, routable: true}
+  - {kind: telegram, subsystem: legacy, batch: prior, routable: true}
+  - {kind: ldap, subsystem: legacy, batch: prior, routable: true, managed_via: "/api/v1/ldaps", consumer_table: ldaps}
+  - {kind: adfs, subsystem: legacy, batch: prior, routable: true}
+  - {kind: saml, subsystem: legacy, batch: prior, routable: true}
+  - {kind: oidc, subsystem: legacy, batch: prior, routable: true}
+  - {kind: custom, subsystem: legacy, batch: prior, routable: true}
+  - {kind: goth, subsystem: legacy, batch: prior, routable: true}
+  - {kind: metamask, subsystem: legacy, batch: prior, routable: true}
+  - {kind: web3onboard, subsystem: legacy, batch: prior, routable: true}
+  - {kind: alipay, subsystem: legacy, batch: prior, routable: true}
+  - {kind: wechat_pay, subsystem: legacy, batch: prior, routable: true}
+  - {kind: smtp, subsystem: messaging, batch: B1, routable: true}
+  - {kind: default, subsystem: legacy, batch: prior, routable: true}
+  - {kind: local, subsystem: legacy, batch: prior, routable: true}
+  - {kind: faceid, subsystem: legacy, batch: prior, routable: true, managed_via: "/api/v1/face-id-providers", consumer_table: face_id_providers}
+  - {kind: apple, subsystem: legacy, batch: prior, routable: true}
+  - {kind: keycloak, subsystem: legacy, batch: prior, routable: true}
+  - {kind: slack, subsystem: legacy, batch: prior, routable: true}
+  - {kind: discord, subsystem: legacy, batch: prior, routable: true}
+  - {kind: steam, subsystem: legacy, batch: prior, routable: true}
+  - {kind: amazon, subsystem: legacy, batch: prior, routable: true}
+  - {kind: sendgrid, subsystem: messaging, batch: B1, routable: true}
+  - {kind: azure_acs, subsystem: messaging, batch: B1, routable: true}
+  - {kind: resend, subsystem: messaging, batch: B1, routable: true}
+  - {kind: submail_email, subsystem: messaging, batch: B1, routable: true}
+  - {kind: mailtrap_email, subsystem: messaging, batch: B1, routable: true}
+  - {kind: directmail, subsystem: messaging, batch: B1, routable: true}
+  - {kind: tencent_ses, subsystem: messaging, batch: B1, routable: true}
+  - {kind: sendcloud, subsystem: messaging, batch: B1, routable: true}
+  - {kind: mailgun, subsystem: messaging, batch: B1, routable: true}
+  - {kind: amazon_ses, subsystem: messaging, batch: B1, routable: true}
+  - {kind: postmark, subsystem: messaging, batch: B1, routable: true}
+  - {kind: mailersend, subsystem: messaging, batch: B1, routable: true}
+  - {kind: brevo, subsystem: messaging, batch: B1, routable: true}
+  - {kind: zoho_mail, subsystem: messaging, batch: B1, routable: true}
+  - {kind: custom_http, subsystem: messaging, batch: B1, routable: true}
+  - {kind: sms, subsystem: legacy, batch: prior, routable: true}
+  - {kind: twilio_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: alibaba_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: tencent_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: volcengine_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: huawei_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: amazon_sns, subsystem: messaging, batch: B1, routable: true}
+  - {kind: azure_acs_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: infobip, subsystem: messaging, batch: B1, routable: true}
+  - {kind: ucloud_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: emay_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: baidu_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: submail, subsystem: messaging, batch: B1, routable: true}
+  - {kind: mailtrap_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: oson_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: mock_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: twilio_verify, subsystem: messaging, batch: B1, routable: true}
+  - {kind: alibaba_pnvs, subsystem: messaging, batch: B1, routable: true}
+  - {kind: smsbao, subsystem: messaging, batch: B1, routable: true}
+  - {kind: msg91, subsystem: messaging, batch: B1, routable: true}
+  - {kind: custom_http_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: unisms_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: yunpian_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: jdcloud_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: vonage_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: plivo_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: telnyx_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: sinch_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: bird_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: clickatell_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: africastalking_sms, subsystem: messaging, batch: B1, routable: true}
+  - {kind: aws_s3, subsystem: storage, batch: B2, routable: true}
+  - {kind: azure_blob, subsystem: storage, batch: B2, routable: true}
+  - {kind: gcs, subsystem: legacy, batch: prior, routable: true}
+  - {kind: minio, subsystem: legacy, batch: prior, routable: true}
+  - {kind: ali_oss, subsystem: storage, batch: B2, routable: true}
+  - {kind: tencent_cos, subsystem: storage, batch: B2, routable: true}
+  - {kind: qiniu, subsystem: legacy, batch: prior, routable: true}
+  - {kind: cu_cloud, subsystem: storage, batch: B2, routable: true}
+  - {kind: huawei_obs, subsystem: storage, batch: B2, routable: true}
+  - {kind: cloudflare_r2, subsystem: storage, batch: P7, routable: true}
+  - {kind: backblaze_b2, subsystem: storage, batch: P7, routable: true}
+  - {kind: digitalocean_spaces, subsystem: storage, batch: P7, routable: true}
+  - {kind: synology, subsystem: legacy, batch: prior, routable: true}
+  - {kind: recaptcha, subsystem: legacy, batch: prior, routable: true, managed_via: "/api/v1/captcha-providers", consumer_table: captcha_providers}
+  - {kind: recaptcha_v3, subsystem: captcha, batch: B3, routable: true, managed_via: "/api/v1/captcha-providers", consumer_table: captcha_providers}
+  - {kind: hcaptcha, subsystem: legacy, batch: prior, routable: true, managed_via: "/api/v1/captcha-providers", consumer_table: captcha_providers}
+  - {kind: turnstile, subsystem: legacy, batch: prior, routable: true, managed_via: "/api/v1/captcha-providers", consumer_table: captcha_providers}
+  - {kind: geetest, subsystem: legacy, batch: prior, routable: true, managed_via: "/api/v1/captcha-providers", consumer_table: captcha_providers}
+  - {kind: aliyun_captcha, subsystem: captcha, batch: B3, routable: true, managed_via: "/api/v1/captcha-providers", consumer_table: captcha_providers}
+  - {kind: tencent_captcha, subsystem: captcha, batch: B3, routable: true, managed_via: "/api/v1/captcha-providers", consumer_table: captcha_providers}
+  - {kind: totp, subsystem: legacy, batch: prior, routable: true}
+  - {kind: radius, subsystem: legacy, batch: prior, routable: true}
+  - {kind: push, subsystem: legacy, batch: prior, routable: true}
+  - {kind: aliyun_face_body, subsystem: faceid, batch: B4, routable: false, managed_via: "/api/v1/face-id-providers", consumer_table: face_id_providers}
+  - {kind: wechat_scan, subsystem: scan, batch: B5, routable: false}
+  - {kind: dingtalk_scan, subsystem: scan, batch: B5, routable: false}
+  - {kind: jumio, subsystem: legacy, batch: prior, routable: true, consumer_table: identity_verifications}
+  - {kind: aliyun_idv, subsystem: legacy, batch: prior, routable: true, consumer_table: identity_verifications}
+  - {kind: tencent_idv, subsystem: legacy, batch: prior, routable: true, consumer_table: identity_verifications}
+  - {kind: onfido, subsystem: legacy, batch: P5, routable: true, consumer_table: identity_verifications}
+  - {kind: veriff, subsystem: legacy, batch: P5, routable: true, consumer_table: identity_verifications}
+  - {kind: persona, subsystem: legacy, batch: P5, routable: true, consumer_table: identity_verifications}
+  - {kind: syslog, subsystem: logs, batch: C6, routable: true}
+  - {kind: elasticsearch, subsystem: logs, batch: B6, routable: false}
+  - {kind: loki, subsystem: logs, batch: B6, routable: false}
+
+# goth_types — provider_type values served by the Goth adapter. They all keep
+# kind=goth (no dedicated closed-set kind) and route on provider_type.
+# check-provider-kinds.py holds this list equal to app/providers gothProviderTypes
+# and infra/idp SupportedGothTypes.
+goth_types:
+  - battlenet
+  - box
+  - cloudfoundry
+  - dailymotion
+  - deezer
+  - digitalocean
+  - dropbox
+  - eveonline
+  - fitbit
+  - gitea
+  - heroku
+  - influxcloud
+  - instagram
+  - intercom
+  - kakao
+  - lastfm
+  - mailru
+  - meetup
+  - microsoftonline
+  - naver
+  - nextcloud
+  - onedrive
+  - oura
+  - patreon
+  - paypal
+  - salesforce
+  - shopify
+  - soundcloud
+  - spotify
+  - strava
+  - stripe
+  - tiktok
+  - tumblr
+  - twitch
+  - typetalk
+  - uber
+  - vk
+  - wepay
+  - xero
+  - yahoo
+  - yammer
+  - yandex
+  - zoom

@@ -1,0 +1,80 @@
+# 85_workload.yaml — Schema Group (3 tables)
+# Workload 身份域（identity_pools / federation_trusts / service_accounts），见 ADR-026。
+# Topology: ordered so every FK target exists first
+
+table_name: guliangiam.identity_pools
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: display_name, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: description, type: TEXT, nullable: true }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_identity_pools_org_name, type: unique, columns: [organization_id, name] }
+indexes:
+revision: true
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.federation_trusts
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: pool_id, type: UUID, nullable: false }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: issuer, type: TEXT, nullable: false }
+  - { name: jwks_uri, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: audience, type: 'TEXT[]', nullable: false, default: "'{}'" }
+  - { name: subjects, type: 'TEXT[]', nullable: false, default: "'{}'" }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'active'" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_federation_trusts_org_name, type: unique, columns: [organization_id, name] }
+  - { name: ck_federation_trusts_status, type: check, expr: "status IN ('active', 'disabled', 'deleted')" }
+indexes:
+  - { name: idx_federation_trusts_pool, columns: [pool_id] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: pool_id, ref_table: guliangiam.identity_pools, on_delete: CASCADE }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.service_accounts
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: pool_id, type: UUID, nullable: true }
+  - { name: name, type: TEXT, nullable: false }
+  - { name: description, type: TEXT, nullable: true }
+  - { name: client_id, type: TEXT, nullable: false }
+  - { name: client_secret_hash, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: scopes, type: 'TEXT[]', nullable: false, default: "'{}'" }
+  - { name: access_token_ttl_seconds, type: INTEGER, nullable: false, default: "900" }
+  - { name: last_rotated_at, type: TIMESTAMPTZ, nullable: true }
+  - { name: status, type: VARCHAR(64), nullable: false, default: "'active'" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+  - { name: uq_service_accounts_org_name, type: unique, columns: [organization_id, name] }
+  - { name: uq_service_accounts_client_id, type: unique, columns: [client_id] }
+  - { name: ck_service_accounts_status, type: check, expr: "status IN ('active', 'disabled', 'deleted')" }
+  - { name: ck_service_accounts_access_token_ttl, type: check, expr: "access_token_ttl_seconds BETWEEN 60 AND 3600" }
+indexes:
+  - { name: idx_service_accounts_pool, columns: [pool_id] }
+revision: true
+rls: true
+fk_constraints:
+  - { column: pool_id, ref_table: guliangiam.identity_pools, on_delete: SET_NULL }
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }

@@ -1,0 +1,407 @@
+version: 2
+# ──────────────────────────────────────────────────────────────────────────
+# known-red.yaml — 问题与风险清单 / 门禁已知红项基线（唯一事实源）
+#
+# 定位：本表是全系统「已识别问题与风险」的唯一机器可读清单（docs/README.md §3）。
+# 每条登记一类风险，不是一次运行结果；量化口径为 baseline_failures：
+#
+#   rule_id            门禁规则标识（verify-docs.sh 的 run_gate 查询键）
+#   severity           严重等级 —— P0 阻断（数据安全/正确性/合规证据）、
+#                      P1 高（跨模块链路、契约/安全能力、运行期失败）、
+#                      P2 中（局部质量/性能/体验）
+#   impact_scope       影响范围（受影响的模块 / 链路 / 交付面，逐项可追溯）
+#   baseline_failures  当前实测基线失败数（>0 时按基线比较：实测 > 基线硬 FAIL，实测 ≤ 基线降级 WARN）
+#   exit_condition     出口条件（可验收的关闭判据，禁止永久豁免）
+#   owner              责任面（db / api / arch / dev / sec / web）
+#
+# 渲染层：docs/generated/known-red-registry.md（由 gen_registry_md.py 生成，禁止手改）
+# 消费方：verify-docs.sh::run_gate（基线判定）、check-registry-sync.py（结构校验）、
+#         gen_registry_md.py（渲染）
+# 纪律：
+#   * 基线只增不减（实测失败数下降须主动下调并在 CHANGELOG 登记）；
+#   * 每条必须有 severity / impact_scope / exit_condition / owner 四要素；
+#   * 任何条目或基线调整须在同一变更内写入 CHANGELOG。
+#
+# 基线来源：RUN_CODE_CHECKS=1 bash scripts/verify-docs.sh 实测（2026-10-19）。
+# 已关闭项（2026-10-19）：check-redundant-index（38→0）、gen_schema（3→0）、
+#   check-generated-zero-diff（8→0）、gen_openapi（1→0）—— 多方言/Flyway 产物
+#   生成 + 冗余索引前缀去重后全部转绿，已从基线移除。
+# 已关闭项（V4.5）：check-api-params（1→0）—— 规则③把事务函数的回调闭包体
+#   误当成实参；修正判定边界后门禁零违规，基线移除。
+# 已关闭项（V4.10）：check-gofmt（5→0）—— 全仓 gofmt 格式化后零差异，基线移除。
+# 已关闭项（V4.11）：check-security-readiness（1→0）—— 该门禁自注册表迁到 contracts/ 后
+#   一直因旧路径 FileNotFoundError 崩溃（表现为基线 WARN，实际从未校验过任何能力声明）；
+#   路径修正后恢复真实校验，S19 的已失效测试锚点（SESSION_HMAC_KEY 随 OPEN-API-22 退役）
+#   更新为通用生产密钥 fail-close 校验测试，门禁零违规，基线移除。
+# 已关闭项（V4.22）：check-i18n-keys（36 键解析失败→0）—— Web3 登录面板 36 个 passkey.*
+#   键补齐 14 个语言包（auth 命名空间：en/zh-CN/zh-TW/ja/ko/de/fr/es/pt/ru/pl/tr/uk/vi）；
+#   check-lint（1→0）—— golangci-lint advisory 扫描存量 0 条、配置自检通过。
+# 已关闭项（V4.20）：check-layers（4→0）—— 租户作用域原语下沉 platform/tenantctx（infra 以别名重导出）、
+#   platform 审计端口改为本地 dbtx 最小接口、cron worker 移到 app 层、scopeauthorizer 验证错误改用
+#   apperrors；分层门禁 8 条规则全部 0 违规。
+# 已关闭项（V4.19）：check-sql-portability（1→0）—— 方言隔离白名单显式化（pgx 启动层/casbin/MySQL 方言仓储）、
+#   COMMENT ON 说明文字误报修正、transport 内联 SQL 移到 infra 端口实现、domain chain SQL 去除 ::uuid
+#   （顺带修复审计锚点插入把 SQL 片段当参数值的真实缺陷）。
+# 已关闭项（V4.16）：check-ui-wiring（支付渠道/对账页筛选属本地过滤，登记 CLIENT_SIDE_FILTER
+#   并说明服务端无对应查询参数；1→0）、check-frontend-coverage（AI 网关菜单 routeKeys 补齐
+#   明细/向导路由、/ai 根路径登记 NON_NAV_ROUTES、生成菜单表重新闭合；1→0）。
+# 已关闭项（V4.15）：check-errors（2 个本地无状态错误类型→apperrors，1→0）、check-sql-args（
+#   门禁把尾注释当实参产生假失败，修门禁后 458 调用点全部匹配，1→0）。
+# 已关闭项（V4.14）：check-enums（1→0）—— 支付状态 partially_refunded 与 5 个服务端闭集
+#   的枚举/文案/转移表补齐后真实通过。
+# 已关闭项（V4.14）：check-schema-parity（898 项差异→0）、check-sql-columns（1→0）、
+#   check-db-conventions（11→0）—— 迁移链 squash 为生成式 V1 基线 + 声明式 Schema 补隐式列
+#   （created_at/updated_at/revision/deleted_at）+ 唯一索引 unique 标志修复后，三项门禁全部真实通过。
+# 已关闭项（V4.105）：check-schema-defaults（12→0）—— 11 个「TEXT + DEFAULT」列收窄为有界
+#   VARCHAR（状态/动作/资源 ≤ 32/64/255，错误信息 ≤ 2000），ticket_messages.content 保留 TEXT
+#   仅去掉默认值（正文不定长）；同步既有库的版本化增量已在开发期 squash 中并入 V1 基线
+#   （2026-10-29），四方言 DDL 重新生成后零差异。check-redundant-index（1→0）——
+#   删除 platform_admins.idx_platform_admins_user_id（已被 uq_platform_admins_user_id
+#   最左前缀覆盖），同样随 V1 基线固化。
+# ──────────────────────────────────────────────────────────────────────────
+
+rules:
+  # 2026-11-03 G1d 关闭：check-schema-evolution-audit（7→0）。7 项全部为门禁自身
+  # 解析误报，已修脚本而非抑制：
+  #   [C-1] 2 项：_split_insert_values() 在 INSERT ... SELECT 之后继续扫描整份 seed，
+  #         把后续 products INSERT 的 VALUES 串到 organization_billing 列上；现按顶层
+  #         分号限定语句边界，INSERT ... SELECT 无 VALUES 时直接跳过。
+  #   [E] 5 项：orders/payments/risk 的错误文案与审计 reason 中 from/order 英文单词被
+  #         AST containsSQLKeyword、正则 _SQL_KW_IN_TEMPLATE 与 _CONCAT_SQL_PLUS_VAR2
+  #         当作 SQL；现改为要求 SQL 结构锚点（SELECT…FROM / INSERT INTO / WHERE 比较 /
+  #         ORDER BY 等）才判定。E-5 报出的 payments/risk 两点同源，非未登记动态 SQL，
+  #         contracts/security/sql-injection-registry.json 无需新增条目。
+  # 负向对照：seed mirror 注入 products.tag 300 chars → [C-1] FAIL；注入
+  # repository_list.go fmt.Sprintf("... WHERE x=%s", ...) → AST E1 FATAL 且 audit exit 1；
+  # 删除样本后 RESULT: 全 PASS。基线保留 0，禁止重新放宽。
+  - rule_id: check-schema-evolution-audit
+    severity: P2
+    impact_scope:
+      - "scripts/check-schema-evolution-audit.py [C] seed 值 ↔ 列类型长度：INSERT…SELECT 跨语句误配已修"
+      - "scripts/check-schema-evolution-audit.py [E] SQL Injection Risk：错误文案/审计 reason 的 from/order 误判已修"
+      - "该门禁由 verify-docs.sh 调度；基线收紧至 0 后任何失败重新成为硬阻断"
+    baseline_failures: 0
+    exit_condition: >-
+      已满足（2026-11-03）：语句边界与 SQL 结构锚点修复后，运行
+      `python3 scripts/check-schema-evolution-audit.py` 得到 `RESULT: 全 PASS (5 维度)`（exit 0）；
+      负向对照仍能命中真实 C-1 / E-1 漂移。基线保留 0 作为「禁止重新放宽」的显式记录。
+    evidence_command: "python3 scripts/check-schema-evolution-audit.py  # 2026-11-03 实测 RESULT: 全 PASS (5 维度) (exit 0)"
+    owner: sec
+
+# God File 体量债务不在本表登记：check-file-size 曾是 ghost 规则（无脚本、未接线），
+# 于 V4.155 删除。超限清单与拆分计划见 docs/architecture/README.md AR16 与《layers》§8.3。
+
+  # ── 声明层 / Schema 门禁 ────────────────────────────────────────────────
+  # 已关闭项（V4.121）：check-sql-portability（1→0）—— V4.119 的 V1 重冻结已按声明式
+  # Schema 重新生成 identity_verifications.confidence 为 DECIMAL(19,4)，V1 冻结基线中
+  # 不再存在 DOUBLE PRECISION；实测 0 项违规，按原 exit_condition 删除条目。
+
+  # ── 代码质量门禁（存量失败，与声明层无关）───────────────────────────────
+# 已关闭项（V4.25）：web-frontend（1→0）—— 修复 22 个 TS 错误 / 21 个 lint 错误 / 79 个文件格式，
+#   新增 web/.npmrc（manage-package-manager-versions=false）后 pnpm lint/format:check/build/test
+#   全部真实通过（90 文件 1319 测试）。known-red 归零。
+# 已关闭项（V4.24）：check-bundle-budget（1→0）—— 经评审上调首屏预算 710→730 KB 并在
+# docs/design/frontend/performance.md 记录实测 719.2 KB 与 trade-off（antd-vendor 489 KB
+# 为框架地板，拆分优化登记 OPEN-PERF-01），门禁真实通过。
+
+# ──────────────────────────────────────────────────────────────────────────
+# route_derivation_known_red — check-route-resource-derivation.py 的按条基线
+#
+# 与上方 `rules` 的 baseline_failures 语义不同：这里逐条登记「既有失配」，带到期日。
+# 消费方：scripts/check-route-resource-derivation.py。
+#   * 命中且 expires_on 未过期 → 计入 PASS，打印 `KNOWN-RED n/22` 摘要，不改变裁决；
+#   * 命中但已过期 → 判红（KNOWN_RED_EXPIRED），到期即恢复阻断；
+#   * 不在本列表内 → 立即判红（NESTED/R1/R2 原规则），检出能力不受基线影响；
+#   * 未命中任何当前失配 → WARN（KNOWN_RED_STALE），提示清理。
+#
+# 定位：这 22 条是**声明债**，不是豁免。NESTED 类不允许写 route-resource-exemptions.yaml；
+# 唯一缓冲是「带期限的 known-red」，到期自动再红。修复路线按 Y 批次「改声明」推进：
+# 运行时按路径首段派生资源，因此绝大多数条目只改 Permission 字符串即可；
+# 少数需要同步 Casbin policy slug 或运行时特判（见 CHANGELOG 2026-11-04 条目）。
+#
+# 字段：gate / code（NESTED|R2|*）/ method / pattern / file / line / reason /
+#       owner / target_batch / expires_on / evidence_ref
+# 到期：target_batch Y 完成后 30 天，暂定 2027-03-31（Y 批次排期确认后顺延/提前，
+#       调整须同步 CHANGELOG）。
+route_derivation_known_red:
+  # ── LDAP 同步：声明 ldaps，运行期按路径首段 ldap-sync-configs 放行 ──────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/ldap-sync-configs/{id}/sync
+    file: internal/transport/http/api/v1/ldapsync/routes.go
+    line: 58
+    reason: 声明资源 ldaps 不参与运行期裁决；运行期按首段 ldap-sync-configs 放行，LDAP 同步触发实际只校验宿主动词 write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: GET
+    pattern: /api/v1/ldap-sync-configs/{id}/logs
+    file: internal/transport/http/api/v1/ldapsync/routes.go
+    line: 66
+    reason: 声明资源 ldaps 不参与运行期裁决；运行期按首段 ldap-sync-configs 放行，同步日志读取实际只校验宿主 read
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── 支付对账：声明 payments，运行期首段 pay-recon-batches ────────────────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: GET
+    pattern: /api/v1/pay-recon-batches/{id}/items
+    file: internal/transport/http/api/v1/payments/routes.go
+    line: 94
+    reason: 声明资源 payments 不参与运行期裁决；运行期按首段 pay-recon-batches 放行，对账明细读取实际只校验宿主 read
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── 商品购买：声明 products:buy，运行期首段 products ─────────────────────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/products/{id}/buy
+    file: internal/transport/http/api/v1/products/routes.go
+    line: 52
+    reason: 购买动作声明为 products:buy，运行期只按首段 products 校验 write；细粒度购买权未生效
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── 数据同步器：声明 syncers.run，运行期首段 syncers ─────────────────────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/syncers/{id}/run
+    file: internal/transport/http/api/v1/syncers/routes.go
+    line: 52
+    reason: 运行动作声明为 syncers.run，运行期只按首段 syncers 校验 write；手动触发同步与编辑同步器同权
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/syncers/{id}/test-connection
+    file: internal/transport/http/api/v1/syncers/routes.go
+    line: 60
+    reason: 连通性测试复用 syncers.run 声明，运行期只按首段 syncers 校验 write；测试与运行未分离
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── B2B 域名托管：声明 b2b，运行期首段 organizations ─────────────────────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/organizations/{orgId}/domains
+    file: internal/transport/http/api/v1/b2b/routes.go
+    line: 17
+    reason: 声明资源 b2b 不参与运行期裁决；运行期按首段 organizations 放行，域名新增实际只校验组织 write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: GET
+    pattern: /api/v1/organizations/{orgId}/domains
+    file: internal/transport/http/api/v1/b2b/routes.go
+    line: 27
+    reason: 声明资源 b2b 不参与运行期裁决；运行期按首段 organizations 放行，域名列表实际只校验组织 read
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: DELETE
+    pattern: /api/v1/organizations/{orgId}/domains/{domainId}
+    file: internal/transport/http/api/v1/b2b/routes.go
+    line: 35
+    reason: 声明资源 b2b 不参与运行期裁决；运行期按首段 organizations 放行，域名删除实际只校验组织 delete
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/organizations/{orgId}/domains/{domainId}/verify
+    file: internal/transport/http/api/v1/b2b/routes.go
+    line: 45
+    reason: 声明资源 b2b 不参与运行期裁决；运行期按首段 organizations 放行，域名验证实际只校验组织 write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── MCP Server：声明 mcpservers，运行期首段 mcp-servers（连字符归一）─────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/mcp-servers/{id}/sync-tools
+    file: internal/transport/http/api/v1/mcpservers/routes.go
+    line: 67
+    reason: 声明资源 mcpservers 与派生 mcp-servers 不一致；运行期按首段 mcp-servers 放行，工具同步实际只校验宿主 write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: GET
+    pattern: /api/v1/mcp-servers/{id}/access-token
+    file: internal/transport/http/api/v1/mcpservers/routes.go
+    line: 75
+    reason: 声明资源 mcpservers 与派生 mcp-servers 不一致；访问令牌读取实际只校验宿主 read，令牌可见性未单独收敛
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/mcp-servers/{orgSlug}/{serverName}/proxy
+    file: internal/transport/http/api/v1/mcpservers/routes.go
+    line: 83
+    reason: 声明资源 mcpservers.proxy 不参与运行期裁决；代理调用实际只校验宿主 mcp-servers write，工具级代理权未生效
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── 用户子资源：声明 orders/payments，运行期首段 users（P0 口径）───────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: GET
+    pattern: /api/v1/users/{id}/orders
+    file: internal/transport/http/api/v1/users/routes.go
+    line: 228
+    reason: >-
+      路由声明仍为 orders:read，而运行期按路径首段 users 派生资源（Permission 声明不参与裁决），
+      因此门禁 NESTED 仍成立，本条保留为「声明与派生资源不一致」的声明债。
+      同租户横向越权已由 X1 批次修复（批次代号 X1，不绑定 commit sha；证据见 evidence_ref）：internal/app/orders/service.go 的
+      GetUserOrders 调用 authorizeCrossUserRead（空 actor→403、本人放行、TenantFilterSystem 放行、
+      管理员 scope Covers 放行、其余 403），transport 层显式传入 sessionUserID；
+      L4 实测 r3read 读他人 403 / admin 读他人 200 / 伪造 organizationId 403。
+      到期日仍按 Y 批次收敛声明。
+    owner: sec
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: >-
+      .trae/documents/permission-baseline-audit-2026-11-04.md；
+      .trae/documents/closure-audit-2026-11-05.md（X1 批次）
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: GET
+    pattern: /api/v1/users/{id}/payments
+    file: internal/transport/http/api/v1/users/routes.go
+    line: 236
+    reason: >-
+      路由声明仍为 payments:read，而运行期按路径首段 users 派生资源（Permission 声明不参与裁决），
+      因此门禁 NESTED 仍成立，本条保留为「声明与派生资源不一致」的声明债。
+      同租户横向越权已由 X1 批次修复（批次代号 X1，不绑定 commit sha；证据见 evidence_ref）：internal/app/payments/crud.go 的
+      GetUserPayments 调用 authorizeCrossUserRead（空 actor→403、本人放行、TenantFilterSystem 放行、
+      管理员 scope Covers 放行、其余 403），transport 层显式传入 sessionUserID；
+      L4 实测 r3read 读他人 403 / admin 读他人 200 / 伪造 organizationId 403。
+      到期日仍按 Y 批次收敛声明。
+    owner: sec
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: >-
+      .trae/documents/permission-baseline-audit-2026-11-04.md；
+      .trae/documents/closure-audit-2026-11-05.md（X1 批次）
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/platform/users/{id}/mfa/totp/admin-rebind
+    file: internal/transport/http/api/v1/users/routes.go
+    line: 405
+    reason: 声明资源 users 与派生 platform 不一致；管理员强制重绑 TOTP 实际只校验 platform write，用户域动作被平台域放行
+    owner: sec
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── 用户可信设备：DELETE 声明 write，运行期只接受 delete ────────────────────
+  - gate: check-route-resource-derivation
+    code: R2
+    method: DELETE
+    pattern: /api/v1/users/{id}/trusted-devices/{deviceId}
+    file: internal/transport/http/api/v1/users/routes.go
+    line: 431
+    reason: DELETE 声明动作 write ∉ casbinActionCandidates(DELETE)={delete}；策略中按 users:write 授权的删除实际不可达，仅 users:delete 生效
+    owner: sec
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── 订单支付：声明 orders:pay，运行期首段 orders ───────────────────────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/orders/{id}/pay
+    file: internal/transport/http/api/v1/orders/routes.go
+    line: 52
+    reason: 支付动作声明为 orders:pay，运行期只按首段 orders 校验 write；支付与订单编辑同权，支付权未分离
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── ReBAC：声明 rebac:check，运行期首段 rebac ───────────────────────────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/rebac/namespaces/{namespaceId}/check
+    file: internal/transport/http/api/v1/rebac/routes.go
+    line: 82
+    reason: 声明 rebac:check 不参与运行期裁决；运行期按首段 rebac 放行，关系检查实际只校验 rebac write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/rebac/namespaces/{namespaceId}/expand
+    file: internal/transport/http/api/v1/rebac/routes.go
+    line: 90
+    reason: 声明 rebac:check 不参与运行期裁决；关系展开实际只校验首段 rebac write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/rebac/namespaces/{namespaceId}/batch-check
+    file: internal/transport/http/api/v1/rebac/routes.go
+    line: 98
+    reason: 声明 rebac:check 不参与运行期裁决；批量关系检查实际只校验首段 rebac write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md
+
+  # ── Webhook 事件：声明 webhooks，运行期首段 webhook-events ──────────────────
+  - gate: check-route-resource-derivation
+    code: NESTED
+    method: POST
+    pattern: /api/v1/webhook-events/{eventId}/replay
+    file: internal/transport/http/api/v1/webhooks/routes.go
+    line: 68
+    reason: 声明资源 webhooks 与派生 webhook-events 不一致；事件重放实际只校验首段 webhook-events write
+    owner: api
+    target_batch: Y
+    expires_on: 2027-03-31
+    evidence_ref: .trae/documents/permission-baseline-audit-2026-11-04.md

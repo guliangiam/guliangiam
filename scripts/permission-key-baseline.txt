@@ -1,0 +1,62 @@
+# 前端权限 key 存量基线（allowlist）：只减不增。
+# 格式：<kind>|<key>|<file>:<line>|<reason>
+# kind = action | resource | mirror
+# 新增未登记 permissions.yaml 的 key 必须改代码或改注册表；只有评审确认的存量缺口
+# 才能登记在这里，并写明 file:line 与理由。key 被登记或不再使用时该条必须删除。
+#
+# 存量来源：permissions.yaml 目前是「域级权限点清单」而非全量权限表；IAM 核心/商业/
+# 安全扩展/网关等域尚未登记（D4 G-2 注册表覆盖缺口）。本文件是收敛棘轮，不是豁免：
+# 新增 key、新增前缀或新增共享槽资源都不会被既有条目覆盖。
+action|agent:write|web/src/pages/agents/AgentsPage.tsx:50|AI agent前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|cert:delete|web/src/pages/certs/CertsPage.tsx:165|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|cert:write|web/src/pages/certs/CertsPage.tsx:119|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|coupon:write|web/src/pages/coupons/CouponsPage.tsx:74|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|dashboard:read|web/src/pages/dashboard/DashboardPage.tsx:43|系统前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|key:delete|web/src/pages/keys/KeysPage.tsx:172|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|key:write|web/src/pages/keys/KeysPage.tsx:122|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|ldaps:write|web/src/pages/ldaps/LdapSyncPage.tsx:132|目录/规则/IGA前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|mcp-server:delete|web/src/pages/mcp-servers/McpServersPage.tsx:99|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|mcp-server:write|web/src/pages/mcp-servers/McpServersPage.tsx:54|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|order:delete|web/src/pages/orders/OrderDetailPageView.tsx:124|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|order:write|web/src/pages/orders/OrderDetailPageView.tsx:95|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|payment:delete|web/src/pages/payments/PaymentDetailPage.tsx:233|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|payment:write|web/src/pages/payments/PaymentDetailPage.tsx:231|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|plan:write|web/src/pages/plans/PlansPage.tsx:76|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|pricing:write|web/src/pages/pricings/PricingsPage.tsx:65|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|product:write|web/src/pages/products/ProductsPage.tsx:76|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|resource:delete|web/src/pages/resources/ResourcesPage.tsx:181|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|resource:write|web/src/pages/resources/ResourcesPage.tsx:103|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|rules:delete|web/src/pages/rules/RulesPage.tsx:216|目录/规则/IGA前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|rules:write|web/src/pages/rules/RulesPage.tsx:100|目录/规则/IGA前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|server:write|web/src/pages/gateway/ServersPage.tsx:47|网关前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|session:write|web/src/pages/sessions/SessionsPage.tsx:93|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|site:write|web/src/pages/gateway/SitesPage.tsx:41|网关前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|subscription:write|web/src/pages/subscriptions/SubscriptionsPage.tsx:66|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|ticket:write|web/src/pages/tickets/TicketsPage.tsx:87|支持前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|token:delete|web/src/pages/tokens/TokensPage.tsx:132|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|token:read|web/src/pages/tokens/TokenDetailPage.tsx:57|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|token:write|web/src/pages/tokens/TokensPage.tsx:146|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|transaction:write|web/src/pages/transactions/TransactionsPage.tsx:59|商业前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+action|webhook:write|web/src/pages/webhooks/WebhooksPage.tsx:68|IAM 核心前缀尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；后端 adminPermissionSet 已派生，下一批补登记
+resource|agents|web/src/pages/agents/AgentsPage.tsx:50|AI agent资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|certs|web/src/pages/certs/CertsPage.tsx:119|IAM 核心资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|coupons|web/src/pages/coupons/CouponsPage.tsx:74|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|keys|web/src/pages/keys/KeysPage.tsx:122|IAM 核心资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|ldaps|web/src/pages/ldaps/LdapSyncPage.tsx:132|目录/规则/IGA资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|mcp-servers|web/src/pages/mcp-servers/McpServersPage.tsx:54|IAM 核心资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|orders|web/src/pages/orders/OrderDetailPageView.tsx:95|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|payments|web/src/pages/payments/PaymentDetailPage.tsx:231|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|plans|web/src/pages/plans/PlansPage.tsx:76|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|pricings|web/src/pages/pricings/PricingsPage.tsx:65|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|products|web/src/pages/products/ProductsPage.tsx:76|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|resources|web/src/pages/resources/ResourcesPage.tsx:103|IAM 核心资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|rules|web/src/pages/rules/RulesPage.tsx:100|目录/规则/IGA资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|servers|web/src/pages/gateway/ServersPage.tsx:47|网关资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|sessions|web/src/pages/sessions/SessionsPage.tsx:93|IAM 核心资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|sites|web/src/pages/gateway/SitesPage.tsx:41|网关资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|subscriptions|web/src/pages/subscriptions/SubscriptionsPage.tsx:66|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|tickets|web/src/pages/tickets/TicketsPage.tsx:87|支持资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|tokens|web/src/pages/tokens/TokenDetailPage.tsx:57|IAM 核心资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|transactions|web/src/pages/transactions/TransactionsPage.tsx:59|商业资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+resource|webhooks|web/src/pages/webhooks/WebhooksPage.tsx:68|IAM 核心资源尚未登记到 permissions.yaml（G-2 注册表覆盖缺口）；与同域 action 前缀同批补登记
+mirror|syncer:delete|web/src/shared/hooks/usePermissions.ts:116|adminPermissionSet 保留 syncer:delete，而 permissions.yaml 的 syncers.actions 只有 read/write/admin/run；下一批对齐

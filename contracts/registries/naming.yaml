@@ -1,0 +1,372 @@
+version: 1
+principles:
+- JSON: camelCase（RFC 8259）
+- SQL: 小写 snake_case
+- URL: 小写无连字符（历史 qrcode 维持）
+- claim: 按 RFC 标准拼写
+- state_values: 全小写 snake_case、英式拼写（cancelled 双 l）
+- state_column: SQL 列名统一 status（禁用 state 列名）；类型统一 TEXT
+concepts:
+  organization:
+    zh: 组织标识
+    en: organization id
+    json: organizationId
+    sql: organization_id
+    url: organizationId
+    claim: org_id
+    note: 内省扩展 claim org_id 为既有对外契约，保留；新增 claim 不得再用缩写
+  application:
+    zh: 应用标识
+    en: application id
+    json: applicationId
+    sql: application_id
+    url: applicationId
+    claim: azp / client_id
+  user:
+    zh: 用户标识
+    en: user id
+    json: userId
+    sql: user_id
+    url: userId
+    claim: sub
+  qrcode_login:
+    zh: 二维码登录
+    en: QR code login
+    json: qrcodeId
+    sql: qr_code_sessions
+    url: qrcode
+    note: URL=/api/v1/auth/qrcode（无连字符）；表名 snake_case
+  mfa_challenge:
+    zh: MFA 挑战标识
+    en: challenge id
+    json: challengeId
+    sql: login_challenges.id
+    url: challengeId
+    forbid:
+    - mfa_token
+    note: 废弃 mfa_token，旧引用全仓清理
+  webauthn_credential:
+    zh: WebAuthn 凭证
+    en: credential id
+    json: credentialId
+    sql: webauthn_credentials.id
+    url: credentialId
+    forbid:
+    - credId
+    note: 废弃 credId 缩写
+  session_sid:
+    zh: 会话安全标识
+    en: session sid
+    json: sid
+    sql: sessions.sid
+    claim: sid
+    note: Cookie 值；与主键 id 分离
+  revision:
+    zh: 乐观锁版本
+    en: revision
+    json: revision
+    sql: revision
+    note: 'ETag 值来源 ETag: "<revision>"'
+  idempotency_key:
+    zh: 幂等键
+    en: idempotency key
+    json_header: Idempotency-Key
+    sql: idempotency_keys.idempotency_key
+    note: HTTP 头唯一载体
+  service_account:
+    zh: 服务账号
+    en: service account
+    json: serviceAccountId
+    sql: service_accounts
+    url: serviceAccounts
+    forbid:
+    - SA_in_code
+    note: 缩写 SA 仅限行文；代码标识符用全称
+  isolation_tier:
+    zh: 租户隔离套餐
+    en: isolation tier
+    json: isolationTier
+    sql: organizations.isolation_tier
+    values:
+    - shared
+    - bridged
+    - dedicated
+  ticket_type:
+    zh: 工单提交目标
+    en: ticket type
+    json: type
+    sql: tickets.type
+    values:
+    - value: org_request
+      zh: 组织请求
+      en: organization request
+    - value: vendor_feedback
+      zh: 供应商反馈
+      en: vendor feedback
+    note: 白名单仅约束新写入；空值默认 org_request，存量自由文本 type 仍可读
+  request_id:
+    zh: 请求标识
+    en: request id
+    json: requestId
+    sql: records.request_id
+    claim: request_id
+  trace_id:
+    zh: 追踪标识
+    en: trace id
+    json: traceId
+    sql: records.trace_id
+    claim: trace_id
+  audit_id:
+    zh: 审计标识
+    en: audit id
+    json: auditId
+    sql: records.id
+    note: 写操作响应返回 auditId
+
+# ────────────────────────────────────────────────────────────────────────────
+# AI Gateway Canonical 字段（设计 §4.2）
+# CanonicalRequest 作为三协议面转换中枢，Go CamelCase / JSON snake_case
+# ────────────────────────────────────────────────────────────────────────────
+canonical_fields:
+  - go_field: ModelAlias
+    json_key: model_alias
+    zh: 逻辑模型别名
+    note: 路由查找键，而非物理模型名
+  - go_field: System
+    json_key: system
+    zh: 系统指令
+    note: 统一为纯文本；OpenAI developer role 并入此处
+  - go_field: Messages
+    json_key: messages
+    zh: 对话历史
+    note: 归一化为 role=user/assistant/tool
+  - go_field: Tools
+    json_key: tools
+    zh: 工具声明
+    note: 含 MCPBinding 运行时注入（不在 JSON 序列化）
+  - go_field: ToolChoice
+    json_key: tool_choice
+    zh: 工具选择策略
+    values: [auto, required, none, specific]
+  - go_field: Stream
+    json_key: stream
+    zh: 是否流式
+  - go_field: Temperature
+    json_key: temperature
+    zh: 采样温度
+    range: [0.0, 1.0]
+  - go_field: MaxTokens
+    json_key: max_tokens
+    zh: 最大输出 token
+    note: 统一用 OpenAI 语义；Anthropic max_output_tokens 在适配器层转换
+  - go_field: Stop
+    json_key: stop
+    zh: 停止序列
+  - go_field: Thinking
+    json_key: thinking
+    zh: 思考模式
+    note: budget tokens
+
+canonical_stream_events:
+  - type: message_start
+    note: 流开始
+  - type: content_delta
+    note: 文本增量
+  - type: tool_call_delta
+    note: 工具调用增量
+  - type: message_delta
+    note: 顶层更新（usageMetadata）
+  - type: message_stop
+    note: 流结束
+  - type: ping
+    note: 心跳（仅透传 Anthropic）
+
+# ────────────────────────────────────────────────────────────────────────────
+# AI Gateway 路径段（设计 §3.1 / §8.3）
+# ────────────────────────────────────────────────────────────────────────────
+aigateway_paths:
+  faces_prefix: /api/v1/ai/faces/
+  admin_prefix: /api/v1/ai/
+  protocol_families: [openai, anthropic, gemini]
+  admin_resources: [providers, models, aliases, routes, api-keys, quotas, prices, usage, health]
+
+# ────────────────────────────────────────────────────────────────────────────
+# AI Gateway 枚举（设计 §11）
+# ────────────────────────────────────────────────────────────────────────────
+aigateway_enums:
+  provider_type: [openai, anthropic, gemini, deepseek, glm, kimi, qwen, seed, ollama, vllm, custom]
+  provider_status: [active, disabled, testing]
+  provider_preferred_protocol: [openai, anthropic, gemini]
+  api_key_status: [active, revoked, expired]
+  provider_health_state: [healthy, degraded, open, half_open]
+  quota_scope: [organization, api_key, alias]
+  quota_reset_cycle: [daily, monthly]
+  usage_log_status: [succeeded, failed, timeout]
+  usage_source: [upstream, estimated]
+  protocol_face: [openai, anthropic, gemini]
+
+conflicts:
+- id: N1
+  conflict: cancelled vs canceled
+  ruling: cancelled
+  reason: 英式拼写双 l；全仓状态值、CHECK、枚举、文档统一
+- id: N2
+  conflict: expired vs expire
+  ruling: expired
+  reason: 状态值为过去分词；动词方法名可用 expire
+- id: N3
+  conflict: organizationId vs org_id vs organization_id
+  ruling: 三层各自固定：JSON=organizationId、SQL=organization_id、内省 claim=org_id
+  reason: 新增 claim 禁用缩写；org_id 仅限已发布的内省扩展 claim
+- id: N4
+  conflict: challengeId vs mfa_token
+  ruling: challengeId
+  reason: 全仓清理 mfa_token 字面量
+- id: N5
+  conflict: credentialId vs credId
+  ruling: credentialId
+  reason: 全仓清理 credId 缩写
+- id: N6
+  conflict: qrcode vs qr-code vs qr_code
+  ruling: URL=qrcode、表名=qr_code_sessions
+  reason: 不得在 URL 引入连字符变体
+- id: N7
+  conflict: PostgreSQL-first 语义
+  ruling: PostgreSQL 默认基线（非唯一支持的数据库；第二基线 MySQL，ADR-023）
+  reason: 禁止表述为"仅支持 PostgreSQL"
+- id: N8
+  conflict: 订单 pending vs payment_pending
+  ruling: payment_pending 为合法中间态
+  reason: 状态机注册表为唯一口径；CHECK 按其生成
+- id: N9
+  conflict: ADR 状态词
+  ruling: Current/Target/Open 仅限 docs/adr/
+  reason: docs/ 正文一律不使用三态标注
+- id: N10
+  conflict: service account vs SA
+  ruling: 中文服务账号、英文 service account、行文缩写 SA、代码标识符全称
+  reason: 代码/表名/JSON 不得使用 SA 缩写
+- id: N11
+  conflict: RateLimit-* vs X-RateLimit-*
+  ruling: 仅 IETF RateLimit-*
+  reason: 废弃 X-RateLimit-*；Retry-After 仅用于 429/503
+- id: N12
+  conflict: 400 vs 422 分工
+  ruling: 400 invalid_argument=报文畸形；422 unprocessable_entity=语义校验失败
+  reason: 语义校验失败一律 422；错误体 details[].field 携带字段级原因
+- id: N13
+  conflict: 事件名格式 vs 复合事件
+  ruling: 领域事件 {域}.{对象过去式}；复合事件 {域}.{对象}_{过去式动作}
+  reason: 新增事件先过命名裁决
+- id: N14
+  conflict: 指标命名 vs 高基数
+  ruling: Prometheus guliangiam_{域}_{对象}_{单位}；标签仅限白名单
+  reason: 禁止用户 ID/组织 ID 等高基数标签
+- id: N15
+  conflict: status vs state 列名
+  ruling: 统一用 status（含状态机状态与启用/禁用语义）
+  reason: state 语义偏向状态机内部且与 SQL 保留字冲突；status 通用且 PostgreSQL/MySQL 均允许作为裸标识符；CHECK
+    约束名统一 ck_{表名}_status
+protocol_exceptions:
+- protocol: OAuth 2.1 / OIDC
+  spec: RFC 6749 / 6750 / 9449
+  style: snake_case
+  examples:
+  - error
+  - error_description
+  - code_challenge
+  - code_verifier
+  - id_token
+  - access_token
+  - refresh_token
+- protocol: OIDC Discovery
+  spec: OpenID Connect 规范
+  style: snake_case
+  examples:
+  - issuer
+  - authorization_endpoint
+  - token_endpoint_auth_methods_supported
+- protocol: SCIM 2.0
+  spec: RFC 7644/7643
+  style: camelCase + schemas 数组
+  examples:
+  - schemas
+  - userName
+  - emails
+  - name.familyName
+  - meta.location
+- protocol: SAML 2.0
+  spec: SAML V2.0 规范
+  style: XML 元素名
+  examples:
+  - <saml:Issuer>
+  - <samlp:AuthnRequest>
+  - <saml:AttributeStatement>
+- protocol: CAS
+  spec: CAS Protocol
+  style: URL path + form 参数
+  examples:
+  - /login
+  - /serviceValidate
+  - /logout
+  - service 参数
+error_namespaces:
+  management_and_authentication:
+    format: '{"error":{"code","message","details"},"requestId","traceId"}'
+    basis: 项目自定 REST 规范
+  protocol:
+    format: RFC 6749/6750 {"error","error_description"}；SCIM RFC 7644
+    basis: 外部标准客户端按 RFC 格式解析，为内部统一而违反外部标准不可接受
+  write_response:
+    success_add: auditId
+    reject_add: requestId + traceId
+naming_gate_whitelist_dirs:
+- internal/transport/http/api/v1/authorize/
+- internal/transport/http/api/v1/wellknown/
+- internal/transport/http/api/v1/cas/
+- internal/transport/http/api/v1/saml/
+- internal/transport/http/api/v1/scim/
+- internal/transport/http/api/v1/dcr/
+
+# ────────────────────────────────────────────────────────────────────────────
+# 禁用拼写与存量例外（N15 的机器可读落地）
+# ────────────────────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────────────────
+# OAuth 2.0 / OIDC 凭证前缀
+# 任何把业务信息塞进凭据（如 org slug、app name）的变体必须走 ADR 评审
+# ────────────────────────────────────────────────────────────────────────────
+credential_prefixes:
+  client_id:
+    prefix: gl_cid_
+    entropy: 24           # bytes, base64url 后 32 字符
+    encoding: base64url
+    note: 零业务语义；唯一标识；前端不得预设
+  client_secret:
+    prefix: gl_cs_
+    entropy: 32           # bytes, base64url 后 43 字符
+    encoding: base64url
+    note: 仅存哈希 + 前缀；明文只在创建/轮换响应出现一次
+  token_jti:
+    prefix: gl_tok_
+    entropy: 16
+    encoding: base64url
+  user_code:
+    prefix: ""            # device authorization 有 RFC 约束格式
+    note: 见 generateUserCode
+
+disallowed_spellings:
+- spelling: state
+  scope: sql_column
+  ruling: status
+  reason: 状态列统一 status（命名裁决 N15）；state 语义偏向状态机内部且与 SQL 保留字冲突
+  note: 存量例外见 exceptions；新表禁止新增 state / *_state 列
+exceptions:
+- table: sessions
+  column: session_state
+  reason: 会话生命周期列，历史存量（contracts/schema/40_session.yaml）；新表禁止
+- table: user_identities
+  column: link_state
+  reason: 身份合并生命周期列，历史存量（contracts/schema/20_identity.yaml）；新表禁止
+- table: llm_provider_health
+  column: state
+  reason: 熔断状态列，历史存量（contracts/schema/75_ai_gateway.yaml）；新表禁止

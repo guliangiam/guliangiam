@@ -1,0 +1,18 @@
+package payments
+
+import (
+	"strings"
+
+	apperrors "github.com/guliangiam/guliangiam/internal/platform/errors"
+)
+
+// requireOrganizationID fails fast when a caller reaches the app layer without
+// a trusted tenant. HTTP handlers resolve this via TrustedOrganizationID; the
+// guard keeps non-HTTP callers from degrading to a cross-tenant lookup on
+// dialects without RLS.
+func requireOrganizationID(organizationID string) error {
+	if strings.TrimSpace(organizationID) == "" {
+		return apperrors.NewInvalidArgument("organizationId is required")
+	}
+	return nil
+}

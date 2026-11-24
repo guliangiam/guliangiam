@@ -1,0 +1,25 @@
+# dr.yaml — RTO/RPO 与恢复演练机器可读口径
+# 事实源：本文件；docs/operations/backup-dr.md §7 为人类可读说明。
+version: 1
+owner: architecture
+source_ref: docs/operations/backup-dr.md#7
+tiers:
+  - id: L1
+    scenario: "Pod / 单实例应用故障"
+    rto: "<1m"
+    rpo: "0"
+    mechanisms: ["k8s_self_healing", "rolling_recreate"]
+    drill_frequency: monthly
+  - id: L2
+    scenario: "数据库主库故障"
+    rto: "<5m"
+    rpo: "<5m"
+    mechanisms: ["patroni_failover", "sync_replica"]
+    drill_frequency: quarterly
+  - id: L3
+    scenario: "数据库损坏"
+    rto: "<4h"
+    rpo: "<15m"
+    mechanisms: ["pitr_physical_basebackup_wal", "logical_restore_fallback"]
+    drill_frequency: "quarterly_pitr_sample_and_annual_cross_scenario"
+manual_signoff_required: true

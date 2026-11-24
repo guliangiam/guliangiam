@@ -1,0 +1,101 @@
+# 90_metering.yaml — Schema Group (2 tables)
+# Generated from DDL by declarative schema builder
+# Topology: ordered so every FK target exists first
+
+table_name: guliangiam.metering_events
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: event_type, type: TEXT, nullable: false }
+  - { name: subject, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: quantity, type: BIGINT, nullable: false, default: "0" }
+  - { name: unit, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: idempotency_key, type: TEXT, nullable: false }
+  - { name: occurred_at, type: TIMESTAMPTZ, nullable: false }
+  - { name: metadata, type: JSONB, nullable: false, default: "'{}'::jsonb" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: uq_metering_events_org_idem, type: unique, columns: [organization_id, idempotency_key] }
+indexes:
+  - { name: idx_metering_events_org_type, columns: [organization_id, event_type] }
+  - { name: idx_metering_events_occurred, columns: [organization_id, occurred_at DESC] }
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.metering_aggregates
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: period, type: TEXT, nullable: false }
+  - { name: subject, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: metric, type: TEXT, nullable: false }
+  - { name: quantity, type: BIGINT, nullable: false, default: "0" }
+  - { name: unit, type: VARCHAR(255), nullable: false, default: "''" }
+  - { name: calculated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+  - { name: uq_metering_aggregates_org_period_subject_metric, type: unique, columns: [organization_id, period, subject, metric] }
+indexes:
+rls: true
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+
+---
+table_name: guliangiam.plan_quotas
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: plan_id, type: UUID, nullable: false }
+  - { name: quota_key, type: VARCHAR(64), nullable: false }
+  - { name: soft_limit, type: BIGINT, nullable: true }
+  - { name: hard_limit, type: BIGINT, nullable: false }
+  - { name: unit, type: VARCHAR(32), nullable: false, default: "''" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - name: revision
+    type: BIGINT
+    nullable: false
+    default: '1'
+constraints:
+  - { name: uq_plan_quotas_key, type: unique, columns: [organization_id, plan_id, quota_key] }
+  - { name: ck_plan_quotas_hard_limit, type: check, expr: "hard_limit >= 0" }
+  - { name: ck_plan_quotas_soft_limit, type: check, expr: "soft_limit IS NULL OR (soft_limit >= 0 AND soft_limit <= hard_limit)" }
+indexes:
+  - { name: idx_plan_quotas_plan, columns: [plan_id] }
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }
+  - { column: plan_id, ref_table: guliangiam.plans, on_delete: CASCADE }
+
+---
+table_name: guliangiam.tenant_quotas
+pk: id
+columns:
+  - { name: id, type: UUID, nullable: false }
+  - { name: organization_id, type: UUID, nullable: false }
+  - { name: quota_key, type: VARCHAR(64), nullable: false }
+  - { name: limit_value, type: BIGINT, nullable: false }
+  - { name: used_value, type: BIGINT, nullable: false, default: "0" }
+  - { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+  - name: revision
+    type: BIGINT
+    nullable: false
+    default: '1'
+constraints:
+  - { name: uq_tenant_quotas_key, type: unique, columns: [organization_id, quota_key] }
+  - { name: ck_tenant_quotas_limit, type: check, expr: "limit_value >= 0" }
+  - { name: ck_tenant_quotas_used, type: check, expr: "used_value >= 0" }
+indexes: []
+revision: true
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR organization_id = guliangiam.current_organization_id()
+fk_constraints:
+  - { column: organization_id, ref_table: guliangiam.organizations, on_delete: CASCADE }

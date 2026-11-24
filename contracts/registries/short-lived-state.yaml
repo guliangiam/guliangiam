@@ -1,0 +1,62 @@
+version: 1
+states:
+  - id: dpop_jti
+    storage: postgres+mysql
+    multi_region: per_region_independent
+    key_ttl: 3m
+    fail_mode: fail_close
+    cleanup: trigger_purge
+  # DPoP 服务端 nonce（RFC 9449 §4.2）：复用 session-cache Redis 连接跨副本共享
+  # （SET NX 签发 / GETDEL 原子一次性消费，镜像 SAML 重放防护先例）；未配置 Redis
+  # 时回退进程内 LocalNonceStore（启动 Warn 宣告单实例假设）。Redis 请求级故障
+  # fail-close（OPEN-API-86 已关闭）。
+  - id: dpop_nonce
+    storage: redis
+    multi_region: per_region_independent
+    key_ttl: 5m
+    fail_mode: fail_close
+    cleanup: ttl_expiry
+    note: "一次性消费；键前缀 guliangiam:dpop:nonce:v1:；进程内回退时每分钟清扫过期项、容量上限 10k"
+  # 泄露口令 range 响应缓存（AUTH-009 / OPEN-API-85）：缓存的是 HIBP 公共哈希后缀
+  # 列表（按 SHA-1 前 5 位键控），不含用户明文/完整哈希；复用 session-cache Redis
+  # 跨副本共享，未配置 Redis 回退进程内（启动 Warn，容量上限 4096、Set 时惰性清扫）。
+  # 检查开关默认关；range 查询或缓存故障 fail-open（审计标记 breachCheck=unverified）。
+  - id: breach_range_cache
+    storage: redis
+    multi_region: per_region_independent
+    key_ttl: 24h
+    fail_mode: fail_open
+    cleanup: ttl_expiry
+    note: "键前缀 guliangiam:breach:range:v1:；进程内回退容量上限 4096、Set 时清扫过期项"
+  # 账号锁定：PostgreSQL lockout_attempts 唯一事实源（每用户单行 INSERT ... ON CONFLICT
+  # 原子维护观察窗/计数/退避级别），无 Redis 计数层；存储故障时登录路径 fail-close。
+  - id: account_lockout
+    storage: postgres
+    multi_region: per_region_independent
+    fail_mode: fail_close
+    cleanup: success_delete_and_expired_reset
+    note: "认证成功 DeleteByUserID 清零；DeleteExpired 重置过期锁定行；锁定时长按组织策略 30min→6h→24h 退避"
+  - id: rate_limit_counter
+    storage: redis
+    multi_region: per_region_independent
+    fail_mode: auth_protocol_fail_close_management_fail_open
+    cleanup: ttl_expiry
+  - id: idempotency_cache
+    storage: postgres
+    multi_region: per_region_independent
+    ttl: 24h
+    fail_mode: fail_close
+    cleanup: idempotency_cleanup_hourly
+  - id: session_revocation_broadcast
+    storage: redis_pubsub+postgres
+    multi_region: control_plane_outbox_fanout
+    fail_mode: pg_poll_fallback_30s
+    cleanup: ttl_expiry
+  # 授权码（PKCE）：一次性消费，TTL 以本条目为唯一口径（设计见 design/protocol/oauth2.md §14.6.4）。
+  - id: authorization_code
+    storage: postgres
+    multi_region: per_region_independent
+    ttl: 5m
+    fail_mode: fail_close
+    cleanup: consume_on_exchange_then_expiry
+    note: "一次性消费；重复兑换即吊销该码签发的全部令牌；前缀 gl_ac_，仅存 SHA-256 哈希"

@@ -1,0 +1,308 @@
+# ────────────────────────────────────────────────────────────────────────────
+# permissions.yaml — Casbin 权限点机器可读注册表
+#
+# 消费方：
+#   1. scripts/check-registry-sync.py — 结构门禁（域 → resource → actions）
+#   2. scripts/gen_registry_md.py — 渲染 docs/generated/permissions-registry.md
+#
+# 命名纪律：{domain}:{resource}:{action} 语义三段式
+#   domain      = 业务域 (iam/payments/aigateway/...)
+#   resource    = 实体名 / 能力名
+#   action      = 运行期可执行的 CRUD 词表 (read/write/delete)
+#
+# 运行期事实：PEP 只按 HTTP method + 路径首段裁决，本 YAML 不参与鉴权
+# （internal/transport/http/api/v1/auth/auth_rbac_models.go）。AI 网关策略
+# 的 obj 为 aigateway:<entity>，前端 action 前缀为 aigateway-<singular>；
+# 查询侧增量 alias（colon→hyphen、HTTP verb→CRUD）见
+# internal/app/auth/permissions_query.go，旧 key 保留。
+# ────────────────────────────────────────────────────────────────────────────
+
+# ── 认证自服务面（会话主体） ──
+auth:
+  auth:
+    actions: [step_up, trusted_device]
+    casbin_resource: "auth"
+    frontend_prefix: "auth"
+    scenario: "step-up 挑战与信任设备注册/吊销：归属 auth 资源域，动作 step_up / trusted_device；默认角色需显式授予"
+  auth.account:
+    actions: [read, write]
+    casbin_resource: "auth"
+    frontend_prefix: "auth.account"
+    scenario: "会话主体自助资料读取/更新（/auth/account、/auth/profile）、实名认证发起（/auth/verify-identification）与联系方式绑定；GET=read，PATCH/POST=write"
+  auth.session:
+    actions: [read, write]
+    casbin_resource: "auth"
+    frontend_prefix: "auth.session"
+    scenario: "会话主体会话列表与注销；GET=read，DELETE=write"
+  auth.consent:
+    actions: [read, write]
+    casbin_resource: "auth"
+    frontend_prefix: "auth.consent"
+    scenario: "同意查询与撤回；GET=read，POST=write"
+  auth.password:
+    actions: [read, write]
+    casbin_resource: "auth"
+    frontend_prefix: "auth.password"
+    scenario: "会话主体修改密码/密码状态；GET=read，POST=write"
+  auth.mfa:
+    actions: [write]
+    casbin_resource: "auth"
+    frontend_prefix: "auth.mfa"
+    scenario: "会话主体自助 MFA 管理（setup initiate/verify/enable、mfa-methods 替换、preferred-mfa）；POST/PUT=write，身份只取会话"
+  auth.identity:
+    actions: [delete]
+    casbin_resource: "auth"
+    frontend_prefix: "auth.identity"
+    scenario: "会话主体解绑本人第三方身份；DELETE=delete（PEP 由 DELETE 派生 delete 动作），身份只取会话"
+  auth.faceid:
+    actions: [write, delete]
+    casbin_resource: "auth"
+    frontend_prefix: "auth.faceid"
+    scenario: "会话主体自助 FaceID 底图采集/吊销（/auth/faceids 复数，区别于公开登录 /auth/faceid 单数）；POST=write，DELETE=delete（PEP 由 DELETE 派生 delete 动作），身份只取会话"
+
+# ── IAM 核心域 ──
+# resource 为 Casbin obj；前端 action 前缀由 internal/app/auth/permissions_query.go
+# 的 resourceToActionKey 派生（forms→form / entries→entry / syncers→syncer）。
+iam:
+  webauthn:
+    actions: [read, write]
+    casbin_resource: "webauthn"
+    frontend_prefix: "webauthn"
+    scenario: "WebAuthn/passkey 自服务凭据列表与停用；GET=read，注册/DELETE=write"
+  identity-pools:
+    actions: [read, write]
+    frontend_prefix: "identity-pools"
+    scenario: "Workload 身份池、联邦信任、服务账号；Casbin 资源与前端 action 前缀同名复数（路由声明 identity-pools:read|write）"
+  forms:
+    actions: [read, write]
+    frontend_prefix: "form"
+    scenario: "表单资源；前端 action 前缀为 form"
+  entries:
+    actions: [read, write]
+    frontend_prefix: "entry"
+    scenario: "审计条目；前端 action 前缀为 entry"
+  syncers:
+    actions: [read, write, admin, run]
+    frontend_prefix: "syncer"
+    scenario: "目录同步器；前端 action 前缀为 syncer"
+  adapters:
+    actions: [read, write, delete]
+    casbin_resource: "adapters"
+    frontend_prefix: "adapter"
+    scenario: "Casbin 适配器连接、连通性测试与策略读写；DELETE 归 delete（前端 action 前缀为单数 adapter）"
+  applications:
+    actions: [read, write, delete]
+    casbin_resource: "applications"
+    frontend_prefix: "app"
+    scenario: "应用管理：GET=read，POST/PATCH=write，DELETE=delete（运行时按 DELETE → delete 判定；前端 action 前缀为 app）"
+  users:
+    actions: [read, write, delete, "password:reset"]
+    frontend_prefix: "users"
+    scenario: "用户管理：创建、资料、状态、MFA、会话与 Passkey/信任设备的读与写；DELETE=delete；POST /users/{id}/set-password 使用独立权限点 users:password:reset，users:write 不再可改口令；前缀与路由声明同为复数 users"
+  organizations:
+    actions: [read, write, delete]
+    frontend_prefix: "organizations"
+    scenario: "组织管理：GET=read，POST/PATCH=write，DELETE=delete；Casbin 资源与前端 action 前缀同名复数 organizations（路由声明 organizations:read|write|delete）"
+  platform-admins:
+    actions: [read, write, delete]
+    casbin_resource: "platform-admins"
+    frontend_prefix: "platform-admins"
+    scenario: "平台管理员名册管理（BE-A-05，高敏）：GET=read，POST/PATCH/set-active=write，DELETE=delete；嵌套 /platform-admins/{id}/scopes 读写随宿主资源 platform-admins（PEP 按路径首段派生）；默认角色不授予，Casbin 默认拒绝"
+  platform-admin-scopes:
+    actions: [read, write, delete]
+    casbin_resource: "platform-admin-scopes"
+    frontend_prefix: "platform-admin-scopes"
+    scenario: "平台管理员租户作用域（BE-A-05，高敏）：GET=read，POST :approve=write，DELETE=delete；审批者/创建者审计字段取可信会话身份；默认角色不授予，Casbin 默认拒绝"
+  search:
+    actions: [read]
+    casbin_resource: "search"
+    frontend_prefix: "search"
+    scenario: "全局聚合搜索：GET /api/v1/search 在可信租户范围内检索核心实体（普通成员限本组织，平台管理员可跨组织）；仅 read，无写端点"
+  providers:
+    actions: [read, write, delete]
+    casbin_resource: "providers"
+    frontend_prefix: "provider"
+    scenario: "身份提供商配置：GET=read，POST/PATCH/测试/启用归 write，DELETE=delete；前端 action 前缀为单数 provider"
+  roles:
+    actions: [read, write]
+    casbin_resource: "roles"
+    frontend_prefix: "role"
+    scenario: "角色管理：GET=read，POST/PATCH/DELETE/导入归 write（DELETE /roles/{id} 路由声明为 roles:write，无独立 delete 动作）"
+  groups:
+    actions: [read, write, delete]
+    casbin_resource: "groups"
+    frontend_prefix: "group"
+    scenario: "用户组管理：GET=read，POST/PATCH/导入归 write，DELETE=delete"
+  invitations:
+    actions: [read, write, delete]
+    casbin_resource: "invitations"
+    frontend_prefix: "invitation"
+    scenario: "邀请码管理：GET=read，POST 创建/revoke/resend/send 归 write；无 DELETE 端点，delete 为查询侧 adminPermissionSet 与前端兜底镜像签发的通用 CRUD 别名（镜像 enforcers 先例登记以保持镜像一致）；verify 为 public"
+  permissions:
+    actions: [read, write, enforce]
+    casbin_resource: "permissions"
+    frontend_prefix: "permission"
+    scenario: "权限点与 Casbin 策略：GET=read，增删改/批量导入归 write，enforce/batch-enforce 单独登记 enforce；DELETE /permissions/{id} 归 write，无独立 delete 动作"
+  captcha-providers:
+    actions: [read, write]
+    casbin_resource: "captcha-providers"
+    frontend_prefix: "captcha-provider"
+    scenario: "安全扩展：验证码供应商配置；GET=read，POST/PUT/DELETE 归 write（路由无独立 delete 动作，前端 action 前缀为单数 captcha-provider）"
+  face-id-providers:
+    actions: [read, write]
+    casbin_resource: "face-id-providers"
+    frontend_prefix: "face-id-provider"
+    scenario: "安全扩展：人脸识别供应商配置；GET=read，POST/PUT/DELETE 归 write（路由无独立 delete 动作，前端 action 前缀为单数 face-id-provider）"
+  notification-providers:
+    actions: [read, write]
+    casbin_resource: "notification-providers"
+    frontend_prefix: "notification-provider"
+    scenario: "安全扩展：通知渠道供应商配置；GET=read，POST/PUT/DELETE 归 write（路由无独立 delete 动作，前端 action 前缀为单数 notification-provider）"
+  notifications:
+    actions: [read, write]
+    casbin_resource: "notifications"
+    frontend_prefix: "notification"
+    scenario: "通知中心投递台账与管理员广播：GET=read，POST 创建/广播/测试发送/标记已读归 write；个人收件箱 /api/v1/me/notifications 走会话主体，不挂管理权限"
+  enforcers:
+    actions: [read, write, delete]
+    casbin_resource: "enforcers"
+    frontend_prefix: "enforcer"
+    scenario: "Casbin enforcer 管理：GET=read，POST/PATCH 归 write（DELETE /enforcers/{id} 路由声明为 enforcers:write）；查询侧签发 enforcer:read|write|delete，前端 action 前缀为单数 enforcer"
+
+# ── 支付域 ──
+# 运行期 resource 由路径首段决定（resourceFromPath），以下资源的 Casbin obj
+# 与前端 action 前缀同名；pay-recon / pay-recon-items 仅有 POST 写端点。
+payments:
+  pay-recon:
+    actions: [write]
+    casbin_resource: "pay-recon"
+    frontend_prefix: "pay-recon"
+    scenario: "手动触发对账批次；POST /pay-recon:run 归 write，无独立读端点"
+  pay-recon-items:
+    actions: [write, approve]
+    casbin_resource: "pay-recon-items"
+    frontend_prefix: "pay-recon-items"
+    scenario: "对账差异项处置与复核：POST /pay-recon-items/{id}:resolve 归 write，POST /pay-recon-items/{id}:approve 归 approve（复核人必须与处置人不同）"
+  pay-channel-configs:
+    actions: [read, write]
+    casbin_resource: "pay-channel-configs"
+    frontend_prefix: "pay-channel-configs"
+    scenario: "支付渠道配置版本；GET=read，POST 创建与 :transition=write，无删除端点"
+
+# ── AI 网关域 ──
+# Casbin obj 为 aigateway:<entity>（api_keys 保留运行期下划线）；前端 action
+# 前缀为连字符单数、resource 为连字符复数。策略里的 HTTP 动词
+# （get/post/put/patch/delete）在查询侧归一为 read/write/delete。
+aigateway:
+  providers:
+    actions: [read, write, delete]
+    casbin_resource: "aigateway:providers"
+    frontend_prefix: "aigateway-provider"
+    scenario: "供应商注册与连通性测试；POST /providers/{id}/test 归 write"
+  models:
+    actions: [read, write, delete]
+    casbin_resource: "aigateway:models"
+    frontend_prefix: "aigateway-model"
+  aliases:
+    actions: [read, write, delete]
+    casbin_resource: "aigateway:aliases"
+    frontend_prefix: "aigateway-alias"
+  routes:
+    actions: [read, write, delete]
+    casbin_resource: "aigateway:routes"
+    frontend_prefix: "aigateway-route"
+  api_keys:
+    actions: [read, write, delete]
+    casbin_resource: "aigateway:api_keys"
+    frontend_prefix: "aigateway-api-key"
+    scenario: "API Key 管理；POST /api-keys/{id}/revoke 归 write"
+  quotas:
+    actions: [read, write, delete]
+    casbin_resource: "aigateway:quotas"
+    frontend_prefix: "aigateway-quota"
+  prices:
+    actions: [read, write, delete]
+    casbin_resource: "aigateway:prices"
+    frontend_prefix: "aigateway-price"
+    scenario: "价格版本；GET/POST/PATCH/DELETE 均按 CRUD 归一"
+  usage:
+    actions: [read]
+    casbin_resource: "aigateway:usage"
+    frontend_prefix: "aigateway-usage"
+    scenario: "用量日志与统计（只读）"
+  health:
+    actions: [read]
+    casbin_resource: "aigateway:health"
+    frontend_prefix: "aigateway-health"
+    scenario: "供应商健康状态（只读，状态由网关服务写入）"
+  chat:
+    actions: [read, write]
+    casbin_resource: "aigateway:chat"
+    frontend_prefix: "aigateway-chat"
+    scenario: "数据面推理入口（GET models=read，POST chat/embeddings=write；实际鉴权由 API Key 完成）"
+
+# ── 多语言域 ──
+# 路径 /api/v1/i18n/** 的 Casbin obj 为 "i18n"；GET=read，PUT=write。
+i18n:
+  translations:
+    actions: [read, write]
+    casbin_resource: "i18n"
+    frontend_prefix: "i18n"
+    scenario: "多语言资源；GET languages/translations=read，PUT translations=write（GET /i18n/translate 运行期按 method 归 read，routes.go 声明漂移归 C3）"
+
+# ── 治理域（IGA / ReBAC / Actions / Risk / Metering）──
+# 运行期 resource 由路径首段决定，Casbin obj 与前端 action 前缀同名。
+# 前端 action 以 `resource.Definition.Permission` 的冒号前半段为准：
+# actions / rebac / risk / metering / iga。登记条目必须与后端
+# adminPermissionSet 及前端 ADMIN_FULL_PERMISSIONS 镜像同批更新。
+governance:
+  actions:
+    actions: [read, write]
+    casbin_resource: "actions"
+    frontend_prefix: "actions"
+    scenario: "身份动作定义、版本发布与按需执行；GET=read，POST/PATCH/run=write"
+  rebac:
+    actions: [read, write, check]
+    casbin_resource: "rebac"
+    frontend_prefix: "rebac"
+    scenario: "ReBAC 命名空间、关系与授权检查；POST /check 归 check，其余写操作归 write"
+  risk:
+    actions: [read, write]
+    casbin_resource: "risk"
+    frontend_prefix: "risk"
+    scenario: "风险规则、信号与处置；GET=read，写与处置归 write"
+  metering:
+    actions: [read, write]
+    casbin_resource: "metering"
+    frontend_prefix: "metering"
+    scenario: "计量用量、配额快照与汇总发布；GET=read，写归 write"
+  iga:
+    actions: [read, write]
+    casbin_resource: "iga"
+    frontend_prefix: "iga"
+    scenario: "IGA 访问复核、职责分离规则与活动；GET=read，写与状态变更归 write（无 DELETE 端点）"
+
+# ── 身份核验域 ──
+# 回调端点是公开面：第三方提供商无法持有会话，认证由 webhook 签名完成，
+# 因此该路由在 routes.go 中登记为 Permission: "public"，不产生 Casbin 权限点。
+idv:
+  verifications:
+    actions: [read, write]
+    casbin_resource: "idv"
+    frontend_prefix: "idv"
+    scenario: "身份核验记录查询与删除；POST /api/v1/idv/callback/{provider} 为签名验证的公开回调，不参与 RBAC"
+
+# ── 隐私域 ──
+# DSAR 管理面：租户来自会话作用域，请求体不接受 organizationId。
+b2b:
+  b2b:
+    actions: [read, write]
+    casbin_resource: "b2b"
+    frontend_prefix: "b2b"
+    scenario: "企业域名认领/验证与策略继承预览：GET=read，POST/DELETE/verify=write；策略继承预览端点使用 organizations:read"
+privacy:
+  privacy:
+    actions: [read, write, erase]
+    casbin_resource: "privacy"
+    frontend_prefix: "privacy"
+    scenario: "数据主体权利请求（DSAR）创建/列表/详情/状态迁移/超期巡检、导出与擦除复核；GET/导出=read，POST/迁移=write，擦除复核仅合规角色（erase）"

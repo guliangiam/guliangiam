@@ -1,0 +1,305 @@
+name: National Database CI (国产库集成测试)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 国产数据库方言集成测试
+#
+# 触发方式（PostgreSQL-first：非 PG 方言不进入 PR 阻断路径）：
+#   1. schedule（每日夜间，仅 openGauss 自动跑）
+#   2. workflow_dispatch（手动指定 lib，全部 4 个国产库）
+#
+# 镜像来源层级：
+#   Tier 1 — Docker Hub 官方镜像，直接 CI services：
+#     openGauss/GaussDB  → opengauss/opengauss-server:latest
+#
+#   Tier 2 — 社区/非官方镜像，可用但风险自担（PoC 级别）：
+#     DM8                 → teamide/dm8:v201106
+#
+#   Tier 3 — 必须从厂家官网下载 tar → CI 里 docker load：
+#     KingbaseES V9      → kingbase.com.cn 下载中心 (需邮箱注册, 730MB tar)
+#     ShenTong 标准版    → 神舟通用客服获取 Docker tar
+#     DM8 官方镜像       → eco.dameng.com 下载中心 (需登录)
+#
+#   Tier 3 作业使用 workflow_dispatch，从 GitHub Release 下载 tar 后 docker load。
+#   你需要先在本地跑一次：
+#     gh release create national-db-artifacts \
+#       KingbaseES_V009R001C010_x86_64_Docker.tar \
+#       dm8_official.tar \
+#       ShenTong_088_241028_x86_64bit.tar
+#   然后去 GitHub Actions → Run workflow → 选这个 release tag
+#
+# DB_DRIVER → dialectKey 映射（runtime.go driverNormalize）：
+#   opengauss/gaussdb       → wire=pgx    dialectKey=gaussdb   (PG 兼容 + 完整 Feature)
+#   kingbase/kingbasees     → wire=pgx    dialectKey=kingbase  (PG 兼容, RLS 关)
+#   dm8/dameng              → wire=godror  dialectKey=dm8      (Oracle MERGE INTO)
+#   shentong/shentongdb     → wire=stgo    dialectKey=shentong (Oracle MERGE INTO)
+#   shentong-gaussdb        → wire=pgx    dialectKey=shentong_gaussdb (PG 兼容)
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # 19:00 UTC = 03:00 Asia/Shanghai；与 nightly-db.yml 错开
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      tier3_release:
+        description: 'Tier3 国产库 tar 文件来自哪个 GitHub Release（用于 KingbaseES / DM8 / ShenTong）'
+        required: false
+        default: 'national-db-artifacts'
+
+concurrency:
+  group: national-db-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Job 1: openGauss / GaussDB integration — Tier1, Docker Hub 官方镜像, 全自动
+  # ═════════════════════════════════════════════════════════════════════════════
+  opengauss_integration:
+    name: openGauss / GaussDB Integration (Tier1)
+    runs-on: ubuntu-latest
+    services:
+      opengauss:
+        image: opengauss/opengauss-server:latest
+        # 备选社区镜像（国内网络不稳定时可用）
+        # image: enmotech/opengauss:latest
+        env:
+          GS_PASSWORD: Guliangiam@2026
+          GS_NODENAME: gaussdb
+          GS_USERNAME: guliangiam
+          GS_USER_PASSWORD: Guliangiam@2026
+          GS_PORT: '5432'
+          GS_DB: guliangiam
+        ports:
+          - 55432:5432
+        options: >-
+          --privileged=true
+          --health-cmd="bash -c "su - omm -c \"gsql -d guliangiam -c 'SELECT 1'\"""
+          --health-interval=15s
+          --health-timeout=5s
+          --health-retries=15
+          --health-start-period=45s
+    env:
+      DB_DRIVER: gaussdb
+      GS_PASSWORD: Guliangiam@2026
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod, cache: true }
+
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Install gate dependencies
+        run: python3 -m pip install -r scripts/requirements.txt
+
+      - name: Install gsql client (openGauss CLI)
+        run: |
+          # 从容器里拷贝 gsql 出来用
+          docker cp             $(docker ps -qf "name=opengauss"):/usr/local/opengauss/bin/gsql             /usr/local/bin/gsql
+          chmod +x /usr/local/bin/gsql
+          gsql --version 2>&1 || echo "gsql ready"
+
+      - name: Generate gaussdb DDL
+        run: python3 scripts/gen_schema.py --dialect gaussdb --all
+
+      - name: Apply DDL (first replay)
+        run: |
+          PGPASSWORD=$GS_PASSWORD           gsql -h 127.0.0.1 -p 55432 -U guliangiam -d guliangiam             -f db/gaussdb/V1__guliangiam_schema_init.sql
+
+      - name: Apply DDL (idempotency — second replay must be zero-error)
+        run: |
+          PGPASSWORD=$GS_PASSWORD           gsql -h 127.0.0.1 -p 55432 -U guliangiam -d guliangiam             -f db/gaussdb/V1__guliangiam_schema_init.sql
+          echo "✅ openGauss DDL idempotent — second replay zero error"
+
+      - name: Schema parity check (all 4 dialects)
+        run: python3 scripts/check-schema-parity.py
+
+      - name: openGauss runtime consistency check
+        run: |
+          PGHOST=127.0.0.1 PGPORT=55432 PGUSER=guliangiam           PGDB=guliangiam PGPASSWORD=$GS_PASSWORD           python3 scripts/check-schema-vs-db.py --dialect postgresql --fail-fast
+
+      - name: Dialect unit tests (19 drivers)
+        run: go test ./internal/infra/dialect/... -count=1 -v
+
+      - name: Build + vet
+        run: go build ./... && go vet ./...
+
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Job 2: KingbaseES V9 — Tier3, 需手动 docker load 官方 tar
+  # 条件：仅 workflow_dispatch 触发时跑
+  # ═════════════════════════════════════════════════════════════════════════════
+  kingbase_integration:
+    name: KingbaseES V9 Integration (Tier3, manual tar)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      TAR_IMAGE_TAG: kingbase:v1
+      TAR_FILE: KingbaseES_V009R001C010_x86_64_Docker.tar
+      DB_PORT: '54321'
+      DB_USER: guliangiam
+      DB_PASSWORD: Guliangiam@2026
+      DB_NAME: guliangiam
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download KingbaseES tar from GitHub Release
+        run: |
+          gh release download '${{ github.event.inputs.tier3_release }}'             --pattern "$TAR_FILE"             --dir /tmp/national-db-artifacts
+          ls -lh /tmp/national-db-artifacts/
+
+      - name: Load Docker image
+        run: |
+          docker load -i /tmp/national-db-artifacts/$TAR_FILE
+          # 官方 tar 导入后 image name 不固定，重命名为约定标签
+          docker tag "$(docker images -q | head -1)" $TAR_IMAGE_TAG
+          docker images | grep kingbase
+
+      - name: Start KingbaseES container
+        run: |
+          docker run -d --name kingbase-test             --privileged=true             -p 54321:54321             -e DB_USER=$DB_USER             -e DB_PASSWORD=$DB_PASSWORD             -e DB_MODE=postgresql             -e ENCODING=UTF8             -v /tmp/kes-data:/data             $TAR_IMAGE_TAG
+          # 等健康
+          for i in $(seq 1 60); do
+            if docker exec kingbase-test ksql system system -c 'SELECT 1' 2>/dev/null; then
+              echo "✅ KingbaseES ready"
+              break
+            fi
+            sleep 5
+          done || (docker logs kingbase-test; exit 1)
+
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Install gate dependencies
+        run: python3 -m pip install -r scripts/requirements.txt
+
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod, cache: true }
+
+      - name: Generate kingbasees DDL
+        run: python3 scripts/gen_schema.py --dialect kingbasees --all
+
+      - name: Apply DDL × 2 + parity + runtime + dialect tests
+        run: |
+          docker cp db/kingbasees/V1__guliangiam_schema_init.sql kingbase-test:/tmp/init.sql
+          docker exec kingbase-test ksql guliangiam guliangiam -c "SELECT 1" 2>/dev/null             || docker exec kingbase-test ksql system system -c "CREATE DATABASE guliangiam"
+          docker exec kingbase-test ksql guliangiam guliangiam -f /tmp/init.sql
+          docker exec kingbase-test ksql guliangiam guliangiam -f /tmp/init.sql             && echo "✅ KingbaseES DDL idempotent"
+          python3 scripts/check-schema-parity.py
+          go test ./internal/infra/dialect/... -count=1
+
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Job 3: 达梦 DM8 — Tier3 官方 tar（或 Tier2 社区镜像）
+  # ═════════════════════════════════════════════════════════════════════════════
+  dm8_integration:
+    name: 达梦 DM8 Integration (Tier3, manual tar)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      DB_DRIVER: dm8
+      DB_PORT: '5236'
+      DB_USER: SYSDBA
+      DB_PASSWORD: Guliangiam@2026
+      DB_NAME: guliangiam
+      TAR_FILE: dm8_official.tar
+      TAR_IMAGE_TAG: dm8:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Try Tier2 community image first (fast path)
+        id: tier2
+        continue-on-error: true
+        run: |
+          docker pull teamide/dm8:v201106
+          docker tag teamide/dm8:v201106 $TAR_IMAGE_TAG
+          echo "image=teamide/dm8:v201106" >> "$GITHUB_OUTPUT"
+
+      - name: Download official tar from GitHub Release (fallback)
+        if: steps.tier2.outcome != 'success'
+        run: |
+          gh release download '${{ github.event.inputs.tier3_release }}'             --pattern "$TAR_FILE" --dir /tmp/national-db-artifacts
+          docker load -i /tmp/national-db-artifacts/$TAR_FILE
+
+      - name: Start DM8 container
+        run: |
+          docker run -d --name dm8-test             --privileged=true             -p 5236:5236             -e LD_LIBRARY_PATH=/opt/dmdbms/bin             -e PAGE_SIZE=16             -e EXTENT_SIZE=32             -e LOG_SIZE=2048             -e SYSDBA_PWD=$DB_PASSWORD             -e PORT_NUM=5236             -e INSTANCE_NAME=DM8             -v /tmp/dm8-data:/opt/dmdbms/data             $TAR_IMAGE_TAG
+          for i in $(seq 1 90); do
+            if docker exec dm8-test bash -c "disql SYSDBA/$DB_PASSWORD@localhost:5236 `SELECT 1`" 2>/dev/null; then
+              echo "✅ DM8 ready"
+              break
+            fi
+            sleep 5
+          done || (docker logs dm8-test; exit 1)
+
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Install gate dependencies
+        run: python3 -m pip install -r scripts/requirements.txt
+
+      - name: Generate DM8 DDL + parity + dialect tests
+        run: |
+          python3 scripts/check-schema-parity.py
+          go test ./internal/infra/dialect/... -count=1 -v -run "DM8|MERGE"
+
+
+  # ═════════════════════════════════════════════════════════════════════════════
+  # Job 4: ShenTong 标准版 — Tier3, 需联系神舟通用客服拿 Docker tar
+  # ═════════════════════════════════════════════════════════════════════════════
+  shentong_integration:
+    name: 神舟通用 ShenTong Integration (Tier3, manual tar)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    env:
+      DB_DRIVER: shentong
+      DB_PORT: '2003'
+      DB_USER: SYSDBA
+      DB_PASSWORD: szoscar55                  # ShenTong 默认密码
+      DB_NAME: OSRDB
+      TAR_FILE: ShenTong_088_241028_x86_64bit.tar
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download ShenTong tar from GitHub Release
+        run: |
+          gh release download '${{ github.event.inputs.tier3_release }}'             --pattern "$TAR_FILE" --dir /tmp/national-db-artifacts
+          docker load -i /tmp/national-db-artifacts/$TAR_FILE
+          docker tag "$(docker images -q | head -1)" shentong:latest
+
+      - name: Prepare dbdata volume (ShenTong 需要 dbdata.tar.gz 解压后挂载)
+        run: |
+          # 如果 release 里有 dbdata.tar.gz 就解压，否则容器自己初始化
+          if gh release view '${{ github.event.inputs.tier3_release }}'                --json assets | grep -q dbdata.tar.gz; then
+            gh release download '${{ github.event.inputs.tier3_release }}'               --pattern "dbdata.tar.gz" --dir /tmp/national-db-artifacts
+            mkdir -p /tmp/shentong-dbdata
+            tar -zxf /tmp/national-db-artifacts/dbdata.tar.gz -C /tmp/shentong-dbdata
+            echo "DBDATA_DIR=/tmp/shentong-dbdata" >> "$GITHUB_ENV"
+          else
+            mkdir -p /tmp/shentong-dbdata/odbs /tmp/shentong-dbdata/arch /tmp/shentong-dbdata/backup
+            echo "DBDATA_DIR=/tmp/shentong-dbdata" >> "$GITHUB_ENV"
+          fi
+
+      - name: Start ShenTong container
+        run: |
+          docker run -dit --name shentong-test             --privileged=true             -p 2003:2003             -v $DBDATA_DIR/odbs:/opt/ShenTong/odbs/OSRDB             -v $DBDATA_DIR/arch:/opt/ShenTong/arch/OSRDB             -v $DBDATA_DIR/backup:/opt/ShenTong/backup             shentong:latest
+          for i in $(seq 1 90); do
+            if docker exec shentong-test /opt/ShenTong/bin/isql                  -U SYSDBA/szoscar55 -d osrdb <<< 'SELECT VERSION;' 2>/dev/null; then
+              echo "✅ ShenTong ready"
+              break
+            fi
+            sleep 5
+          done || (docker logs shentong-test; exit 1)
+
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Install gate dependencies
+        run: python3 -m pip install -r scripts/requirements.txt
+
+      - name: Parity + dialect tests (MERGE INTO path)
+        run: |
+          python3 scripts/check-schema-parity.py
+          go test ./internal/infra/dialect/... -count=1 -v -run "ShenTong|MERGE"

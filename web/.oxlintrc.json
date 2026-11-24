@@ -1,0 +1,125 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "import", "vitest", "jsx-a11y", "promise"],
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    "storybook-static/**",
+    "coverage/**",
+    "playwright-report/**",
+    "test-results/**"
+  ],
+  "settings": {
+    "react": {
+      "version": "19.2.4"
+    }
+  },
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "import/no-unassigned-import": "off",
+    "eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "no-console": [
+      "warn",
+      {
+        "allow": ["warn", "error"]
+      }
+    ],
+    "prefer-const": "error",
+    "eqeqeq": ["warn", "always"],
+    "no-useless-assignment": "warn",
+    "typescript/no-explicit-any": "error",
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-ignore": "allow-with-description",
+        "ts-expect-error": true,
+        "ts-nocheck": true,
+        "ts-check": true
+      }
+    ],
+    "import/no-duplicates": "warn",
+    "import/no-self-import": "error",
+    "react/hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/only-export-components": [
+      "warn",
+      {
+        "allowConstantExport": true
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/shared/ui/ActivityHeatmap.tsx",
+        "src/shared/ui/charts/ActivityHeatmap.tsx",
+        "src/shared/ui/ProviderIcon/ProviderIcon.tsx"
+      ],
+      "rules": {
+        "jsx-a11y/prefer-tag-over-role": "off"
+      }
+    },
+    {
+      "files": ["src/features/navigation/MenuSearch.tsx"],
+      "rules": {
+        "jsx-a11y/prefer-tag-over-role": "off"
+      }
+    },
+    {
+      "files": ["src/shared/ui/VirtualTable/VirtualTable.tsx"],
+      "rules": {
+        "jsx-a11y/prefer-tag-over-role": "off",
+        "react/incompatible-library": "off"
+      }
+    },
+    {
+      "files": ["src/pages/ai-gateway/prices/AIGatewayPricesPage.tsx"],
+      "rules": {
+        "react/purity": "off"
+      }
+    },
+    {
+      "files": ["src/pages/org-domains/useOrgDomainsPageController.ts"],
+      "rules": {
+        "react/set-state-in-effect": "off"
+      }
+    },
+    {
+      "files": ["src/app/router/*-routes.tsx"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    },
+    {
+      "files": [
+        "src/shared/ui/AccountItemTable.tsx",
+        "src/shared/ui/ProviderSelect.tsx",
+        "src/shared/ui/ProviderItemsEditor.tsx"
+      ],
+      "rules": {
+        "react/no-unstable-nested-components": "off"
+      }
+    },
+    {
+      "files": ["src/shared/ui/FieldHelp.tsx"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    }
+  ]
+}

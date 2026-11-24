@@ -1,0 +1,7 @@
+build
+dist
+node_modules
+cypress
+*.min.js
+pnpm-lock.yaml
+package-lock.json

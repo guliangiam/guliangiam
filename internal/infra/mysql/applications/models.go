@@ -1,0 +1,126 @@
+package applications
+
+import "time"
+
+// applicationRow 对应 applications 主表与五张配置子表的聚合行。
+// MySQL 版 nullable 列用 *string / *time.Time，与 PG 版保持一致，
+// Scan 时 database/sql 能自动处理 NULL 值到指针。
+type applicationRow struct {
+	ID                        string
+	OrganizationID            string
+	Slug                      string
+	DisplayName               string
+	Category                  string
+	AppType                   string
+	Description               *string
+	HomepageURL               *string
+	Domain                    *string
+	Status                    string
+	ClientID                  *string
+	ClientSecretHash          *string
+	TokenEndpointAuthMethod   string
+	RedirectURIs              []byte
+	GrantTypes                []byte
+	DisableSignin             bool
+	Tags                      []byte
+	EnableExclusiveSignin     bool
+	EnableSigninSession       bool
+	Logo                      string
+	EnableSamlCompress        bool
+	SignupItems               []byte
+	TokenFormat               string
+	ExpireInHours             int
+	RefreshTokenExpireInHours int
+	TokenSigningMethod        string
+	ProviderItems             []byte
+	SamlReplyUrl              string
+	Certificate               string
+	CustomCss                 string
+	CustomJs                  string
+	CustomHeader              string
+	SigninUrl                 string
+	LogoutUrl                 string
+	LogoutRedirectUrl         string
+	IsPortal                  bool
+	IsVisible                 bool
+	PromptUrl                 string
+	SamlMetadata              string
+	CustomScopes              []byte
+	// Phase 2: Extended fields
+	IsShared                          bool
+	Title                             string
+	Favicon                           string
+	MenuOrder                         int
+	MenuMode                          string
+	EnableSignup                      bool
+	EnableGuestSignin                 bool
+	EnableAutoSignin                  bool
+	EnableLinkWithEmail               bool
+	CookieExpireInHours               int
+	SignupUrl                         string
+	ForgetUrl                         string
+	AffiliationUrl                    string
+	TokenFields                       string
+	TokenAttributes                   []byte
+	ForcedRedirectOrigin              string
+	CodeExpire                        int
+	SamlNameIdFormat                  string
+	SamlNameIdContent                 string
+	SamlSignRequest                   bool
+	SamlMetadataUrl                   string
+	SamlAttributes                    []byte
+	EnableSamlC14n10                  bool
+	EnableSamlPostBinding             bool
+	DisableSamlAttributes             bool
+	EnableSamlAssertionSignature      bool
+	UseEmailAsSamlNameId              bool
+	ConsentMode                       string
+	DpopRequired                      bool
+	PkceRequired                      bool
+	IpWhitelist                       string
+	IpBlacklist                       string
+	FailedSigninLimit                 int
+	FailedSigninFrozenTime            int
+	CodeResendTimeout                 int
+	CorsAllowedOrigins                []byte
+	EnableBetaOidc                    bool
+	DefaultGroup                      string
+	OrgChoiceMode                     string
+	FormCss                           string
+	FormCssMobile                     string
+	FormSideHtml                      string
+	FormBackgroundUrl                 string
+	FormBackgroundUrlMobile           string
+	FormOffset                        string
+	FormPosition                      string
+	HeaderHtml                        string
+	FooterHtml                        string
+	SignupHtml                        string
+	SigninHtml                        string
+	TermsOfUse                        string
+	PrivacyPolicy                     string
+	BackchannelLogoutUri              string
+	FrontchannelLogoutUri             string
+	FrontchannelLogoutSessionRequired bool
+	OtherDomains                      []byte
+	UpstreamHost                      string
+	SslMode                           string
+	SslCert                           string
+	ClientCert                        string
+	SamlHashAlgorithm                 string
+	SamlC14nPrefix                    string
+	PageHtml                          string
+	SigninMethods                     []byte
+	SigninItems                       []byte
+	CreatedAt                         time.Time
+	UpdatedAt                         time.Time
+	DeletedAt                         *time.Time
+	CreatedBy                         *string
+	UpdatedBy                         *string
+	Revision                          int64
+}
+
+type applicationProviderBindingRow struct {
+	ApplicationID string
+	ProviderID    string
+}

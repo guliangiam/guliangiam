@@ -1,0 +1,1224 @@
+table_name: guliangiam.products
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: image
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: detail
+  type: VARCHAR(2000)
+  nullable: true
+  default: ''''''
+- name: description
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: tag
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: currency
+  type: VARCHAR(3)
+  nullable: false
+  default: '''USD'''
+- name: price
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: quantity
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: sold
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: is_recharge
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: recharge_options
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: disable_custom_recharge
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: providers
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: success_url
+  type: VARCHAR(1000)
+  nullable: true
+  default: ''''''
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''draft'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_products_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+- name: ck_products_status
+  type: check
+  expr: status IN ('draft', 'active', 'discontinued')
+indexes:
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.orders
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: user_id
+  type: UUID
+  nullable: true
+- name: products
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: product_infos
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: payment
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: price
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: currency
+  type: VARCHAR(3)
+  nullable: true
+  default: ''''''
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''created'''
+- name: message
+  type: VARCHAR(2000)
+  nullable: true
+  default: ''''''
+- name: payment_url
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: trade_no
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: paid_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: coupon_name
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: coupon_discount
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+- name: idempotency_key
+  type: TEXT
+  nullable: true
+constraints:
+- name: uq_orders_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+- name: uq_orders_idempotency_key
+  type: unique_partial
+  columns:
+  - idempotency_key
+  predicate: idempotency_key IS NOT NULL
+- name: ck_orders_status
+  type: check
+  expr: status IN ('created', 'payment_pending', 'paid', 'completed', 'failed', 'cancelled',
+    'refunded', 'closed')
+- name: ck_orders_paid_at
+  type: check
+  expr: (status IN ('paid', 'completed', 'refunded', 'closed')) = (paid_at IS NOT
+    NULL)
+indexes:
+- name: idx_orders_org_user
+  columns:
+  - organization_id
+  - user_id
+- name: idx_orders_status
+  columns:
+  - status
+- name: idx_orders_created_at_desc
+  columns:
+  - created_at DESC
+- name: idx_orders_trade_no
+  columns:
+  - trade_no
+- name: idx_orders_org_status
+  columns:
+  - organization_id
+  - status
+- name: idx_orders_user_id
+  columns:
+  - user_id
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: SET_NULL
+---
+table_name: guliangiam.payments
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: provider
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: type
+  type: VARCHAR(100)
+  nullable: true
+  default: ''''''
+- name: products
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: product_name
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: product_display_name
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: detail
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: currency
+  type: VARCHAR(3)
+  nullable: true
+  default: ''''''
+- name: price
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: user_id
+  type: UUID
+  nullable: true
+- name: person_name
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: person_id_card
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: person_email
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: person_phone
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: invoice_type
+  type: VARCHAR(100)
+  nullable: true
+  default: ''''''
+- name: invoice_title
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: invoice_tax_id
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: invoice_remark
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: invoice_url
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: order_id
+  type: UUID
+  nullable: true
+- name: out_order_id
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: pay_url
+  type: VARCHAR(2000)
+  nullable: true
+  default: ''''''
+- name: success_url
+  type: VARCHAR(2000)
+  nullable: true
+  default: ''''''
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''created'''
+- name: message
+  type: VARCHAR(2000)
+  nullable: true
+  default: ''''''
+- name: channel_order_no
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: attempt_count
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: refunded_amount
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: refunding_amount
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: last_error_code
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: last_error_message
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+- name: idempotency_key
+  type: TEXT
+  nullable: true
+constraints:
+- name: uq_payments_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+- name: uq_payments_idempotency_key
+  type: unique_partial
+  columns:
+  - idempotency_key
+  predicate: idempotency_key IS NOT NULL
+- name: ck_payments_status
+  type: check
+  expr: status IN ('created', 'processing', 'succeeded', 'failed', 'cancelled', 'refunded')
+indexes:
+- name: idx_payments_org_status
+  columns:
+  - organization_id
+  - status
+- name: idx_payments_user_id
+  columns:
+  - user_id
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: order_id
+  ref_table: guliangiam.orders
+  on_delete: SET_NULL
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: SET_NULL
+---
+table_name: guliangiam.transactions
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: true
+- name: order_id
+  type: UUID
+  nullable: true
+- name: payment_id
+  type: UUID
+  nullable: true
+- name: transaction_type
+  type: TEXT
+  nullable: false
+- name: amount
+  type: DECIMAL(19, 4)
+  nullable: false
+- name: currency
+  type: VARCHAR(3)
+  nullable: false
+  default: '''USD'''
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''pending'''
+- name: provider_type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: provider_id
+  type: UUID
+  nullable: true
+- name: metadata
+  type: JSONB
+  nullable: false
+  default: '''{}''::jsonb'
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_transactions_org
+  columns:
+  - organization_id
+- name: idx_transactions_order
+  columns:
+  - order_id
+- name: idx_transactions_payment
+  columns:
+  - payment_id
+- name: idx_transactions_user
+  columns:
+  - user_id
+- name: idx_transactions_status
+  columns:
+  - status
+constraints:
+- name: ck_transactions_status
+  type: check
+  expr: status IN ('pending', 'completed', 'failed', 'cancelled')
+- name: ck_transactions_type
+  type: check
+  expr: transaction_type IN ('payment', 'refund', 'cancellation')
+revision: true
+rls: true
+fk_constraints:
+- column: order_id
+  ref_table: guliangiam.orders
+  on_delete: SET_NULL
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: payment_id
+  ref_table: guliangiam.payments
+  on_delete: SET_NULL
+- column: provider_id
+  ref_table: guliangiam.providers
+  on_delete: SET_NULL
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: SET_NULL
+---
+table_name: guliangiam.plans
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: description
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: price
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: currency
+  type: VARCHAR(3)
+  nullable: true
+  default: ''''''
+- name: period
+  type: VARCHAR(50)
+  nullable: true
+  default: ''''''
+- name: product
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: payment_providers
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''draft'''
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: is_exclusive
+  type: BOOLEAN
+  nullable: false
+  default: 'false'
+- name: role
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_plans_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+- name: ck_plans_status
+  type: check
+  expr: status IN ('draft', 'active', 'archived')
+- name: ck_plans_period
+  type: check
+  expr: period IS NULL OR period IN ('daily', 'weekly', 'monthly', 'quarterly', 'yearly',
+    'lifetime')
+indexes:
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.pricings
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: description
+  type: VARCHAR(500)
+  nullable: true
+  default: ''''''
+- name: plans
+  type: JSONB
+  nullable: true
+  default: '''[]'''
+- name: is_enabled
+  type: BOOLEAN
+  nullable: false
+  default: 'true'
+- name: trial_duration
+  type: INTEGER
+  nullable: false
+  default: '0'
+- name: application
+  type: VARCHAR(255)
+  nullable: true
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_pricings_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+indexes:
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+---
+table_name: guliangiam.subscriptions
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: VARCHAR(255)
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: user_id
+  type: UUID
+  nullable: true
+- name: plan_id
+  type: UUID
+  nullable: true
+- name: pricing_id
+  type: UUID
+  nullable: true
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''active'''
+- name: start_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: end_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: expire_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+constraints:
+- name: uq_subscriptions_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+- name: ck_subscriptions_status
+  type: check
+  expr: status IN ('pending', 'trialing', 'active', 'past_due', 'expired', 'cancelled')
+indexes:
+- name: idx_subscriptions_user_id
+  columns:
+  - user_id
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+- column: plan_id
+  ref_table: guliangiam.plans
+  on_delete: SET_NULL
+- column: pricing_id
+  ref_table: guliangiam.pricings
+  on_delete: SET_NULL
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: SET_NULL
+---
+table_name: guliangiam.coupons
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: description
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: code
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: discount_type
+  type: VARCHAR(64)
+  nullable: false
+  default: '''percentage'''
+- name: discount
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: max_discount
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: scope
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: products
+  type: JSONB
+  nullable: false
+  default: '''[]'''
+- name: users
+  type: JSONB
+  nullable: false
+  default: '''[]'''
+- name: quantity
+  type: INT
+  nullable: false
+  default: '0'
+- name: used_count
+  type: INT
+  nullable: false
+  default: '0'
+- name: max_usage_per_user
+  type: INT
+  nullable: false
+  default: '0'
+- name: start_time
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: expire_time
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: min_order_amount
+  type: DECIMAL(19, 4)
+  nullable: false
+  default: '0'
+- name: currency
+  type: VARCHAR(3)
+  nullable: false
+  default: ''''''
+- name: status
+  type: VARCHAR(64)
+  nullable: false
+  default: '''active'''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: deleted_at
+  type: TIMESTAMPTZ
+  nullable: true
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_coupons_org
+  columns:
+  - organization_id
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+constraints:
+- name: uq_coupons_code
+  type: unique
+  columns:
+  - code
+- name: ck_coupons_status
+  type: check
+  expr: status IN ('active', 'disabled', 'expired')
+---
+table_name: guliangiam.entries
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: organization_id
+  type: UUID
+  nullable: false
+- name: name
+  type: TEXT
+  nullable: false
+- name: display_name
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: provider
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: application
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: type
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: client_ip
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: user_agent
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: message
+  type: VARCHAR(255)
+  nullable: false
+  default: ''''''
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: updated_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: NOW()
+- name: revision
+  type: BIGINT
+  nullable: false
+  default: '1'
+indexes:
+- name: idx_entries_type
+  columns:
+  - type
+- name: idx_entries_application
+  columns:
+  - application
+revision: true
+rls: true
+fk_constraints:
+- column: organization_id
+  ref_table: guliangiam.organizations
+  on_delete: CASCADE
+constraints:
+- name: uq_entries_org_name
+  type: unique
+  columns:
+  - organization_id
+  - name
+---
+table_name: guliangiam.coupon_usage
+pk: id
+columns:
+- name: id
+  type: UUID
+  nullable: false
+- name: coupon_id
+  type: UUID
+  nullable: false
+- name: user_id
+  type: UUID
+  nullable: false
+- name: order_id
+  type: UUID
+  nullable: true
+- name: used_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+- name: created_at
+  type: TIMESTAMPTZ
+  nullable: false
+  default: now()
+indexes:
+- name: idx_cu_coupon_id
+  columns:
+  - coupon_id
+- name: idx_cu_user_id
+  columns:
+  - user_id
+- name: idx_cu_order_id
+  columns:
+  - order_id
+fk_constraints:
+- column: coupon_id
+  ref_table: guliangiam.coupons
+  on_delete: CASCADE
+- column: order_id
+  ref_table: guliangiam.orders
+  on_delete: SET_NULL
+- column: user_id
+  ref_table: guliangiam.users
+  on_delete: CASCADE
+rls: true
+rls_predicate: guliangiam.is_super_admin() OR user_id IN (SELECT id FROM guliangiam.users
+  WHERE organization_id = guliangiam.current_organization_id())
+---
+table_name: guliangiam.pay_channel_configs
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: provider_id, type: UUID, nullable: true }
+- { name: channel, type: VARCHAR(50), nullable: false }
+- { name: environment, type: VARCHAR(20), nullable: false, default: "'production'" }
+- { name: config_sealed, type: TEXT, nullable: false }
+- { name: config_fingerprint, type: VARCHAR(16), nullable: false }
+- { name: config_set, type: JSONB, nullable: true, default: "'[]'" }
+- { name: version_no, type: INTEGER, nullable: false, default: "1" }
+- { name: status, type: VARCHAR(32), nullable: false, default: "'draft'" }
+- { name: test_passed_at, type: TIMESTAMPTZ, nullable: true }
+- { name: activated_at, type: TIMESTAMPTZ, nullable: true }
+- { name: disabled_at, type: TIMESTAMPTZ, nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: deleted_at, type: TIMESTAMPTZ, nullable: true }
+- { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+- { name: ck_pay_channel_configs_status, type: check, expr: "status IN ('draft', 'testing', 'active', 'disabled')" }
+- { name: ck_pay_channel_configs_env, type: check, expr: "environment IN ('sandbox', 'production')" }
+- { name: ck_pay_channel_configs_channel, type: check, expr: "channel IN ('alipay', 'wechat_pay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy', 'square', 'checkout')" }
+- name: uq_pay_channel_configs_org_channel_env_version
+  type: unique_partial
+  columns: [organization_id, channel, environment, version_no]
+  predicate: deleted_at IS NULL
+- name: uq_pay_channel_configs_provider_version
+  type: unique_partial
+  columns: [provider_id, version_no]
+  predicate: "provider_id IS NOT NULL"
+- name: uq_pay_channel_configs_one_active
+  type: unique_partial
+  columns: [provider_id]
+  predicate: "provider_id IS NOT NULL AND status = 'active' AND deleted_at IS NULL"
+indexes:
+- { name: idx_pay_channel_configs_org, columns: [organization_id] }
+- { name: idx_pay_channel_configs_status, columns: [status] }
+- { name: idx_pay_channel_configs_channel_env, columns: [channel, environment] }
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: RESTRICT, on_update: CASCADE }
+- { column: provider_id, ref_table: guliangiam.providers, on_delete: RESTRICT, on_update: CASCADE }
+---
+table_name: guliangiam.pay_callback_receipts
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: channel, type: VARCHAR(50), nullable: false }
+- { name: payload_sha256, type: VARCHAR(64), nullable: false }
+- { name: payload, type: BYTEA, nullable: false }
+- { name: headers, type: JSONB, nullable: true, default: "'{}'" }
+- { name: received_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: client_ip, type: VARCHAR(64), nullable: true }
+- { name: process_state, type: VARCHAR(32), nullable: false, default: "'received'" }
+- { name: event_key, type: VARCHAR(255), nullable: true }
+- { name: out_trade_no, type: VARCHAR(255), nullable: true }
+- { name: raw_event, type: JSONB, nullable: true }
+- { name: error_message, type: TEXT, nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+- { name: ck_receipts_process_state, type: check, expr: "process_state IN ('received', 'verified', 'rejected', 'duplicated', 'normalized', 'accepted')" }
+- { name: ck_receipts_channel, type: check, expr: "channel IN ('alipay', 'wechat_pay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy', 'square', 'checkout')" }
+- { name: uq_receipts_channel_sha256, type: unique, columns: [channel, payload_sha256] }
+- name: uq_receipts_channel_event_key
+  type: unique
+  columns: [channel, event_key]
+  predicate: event_key IS NOT NULL
+indexes:
+- { name: idx_receipts_org, columns: [organization_id] }
+- { name: idx_receipts_out_trade_no, columns: [out_trade_no] }
+- { name: idx_receipts_process_state, columns: [process_state] }
+- { name: idx_receipts_received_at, columns: [received_at] }
+soft_delete: false
+revision: true
+rls: true
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: RESTRICT, on_update: CASCADE }
+---
+table_name: guliangiam.pay_refunds
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: payment_id, type: UUID, nullable: false }
+- { name: out_refund_no, type: VARCHAR(255), nullable: false }
+- { name: channel, type: VARCHAR(50), nullable: false }
+- { name: amount, type: "DECIMAL(19, 4)", nullable: false }
+- { name: currency, type: VARCHAR(3), nullable: false }
+- { name: state, type: VARCHAR(32), nullable: false, default: "'requested'" }
+- { name: reason, type: VARCHAR(500), nullable: true, default: "''" }
+- { name: channel_refund_no, type: VARCHAR(255), nullable: true }
+- { name: error_code, type: VARCHAR(100), nullable: true }
+- { name: error_message, type: VARCHAR(2000), nullable: true }
+- { name: requested_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: completed_at, type: TIMESTAMPTZ, nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: deleted_at, type: TIMESTAMPTZ, nullable: true }
+- { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+- { name: ck_pay_refunds_state, type: check, expr: "state IN ('requested', 'processing', 'succeeded', 'failed', 'cancelled')" }
+- { name: ck_pay_refunds_channel, type: check, expr: "channel IN ('alipay', 'wechat_pay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy', 'square', 'checkout')" }
+- name: uq_pay_refunds_channel_out_no
+  type: unique_partial
+  columns: [channel, out_refund_no]
+  predicate: deleted_at IS NULL
+indexes:
+- { name: idx_pay_refunds_payment, columns: [payment_id] }
+- { name: idx_pay_refunds_state, columns: [state] }
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: RESTRICT, on_update: CASCADE }
+- { column: payment_id, ref_table: guliangiam.payments, on_delete: RESTRICT, on_update: CASCADE }
+---
+table_name: guliangiam.pay_attempts
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: payment_id, type: UUID, nullable: false }
+- { name: refund_id, type: UUID, nullable: true }
+- { name: channel, type: VARCHAR(50), nullable: false }
+- { name: attempt_type, type: VARCHAR(20), nullable: false }
+- { name: attempt_no, type: INTEGER, nullable: false, default: "1" }
+- { name: channel_order_no, type: VARCHAR(255), nullable: true }
+- { name: channel_request_id, type: VARCHAR(255), nullable: true }
+- { name: state, type: VARCHAR(32), nullable: false, default: "'pending'" }
+- { name: amount, type: "DECIMAL(19, 4)", nullable: true }
+- { name: currency, type: VARCHAR(3), nullable: true }
+- { name: error_code, type: VARCHAR(100), nullable: true }
+- { name: error_message, type: VARCHAR(2000), nullable: true }
+- { name: latency_ms, type: INTEGER, nullable: true }
+- { name: occurred_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: raw_response, type: JSONB, nullable: true }
+constraints:
+- { name: ck_pay_attempts_state, type: check, expr: "state IN ('pending', 'succeeded', 'failed', 'unknown', 'rejected')" }
+- { name: ck_pay_attempts_type, type: check, expr: "attempt_type IN ('charge', 'query', 'refund', 'query_refund', 'close', 'callback')" }
+- { name: ck_pay_attempts_channel, type: check, expr: "channel IN ('alipay', 'wechat_pay', 'wxpay', 'stripe', 'paypal', 'adyen', 'airwallex', 'paddle', 'fastspring', 'lemonsqueezy', 'polar', 'balance', 'gc', 'dummy', 'square', 'checkout')" }
+indexes:
+- { name: idx_pay_attempts_payment, columns: [payment_id] }
+- { name: idx_pay_attempts_refund, columns: [refund_id] }
+- { name: idx_pay_attempts_occurred, columns: [occurred_at] }
+soft_delete: false
+revision: false
+rls: true
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: RESTRICT, on_update: CASCADE }
+- { column: payment_id, ref_table: guliangiam.payments, on_delete: RESTRICT, on_update: CASCADE }
+- { column: refund_id, ref_table: guliangiam.pay_refunds, on_delete: SET_NULL, on_update: CASCADE }
+---
+table_name: guliangiam.pay_recon_batches
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: organization_id, type: UUID, nullable: false }
+- { name: channel, type: VARCHAR(50), nullable: false }
+- { name: batch_date, type: DATE, nullable: false }
+- { name: status, type: VARCHAR(32), nullable: false, default: "'pending'" }
+- { name: diff_count, type: INTEGER, nullable: false, default: "0" }
+- { name: total_local, type: INTEGER, nullable: false, default: "0" }
+- { name: total_channel, type: INTEGER, nullable: false, default: "0" }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: updated_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+- { name: deleted_at, type: TIMESTAMPTZ, nullable: true }
+- { name: revision, type: BIGINT, nullable: false, default: "1" }
+constraints:
+- { name: ck_pay_recon_batches_status, type: check, expr: "status IN ('pending', 'processing', 'completed', 'failed')" }
+- name: uq_pay_recon_batches_org_channel_date
+  type: unique_partial
+  columns: [organization_id, channel, batch_date]
+  predicate: deleted_at IS NULL
+indexes:
+- { name: idx_pay_recon_batches_org, columns: [organization_id] }
+- { name: idx_pay_recon_batches_date, columns: [batch_date] }
+soft_delete: true
+revision: true
+rls: true
+fk_constraints:
+- { column: organization_id, ref_table: guliangiam.organizations, on_delete: RESTRICT, on_update: CASCADE }
+---
+table_name: guliangiam.pay_recon_items
+pk: id
+columns:
+- { name: id, type: UUID, nullable: false }
+- { name: batch_id, type: UUID, nullable: false }
+- { name: diff_type, type: VARCHAR(30), nullable: false }
+- { name: channel_order_no, type: VARCHAR(255), nullable: true }
+- { name: local_payment_id, type: UUID, nullable: true }
+- { name: channel_amount, type: "DECIMAL(19, 4)", nullable: true }
+- { name: local_amount, type: "DECIMAL(19, 4)", nullable: true }
+- { name: channel_state, type: VARCHAR(50), nullable: true }
+- { name: local_state, type: VARCHAR(50), nullable: true }
+- { name: resolved, type: BOOLEAN, nullable: false, default: "false" }
+- { name: resolution_state, type: VARCHAR(20), nullable: false, default: "'pending'" }
+- { name: resolved_by, type: VARCHAR(255), nullable: true, default: "''" }
+- { name: resolved_at, type: TIMESTAMPTZ, nullable: true }
+- { name: note, type: VARCHAR(1000), nullable: true, default: "''" }
+- { name: approved_by, type: UUID, nullable: true }
+- { name: approved_at, type: TIMESTAMPTZ, nullable: true }
+- { name: created_at, type: TIMESTAMPTZ, nullable: false, default: "now()" }
+constraints:
+- { name: ck_pay_recon_items_diff_type, type: check, expr: "diff_type IN ('missing_local', 'missing_channel', 'amount_mismatch', 'state_mismatch', 'refund_mismatch')" }
+- { name: ck_pay_recon_items_operator_distinct_approver, type: check, expr: "approved_by IS NULL OR approved_by::text <> resolved_by" }
+- { name: ck_pay_recon_items_resolution_state, type: check, expr: "resolution_state IN ('pending', 'resolved', 'approved', 'rejected')" }
+indexes:
+- { name: idx_pay_recon_items_batch, columns: [batch_id] }
+- { name: idx_pay_recon_items_resolved, columns: [resolved] }
+soft_delete: false
+revision: false
+rls: true
+rls_predicate: "guliangiam.is_super_admin() OR EXISTS (SELECT 1 FROM guliangiam.pay_recon_batches b WHERE b.id = batch_id AND b.organization_id = guliangiam.current_organization_id())"
+fk_constraints:
+- { column: batch_id, ref_table: guliangiam.pay_recon_batches, on_delete: CASCADE, on_update: CASCADE }
+- { column: approved_by, ref_table: guliangiam.users, on_delete: SET_NULL }

@@ -1,0 +1,22 @@
+node_modules/
+dist/
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+cypress/downloads/
+
+.env
+.env.local
+.env.development
+# Storybook build output
+storybook-static/
+coverage/
+playwright-report/
+test-results/
+# E2E 登录态（含会话 Cookie，禁止入库）
+e2e/.auth/
+.iga/

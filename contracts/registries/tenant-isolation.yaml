@@ -1,0 +1,82 @@
+# ──────────────────────────────────────────────────────────────────────────
+# tenant-isolation.yaml — 租户身份与隔离拓扑机器可读注册表
+#
+# 唯一事实源：本文件（YAML）
+# 消费方：scripts/check-tenant-isolation.py（分类/白名单/RLS 断言）、
+#         check-tenant-provisioning.py（创建/退役接线顺序断言）
+#
+# 分类口径（每张表必须且仅属一类）：
+#   direct     含 organization_id 列 → 必须 rls: true 且谓词引用 organization_id
+#   indirect   无 organization_id、经父表 EXISTS/IN 子查询隔离 → 必须 rls: true，
+#              父表必须是 direct 或 self_scoped
+#   self_scoped 以自身 id 对齐 current_organization_id（仅 organizations）
+#   platform_scoped 仅 is_super_admin() 可达的平台专用表
+#   global     无 RLS 且无 organization_id，必须登记理由（白名单）
+# ──────────────────────────────────────────────────────────────────────────
+version: 1
+
+identity:
+  table: tenant_identities
+  key: organization_id          # tenant_id == organizations.id（不引入第二 ID 源）
+  status_column: status
+  statuses: [provisioning, active, failed, decommissioned]
+  tiers: [row]                  # schema/database 为预留值，不进入合法集合
+  builtin_flag: is_built_in
+  required_by: [create_organization, seed]
+  emitted_events: [control.tenant_registered]
+
+topology:
+  table: tenant_instances
+  primary_rule: unique_primary_per_tenant
+  primary_predicate: "is_primary AND status <> 'decommissioned'"
+  required_columns:
+    - status
+    - placement_kind
+    - storage_boundary
+    - backup_boundary
+    - data_residency_country
+  region_registry: deployment_regions
+  emitted_events: [control.tenant_region_changed]
+
+classification:
+  direct:
+    rule: has_column
+    column: organization_id
+  indirect:
+    rule: derived
+    parent_from_predicate: true
+    # 谓词必须包含 >guliangiam.<parent> 与 organization_id；父表必须 direct/self_scoped
+  self_scoped:
+    - organizations
+  platform_scoped:
+    - platform_admins
+    - platform_admin_scopes
+    - authorization_chain_state
+    - cross_tenant_operations
+    - authorization_audit_records
+  global:
+    - table: casbin_rules
+      reason: "受信 adapter 按 enforcer_id 作用域加载；出口条件绑定 OPEN-API-44"
+    - table: deployment_regions
+      reason: "全局区域字典，无租户数据"
+    - table: dpop_replay
+      reason: "全局 jti 重放防护键，天然跨租户"
+    - table: encryption_keys
+      reason: "全局密钥域"
+    - table: encryption_reencrypt_progress
+      reason: "全局密钥重加密进度"
+
+gates:
+  policy_name: tenant_isolation
+  require_enable: true
+  require_force: true
+  require_with_check: true
+  forbid_always_true: true
+  forbid_predicate_tables:
+    - tenant_instances
+    - tenant_identities
+  provisioning_order:
+    - Organizations().Create
+    - Tenants().CreateIdentity
+    - Tenants().CreatePrimaryTopology
+    - embedAuditEvent

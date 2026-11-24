@@ -1,0 +1,52 @@
+version: 1
+# Single source of truth for OAuth/OIDC grant types (OPEN-API-68).
+#
+# Every grant listed here is implemented by the token endpoint. A grant that is
+# not redeemable must not be selectable in the console or accepted by DCR; that
+# is what keeps "savable" and "exchangeable" identical.
+#
+#   console   -> applications.allowedClientGrantTypes + web console selector
+#   dcr       -> RFC 7591 registration closed set
+#   discovery -> OIDC discovery grant_types_supported
+grants:
+  - value: authorization_code
+    console: true
+    dcr: true
+    discovery: true
+  - value: client_credentials
+    console: true
+    dcr: true
+    # discovery 不宣告：其签发主体不是 OIDC 用户主体（见 oidc_discovery_test）。
+    discovery: false
+  - value: urn:ietf:params:oauth:grant-type:device_code
+    console: true
+    dcr: true
+    discovery: true
+  - value: urn:ietf:params:oauth:grant-type:token-exchange
+    console: true
+    dcr: false
+    discovery: true
+  - value: urn:ietf:params:oauth:grant-type:jwt-bearer
+    console: true
+    dcr: false
+    discovery: true
+  - value: refresh_token
+    console: true
+    dcr: true
+    discovery: true
+  - value: password
+    console: false
+    dcr: false
+    discovery: false
+  - value: implicit
+    console: false
+    dcr: false
+    discovery: false
+  - value: id_token
+    console: false
+    dcr: false
+    discovery: false
+  - value: token
+    console: false
+    dcr: false
+    discovery: false
