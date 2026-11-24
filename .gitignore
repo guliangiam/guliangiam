@@ -124,3 +124,5 @@ reports/
 
 # 内部 AI 审查提示词（过程产物，不入库）；AGENTS.md 与 CHANGELOG.md 是治理事实源，必须入库
 AGENT_REVIEW_PROMPT.md
+AGENTS.md
+CHANGELOG.md

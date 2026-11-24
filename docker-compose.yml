@@ -52,8 +52,8 @@ services:
     ports:
       - "${DB_PORT:-5432}:5432"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_USER=guliangiam
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-guliangiam}
       - POSTGRES_DB=guliangiam
     volumes:
       - guliangiam-pgdata:/var/lib/postgresql/data
@@ -62,14 +62,14 @@ services:
       # 对已有集群无任何副作用。bootstrap 脚本是幂等的，可安全重跑。
       - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d guliangiam" ]
+      test: [ "CMD-SHELL", "pg_isready -U guliangiam -d guliangiam" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
   # ---- Development Application (hot-reload) ----
   guliangiam-dev:
-    image: guliangtech/guliangiam:dev
+    image: guliangiam/guliangiam:dev
     container_name: guliangiam-dev
     profiles:
       - dev
