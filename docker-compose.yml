@@ -1,124 +1,241 @@
 # ============================================================
 # GuliangIAM Docker Compose
-# Usage:
-#   Production: docker compose up -d
-#   Development: docker compose --profile dev up -d
-#   First-time dev init: AUTO_MIGRATE=true AUTO_SEED=true docker compose --profile dev up -d
+#
+# 单一文件同时覆盖生产（默认）与开发（--profile dev）两种场景，
+# 避免两份 compose 漂移。每个服务标注生产/开发专属差异。
+#
+#   生产（默认）:  docker compose up -d
+#     · 强制 .env.production 存在（缺失的必需变量会立即报错退出）
+#     · DB / Redis **不** 发布 host 端口（仅内部访问）
+#     · 所有容器启用 mem_limit + cpus + read_only + tmpfs
+#
+#   开发（--profile dev）:  docker compose --profile dev up -d
+#     · DB / Redis / 应用均发布 host 端口（便于 psql / redis-cli / Delve）
+#     · 容器取消 read_only（VSCode Dev Containers 热重载需要）
+#     · 默认 AUTO_MIGRATE + AUTO_SEED 启用（首次启动自动建表 + 播种）
+#
+#   一次性播种（生产）:
+#     docker compose run --rm --no-deps app /app/server migrate up --seed
+#     BOOTSTRAP_ADMIN_PASSWORD 必须在 .env.production 中设置；哨兵密码在 production 会被拒绝。
+#
+# 关键参数设计（compose 层已经锁死，env_file 只提供值）：
+#   * 所有服务 mem_limit + cpus —— 避免单容器 OOM 拖垮 host
+#   * read_only + tmpfs: /tmp —— 根文件系统不可写，攻击面收缩
+#   * internal 数据网络 —— DB/Redis 不经过外部路由
+#   * json-file 日志驱动 + max-size=20m, max-file=3 —— 避免日志写爆磁盘
+#   * restart: unless-stopped —— 进程异常恢复；startup panic 不重复重启
+#   * tini (Dockerfile) —— PID 1 信号处理 / 僵尸进程回收
+#   * Redis 默认启用 —— requirepass + maxmemory 256mb + allkeys-lru
+#
+# 需要外部准备：
+#   .env.production —— 所有生产必需环境变量（README §🔐）
+#   ./secrets/jwt_keys.pem —— JWT 密钥环（或改 JWT_KEYS_HOST_PATH）
 # ============================================================
 
-services:
-  # ---- Production Application ----
-  guliangiam:
-    image: guliangiam/guliangiam:latest
-    container_name: guliangiam
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    ports:
-      - "${HTTP_PORT:-8000}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      - RUNNING_IN_DOCKER=true
-      - HTTP_ADDR=:8000
-      - APP_ENV=${APP_ENV:-development}
-      - driverName=postgres
-      - DB_DSN=postgres://guliangiam:${POSTGRES_PASSWORD:-guliangiam}@db:5432/guliangiam?sslmode=disable
-      - dataSourceName=user=guliangiam password=${POSTGRES_PASSWORD:-guliangiam} host=db port=5432 sslmode=disable dbname=guliangiam
-      - origin=${GULIANGIAM_ORIGIN:-http://localhost:8000}
-      - SESSION_HMAC_KEY=${SESSION_HMAC_KEY:-change-me-to-a-secure-random-string}
-      - ENCRYPTION_KEY_CURRENT=${ENCRYPTION_KEY_CURRENT:?ENCRYPTION_KEY_CURRENT must be set (openssl rand -base64 32)}
-      - AUTO_MIGRATE=${AUTO_MIGRATE:-false}
-      - AUTO_SEED=${AUTO_SEED:-false}
-    volumes:
-      - guliangiam-conf:/app/conf
-      - guliangiam-logs:/app/logs
-      - guliangiam-uploads:/app/uploads
-    healthcheck:
-      test: [ "CMD", "curl", "-fsSL", "http://localhost:8000/healthz" ]
-      interval: 30s
-      timeout: 3s
-      start_period: 10s
-      retries: 3
+name: guliangiam
 
-  # ---- PostgreSQL Database ----
-  db:
-    image: postgres:18-alpine
-    container_name: guliangiam-db
-    restart: unless-stopped
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    environment:
-      - POSTGRES_USER=guliangiam
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-guliangiam}
-      - POSTGRES_DB=guliangiam
-    volumes:
-      - guliangiam-pgdata:/var/lib/postgresql/data
-      # initdb.d: PostgreSQL 官方镜像首次启动时自动执行本目录下的 .sql
-      # / .sh 文件（postgres superuser 权限）。挂载仅在数据目录为空时生效，
-      # 对已有集群无任何副作用。bootstrap 脚本是幂等的，可安全重跑。
-      - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U guliangiam -d guliangiam" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+networks:
+  # backend: 应用层，默认网络；app 通过它连 db/redis
+  backend:
+    name: guliangiam-backend
+    driver: bridge
+  # data: 数据层，内部网络；db/redis 只挂这个，app 通过两网卡访问
+  data:
+    name: guliangiam-data
+    driver: bridge
+    internal: true
 
-  # ---- Development Application (hot-reload) ----
-  guliangiam-dev:
-    image: guliangiam/guliangiam:dev
-    container_name: guliangiam-dev
-    profiles:
-      - dev
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-    ports:
-      - "${HTTP_PORT:-8000}:8000"
-      - "2345:2345" # Delve debugger port
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      - RUNNING_IN_DOCKER=true
-      - HTTP_ADDR=:8000
-      - APP_ENV=development
-      - driverName=postgres
-      - DB_DSN=postgres://guliangiam:${POSTGRES_PASSWORD:-guliangiam}@db:5432/guliangiam?sslmode=disable
-      - dataSourceName=user=guliangiam password=${POSTGRES_PASSWORD:-guliangiam} host=db port=5432 sslmode=disable dbname=guliangiam
-      - origin=${GULIANGIAM_ORIGIN:-http://localhost:8000}
-      - SESSION_HMAC_KEY=${SESSION_HMAC_KEY:-change-me-to-a-secure-random-string}
-      - ENCRYPTION_KEY_CURRENT=${ENCRYPTION_KEY_CURRENT:?ENCRYPTION_KEY_CURRENT must be set (openssl rand -base64 32)}
-      # 启动默认不重放迁移、不导入种子；首次初始化或需要升级时显式置为 true。
-      - AUTO_MIGRATE=${AUTO_MIGRATE:-false}
-      - AUTO_SEED=${AUTO_SEED:-false}
-      # 未设置时留空：仅在导入种子（AUTO_SEED=true 或服务 -seed）后生效，
-      # 由数据链 V1 的开发哨兵口令兜底（仅本地/测试环境）；设置后播种执行器
-      # 以环境口令替换哨兵，新凭据强制首登改密。
-      - BOOTSTRAP_ADMIN_PASSWORD=${BOOTSTRAP_ADMIN_PASSWORD:-}
-      - runmode=dev
-    volumes:
-      - guliangiam-conf:/app/conf
-      - guliangiam-logs:/app/logs
-      - guliangiam-uploads:/app/uploads
-    healthcheck:
-      test: [ "CMD", "curl", "-fsSL", "http://localhost:8000/healthz" ]
-      interval: 30s
-      timeout: 3s
-      start_period: 10s
-      retries: 3
-
-# ---- Named Volumes ----
 volumes:
   guliangiam-pgdata:
     driver: local
-  guliangiam-conf:
-    driver: local
-  guliangiam-logs:
+  guliangiam-redis:
     driver: local
   guliangiam-uploads:
     driver: local
+  guliangiam-logs:
+    driver: local
+  guliangiam-conf:
+    driver: local
+
+# ─── Anchors（跨服务复用）────────────────────────────────────────────
+x-restart-unless-stopped: &restart-unless-stopped
+  restart: unless-stopped
+
+x-logging: &logging-default
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+    labels: "service={{.Name}}"
+
+services:
+
+  # ══════════════════════════════════════════════════════════════
+  # PostgreSQL 18 —— 数据层唯一运行期基线（ADR-023）
+  #
+  # dev profile:   发布 5432 到 host（便于 psql / DBeaver）
+  # production:    不发布 host 端口 —— host 上 psql 不可行是预期安全态
+  # ══════════════════════════════════════════════════════════════
+  db:
+    image: postgres:18-alpine
+    <<: *restart-unless-stopped
+    shm_size: 256m
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-guliangiam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+      POSTGRES_DB: ${POSTGRES_DB:-guliangiam}
+      # 生产安全：md5 认证（禁用 trust），允许后再切换 scram-sha-256
+      POSTGRES_HOST_AUTH_METHOD: md5
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - guliangiam-pgdata:/var/lib/postgresql/data
+      # initdb.d 仅首次启动时执行，已存在集群不重跑（幂等）
+      - ./scripts/db-init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-guliangiam} -d ${POSTGRES_DB:-guliangiam}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 512m
+    cpus: "1.0"
+    logging: *logging-default
+
+  # dev: 发布 PostgreSQL host 端口
+  db-dev-expose:
+    profiles: [ "dev" ]
+    image: alpine:3.22
+    depends_on: [ db ]
+    network_mode: "service:db"
+    # 仅用来暴露 5432 端口；不运行任何进程
+    entrypoint: [ "/bin/sh", "-c", "while true; do sleep 60; done" ]
+    ports:
+      - "${DB_PORT:-5432}:5432"
+
+  # ══════════════════════════════════════════════════════════════
+  # Redis 7.4（默认启用）
+  #
+  # 跨副本会话吊销 / 公平限流 / AI 网关额度 / CAPTCHA / SAML replay。
+  # 所有子系统在 Redis 缺失时回落进程内并打 WARN——Redis 不是硬性依赖，
+  # 但 compose 默认起它，让多副本 HA 路径开箱即用。
+  # ══════════════════════════════════════════════════════════════
+  redis:
+    image: redis:8-alpine
+    <<: *restart-unless-stopped
+    command: >-
+      redis-server --requirepass ${REDIS_PASSWORD:-guliangiam} --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly no --save "" --tcp-keepalive 300 --timeout 300 --protected-mode yes --bind 0.0.0.0 --port 6379
+    volumes:
+      - guliangiam-redis:/data
+    networks:
+      - backend
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-guliangiam}", "ping" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    mem_limit: 256m
+    cpus: "0.5"
+    logging: *logging-default
+
+  redis-dev-expose:
+    profiles: [ "dev" ]
+    image: alpine:3.22
+    depends_on: [ redis ]
+    network_mode: "service:redis"
+    entrypoint: [ "/bin/sh", "-c", "while true; do sleep 60; done" ]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  # ══════════════════════════════════════════════════════════════
+  # Application（生产默认）
+  # ══════════════════════════════════════════════════════════════
+  app:
+    image: guliangiam/guliangiam:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    <<: *restart-unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      # 生产必需：缺失的必需变量会立即报错退出
+      - .env.production
+      # 可选：开发本地覆盖
+      - .env
+    environment:
+      RUNNING_IN_DOCKER: "true"
+      APP_ENV: ${APP_ENV:-production}
+      HTTP_ADDR: :8000
+      # 单一事实源（替代 dataSourceName / driverName / DATABASE_URL 三元组，已退役）
+      DB_DSN: ${DB_DSN:-postgres://${POSTGRES_USER:-guliangiam}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@db:5432/${POSTGRES_DB:-guliangiam}?sslmode=disable}
+      # 生产默认 **不** 重放迁移 / 导入种子；由独立运维 Job 显式执行（AGENTS §4.3）
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-false}
+      AUTO_SEED: ${AUTO_SEED:-false}
+      # Redis（默认启用）—— 所有子系统统一走这一套地址
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-guliangiam}
+      REDIS_DB: "0"
+      SESSION_CACHE_DRIVER: redis
+      RATE_LIMIT_REDIS_ADDR: redis:6379
+      RATE_LIMIT_REDIS_PASSWORD: ${REDIS_PASSWORD:-guliangiam}
+      RATE_LIMIT_REDIS_DB: "1"
+      CAPTCHA_STORE_DRIVER: redis
+    volumes:
+      - guliangiam-conf:/app/conf
+      - guliangiam-logs:/app/logs
+      - guliangiam-uploads:/app/uploads
+      # JWT 密钥环（可选 host 路径；.env.production 里的 JWT_SIGNING_KEYS_FILE 指向容器内路径）
+      - ${JWT_KEYS_HOST_PATH:-./secrets/jwt_keys.pem}:/app/secrets/jwt_keys.pem:ro
+      # GM TLS 证书链（仅 GM 档启用时需要，注释取消）
+      # - ${GM_CERTS_HOST_PATH:-./secrets/gm}:/app/secrets/gm:ro
+    ports:
+      - "${HTTP_PORT:-8000}:8000"
+    networks:
+      - backend
+      - data
+    healthcheck:
+      test: [ "CMD", "curl", "-fsSL", "http://127.0.0.1:8000/healthz" ]
+      interval: 20s
+      timeout: 3s
+      start_period: 20s
+      start_interval: 5s
+      retries: 3
+    mem_limit: 768m
+    cpus: "1.5"
+    logging: *logging-default
+    # 生产安全：只读根文件系统 + tmpfs 覆盖可写目录
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+
+  # ══════════════════════════════════════════════════════════════
+  # Application（dev profile override）
+  # ══════════════════════════════════════════════════════════════
+  app-dev:
+    profiles: [ "dev" ]
+    extends:
+      service: app
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      APP_ENV: development
+      # 开发环境首次启动自动建表 + 播种，省掉运维 Job
+      AUTO_MIGRATE: ${AUTO_MIGRATE:-true}
+      AUTO_SEED: ${AUTO_SEED:-true}
+      # 开发哨兵口令（仅本地/测试；生产显式拒绝）
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Guliang@2026}
+      runmode: dev
+    read_only: false
+    tmpfs: []
+    ports:
+      - "${HTTP_PORT:-8000}:8000"
+      - "2345:2345" # Delve debugger

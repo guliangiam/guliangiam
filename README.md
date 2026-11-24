@@ -1,50 +1,131 @@
 # GuliangIAM
 
-A unified identity authentication and access management (IAM) platform: multi-tenant identity, authentication, authorization, protocol integration, commerce and AI gateway capabilities, together with a management console.
+> Unified multi-tenant Identity and Access Management platform — authentication, authorization, protocol gateway, commerce and AI gateway, plus a React management console.
 
-## Architecture
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/badge/go-1.27%2B-00ADD8)](https://go.dev/doc/go1.27)
+[![React](https://img.shields.io/badge/react-19%2B-61dafb.svg)](https://react.dev/)
+[![Ant Design](https://img.shields.io/badge/ant--design-6-1677ff.svg)](https://ant.design/)
+[![PostgreSQL](https://img.shields.io/badge/postgresql-18-4169e1.svg)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/redis-8.2-ff69b4.svg)](https://redis.io/)
+[![Release](https://img.shields.io/github/v/tag/guliangiam/guliangiam?label=release)](https://github.com/guliangiam/guliangiam/releases)
 
-- **Backend**: a modular Go monolith following Clean Architecture (Domain / App / Infra / Transport / Platform). Routing uses chi v5, data access uses pgx/v5 with parameterized SQL (no ORM), PostgreSQL is the primary database, and dialect baselines are maintained for MySQL / GaussDB / KingBaseES (ADR-023).
-- **Frontend**: React + Vite + TypeScript + Ant Design; the management console lives in `web/`.
-- **Single source of truth**: declarative schemas, registries and route declarations drive all generated artifacts (DDL, migrations, OpenAPI, frontend types, registry rendering layer). Zero-diff gates guarantee that documentation, contracts and implementation stay consistent (ADR-022, ADR-012).
-- **Technology stack versions** are governed by `go.mod` and `web/package.json` and are not written by hand in this document.
+---
 
-## Documentation
+## ✨ Highlights
 
-- [docs/README.md](docs/README.md)
-- [docs/architecture/README.md](docs/architecture/README.md) (layering, data model, the three API surfaces, security, observability, multi-region, technology selection, architecture risk register)
-- [docs/design/README.md](docs/design/README.md) (authentication / IAM / protocols / commerce / AI gateway / infrastructure / frontend)
-- [docs/requirements/README.md](docs/requirements/README.md) / [docs/acceptance-criteria.md](docs/acceptance-criteria.md) / [docs/traceability-matrix.md](docs/traceability-matrix.md)
-- [docs/operations/README.md](docs/operations/README.md) / [docs/adr/README.md](docs/adr/README.md)
-- [docs/GuliangIAM-开发规范.md](docs/GuliangIAM-开发规范.md)
+- **Modular Go monolith** (Clean Architecture: Domain → App → Infra → Transport → Platform). Routing with [chi v5](https://go-chi.io/), data access with [pgx/v5](https://github.com/jackc/pgx) — parameterized SQL, no ORM.
+- **Complete protocol coverage**: OAuth 2.1, OpenID Connect, SAML 2.0, CAS, SCIM 2.0, LDAP, SMTP/SMS login.
+- **Multi-tenant authorization**: Rebac RBAC + Casbin enforcement, per-organizations roles / permissions / policies.
+- **Declarative single source of truth**: DDL, migrations, OpenAPI, frontend types and registry rendering all generated from `contracts/schema/*.yaml`. Zero-diff gates guarantee docs ↔ contracts ↔ implementation never drift (ADR-022, ADR-012).
+- **AI gateway**: Multi-model upstream abstraction (Anthropic, OpenAI, custom), tenant-level quota, request audit, cost tracking.
+- **Commercial subsystem**: Product / plan / pricing / coupon catalog tied to IAM organizations.
+- **Production-grade security**: Argon2id password hashing, AES-256-GCM / SM4-GCM field encryption (no plaintext fallback), JWT key ring, SSRF guard, RLS, CSRF, rate limiting.
+- **Dialect baseline**: PostgreSQL 18 is the only runtime baseline; MySQL / openGauss / KingBaseES dialects are generated and verified but follow the runtime gates documented in ADR-023.
 
-## Quick Start
+## 🧱 Tech Stack
+
+| Layer | Choice |
+|-------|--------|
+| Language | Go 1.27+ |
+| Backend | chi · pgx/v5 · go-redis · Casbin · go-sqlmock |
+| Frontend | React 19 · Vite · TypeScript · Ant Design 6 |
+| Database | PostgreSQL 18 (runtime baseline) · MySQL (dialect) |
+| Cache | Redis (multi-replica fairness; process-memory fallback is safe-by-default) |
+| Observability | OpenTelemetry · Prometheus / Grafana |
+| Build | GoReleaser · semantic-release · pnpm |
+| Deploy | Docker Compose · Kubernetes (manifest in `k8s.yaml`) |
+
+## 🚀 Quick Start (2 steps)
+
+### 1. Bring up dependencies
 
 ```bash
-# Backend
-go build -o bin/manager ./
-
-# Frontend
-cd web && pnpm install && pnpm run build
-
-# Local dependencies (PostgreSQL / Redis, etc.)
 docker compose up -d
 ```
 
-Deployment topologies, migration jobs, backup and rollback are documented in [Deployment](docs/operations/deployment.md); structural changes must follow [ADR-022](docs/adr/ADR-022-declarative-schema-versioned-migration.md).
+Starts **PostgreSQL + Redis + MailHog** (SMTP dev sink). Redis is **enabled by default** in the compose manifest — the process still boots without it, but enabling it is recommended so HA features (session revocation sharing, fair rate-limiting, AI quota) exercise the shared path out of the box.
 
-## Database and Gates
+### 2. Boot the application
 
-**Runtime baseline**: PostgreSQL 18 is the only runtime database. During development, schema changes are applied explicitly by the developer via `go run ./cmd/migrate up`; on application startup, migrations are not replayed and seeds are not imported by default.
+```bash
+# Pre-boot: apply schema + import built-in admin / demo fixtures
+go run ./cmd/migrate up --seed
 
-**Dialect verification tiers**: PR blocking covers only the PostgreSQL runtime gates; DDL and runtime checks for MySQL / GaussDB / KingbaseES and other dialects run in nightly or manually triggered workflows (ADR-023).
+# Then start the server (default listen :8000)
+go run .
+```
 
-**Gates requiring a database**: `scripts/check-schema-vs-db.py` and `scripts/check-rls-policy-content.py` require `POSTGRES_DSN` (or `--dsn`); `scripts/check-sql-runtime.py` requires `SQL_CHECK_DSN` and `REQUIRE_SQL_RUNTIME_CHECK=1`. When no connection string is provided, these scripts skip according to their own definitions and emit a warning.
+Default admin after `--seed`: `admin` / `Guliang@2026` (development sentinel; change it on first login).
 
-**Gate counts**: the number of gates and the number passing are not written by hand in the documentation; refer to the live output of `bash scripts/verify-docs.sh` and `python3 scripts/check-gate-coverage.py`.
+### Frontend
 
-## Contributing
+```bash
+cd web && pnpm install && pnpm run dev    # http://localhost:5173
+```
 
-- Contribution workflow and local gates: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Security disclosure: [SECURITY.md](SECURITY.md)
-- License: [LICENSE](LICENSE)
+The production binary (via `docker build`) bundles `web/dist` into the same image — no separate static host.
+
+## 🔐 Production Mandatory Configuration
+
+The process refuses to start (`panic` or startup `503`) when any of the values below is missing or malformed. Settings **not** listed here (rate limits, provider credentials, captcha, SLS webhooks, payment channels, AI gateway upstreams, org branding) are either safe-by-default or editable from the admin console after first boot.
+
+| Name | Scope | Notes |
+|------|-------|-------|
+| `DB_DSN` (or `POSTGRES_DSN` / `DATABASE_URL`) | Every env | Primary PostgreSQL 18 connection string |
+| `ENCRYPTION_KEY_CURRENT` (or legacy `ENCRYPTION_KEY`) | Every env | Field-level encryption key — AES-256-GCM (32 B base64) or SM4-GCM (16 B base64); `openssl rand -base64 32` |
+| `ISSUER_URL` | production | Public JWT issuer (absolute HTTPS URL) |
+| `METRICS_SCRAPE_TOKEN` | production | Bearer token for `/metrics` and `/debug/pprof` |
+| `PASSWORD_HISTORY_PEPPER` | production | Must be non-empty and not equal to the built-in dev sentinel |
+| `JWT_SIGNING_KEYS_FILE` | production | PEM key-ring path; production refuses process-local ephemeral keys |
+| `BOOTSTRAP_ADMIN_PASSWORD` | production (when seeding) | 12–128 chars, upper + lower + digit + special |
+
+Plus conditional requirements when you enable a capability — e.g. `VAULT_ADDR` / `VAULT_TOKEN` when `KMS_PROVIDER=vault`, five SM2 PEM files when `GM_TLS_ENABLED=true`, provider credentials when `STORAGE_TYPE` is non-`local`. Full table and Docker step-by-step are in `docs/operations/deployment.md`.
+
+## 🐘 Redis
+
+Redis is **not a hard prerequisite** — every subsystem falls back to in-process memory when it is absent. That said, it is the only cross-replica store for:
+
+- Session cache revocation / shared invalidation
+- Fair rate-limiting (single-instance bucket otherwise)
+- AI gateway quota metering
+- CAPTCHA answer store across replicas
+- SAML replay cache / HIBP k-anonymity range cache / DPoP nonce cache / audit denial recorder
+
+Redis is **enabled by default** in `docker compose up -d`. Production operators should set:
+
+```dotenv
+RATE_LIMIT_REDIS_ADDR=redis:6379          # dedicated rate-limit Redis if you split
+RATE_LIMIT_REDIS_DB=1                     # to isolate quota/limiting traffic
+REDIS_ADDR=redis:6379
+REDIS_PASSWORD=...                        # empty in compose dev
+REDIS_DB=0                                # session cache / captcha / audit
+SESSION_CACHE_DRIVER=redis                # omit or set to redis; memory is also valid
+CAPTCHA_STORE_DRIVER=redis
+```
+
+Single-replica deployments may safely omit every `REDIS_*` variable — the service boots with memory fallbacks and logs an informational warning at startup.
+
+## 📚 Documentation
+
+- [docs/README.md](docs/README.md) — master document map (layering · design · requirements · ADR index · operations)
+- [docs/architecture/README.md](docs/architecture/README.md) — Clean Architecture, data model, security model, observability
+- [docs/design/README.md](docs/design/README.md) — auth / IAM / protocols / commerce / AI gateway / frontend
+- [docs/operations/deployment.md](docs/operations/deployment.md) — topology, migration jobs, backup and rollback
+- [docs/GuliangIAM-开发规范.md](docs/GuliangIAM-开发规范.md) — engineering gates and authoring contract
+
+## 🤝 Contributing
+
+Conventional Commits, all gates must pass, no generated files hand-edited, no production secrets in commits. Full workflow in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+```bash
+python3 -m pip install -r scripts/requirements.txt
+GOCACHE=$PWD/.gotmp/gocache PNPM_HOME=$PWD/.gotmp/pnpmhome \
+  RUN_CODE_CHECKS=1 bash scripts/verify-docs.sh
+go build ./... && go vet ./... && go test ./...
+bash scripts/check-layers.sh
+```
+
+## 📄 License
+
+[Apache License 2.0](LICENSE). Copyright © 2026 The Beijing Gu Liang Technology Co., Ltd.

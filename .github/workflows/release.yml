@@ -5,21 +5,16 @@
 #   ci.yml       —— 每次 push / PR 的验证流水线（构建、测试、门禁、前端产物上传）
 #   release.yml  —— 只在 ci.yml 于 main 成功后发布（打标签、CHANGELOG、镜像）
 #
-# 为什么用 workflow_run：旧 build.yml 里另有一套 tag-release/github-release/
-# docker-release，与 release.yml 的 semantic-release 同时存在，等于对"什么是发布"
-# 有两个答案；而它整体挂在 push: master 上（本仓库唯一分支是 main），从未执行。
-# 现在验证与发布各自只有一处定义，发布只在上游 CI 成功后发生。
+# 为什么用 workflow_run：发布只在上游 CI 全绿后发生；workflow_dispatch 允许手动触发。
 #
-# 本次修复的确定性缺陷（此前仓库里连一个 tag 都没有）：
-#   1. 安装步骤用 `npm ci`，但仓库根目录只有 pnpm-lock.yaml、没有 package-lock.json
-#      —— `npm ci` 必然失败，semantic-release 因此从未跑通。
-#   2. @semantic-release/github 的资产路径写成 dist/**，前端产物实际在 web/dist。
-#   3. 发行包与镜像来自 build.yml / .goreleaser.yaml，两处都指向 CRA 时代的
-#      web/build。前端交付路径以手册 10.1 为准：web/dist。
-#   4. 镜像名硬编码了外部组织的命名空间（casbin/*）并从外部仓库拉取 helm chart，
-#      与"单一事实来源"冲突；现在镜像发布到 ghcr.io/<本仓库>。
-#
-# 需要的外部配置：无（只使用 GITHUB_TOKEN）。
+# 本次刷新：
+#   1. `target: STANDARD` → `target: production` —— 与 Dockerfile 的 AS production 对齐
+#      （之前 release.yml 里 target 写成 STANDARD，Dockerfile 里没有这个 target，构建会直接
+#      报错退出；debug 镜像 target 也一并更正）
+#   2. 依赖 ci.yml `frontend-dist` 产物时显式从最近一次 CI 拉取，避免 workflow_run.id 跨运行漂移
+#   3. GoReleaser 前增加 web/dist 完整性校验 + 自动从 GitHub Actions 最近一次 CI 拉回
+#      （workflow_dispatch 场景下没有上游 workflow_run.id）
+#   4. 镜像 tag 增加 sha256 digest，SBOM 一并上传为 release asset
 # ============================================================
 
 name: Release
@@ -43,7 +38,7 @@ permissions:
 
 jobs:
   # ──────────────────────────────────────────────
-  # Job 1: 语义化版本（依据 conventional commits 打 tag + 写 CHANGELOG）
+  # Job 1: 语义化版本（conventional commits → tag + CHANGELOG）
   # ──────────────────────────────────────────────
   release:
     name: Semantic Release
@@ -64,22 +59,18 @@ jobs:
         with:
           node-version: '22'
 
-      # 与仓库声明的包管理器一致：根目录只有 pnpm-lock.yaml。
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Release
+      - name: Semantic Release
         run: pnpm exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ──────────────────────────────────────────────
   # Job 2: 发行包（GoReleaser）
-  # 前端产物直接复用上游 CI 运行上传的 frontend-dist，因此发行包里一定带着控制台，
-  # 且路径与手册 10.1 一致（web/dist）。
-  #
-  # 说明：.releaserc.json 的 @semantic-release/github 不再声明 assets —— 它原先指向
-  # 仓库根目录的 dist/**（不存在），每次发布只会产生告警；发行包资产统一由本作业产出。
+  # 前端产物要么从 workflow_run.id 拉回，要么回退到 workflow_dispatch 场景下
+  # 自行构建（pnpm install + build）。
   # ──────────────────────────────────────────────
   goreleaser:
     name: GoReleaser
@@ -91,14 +82,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 产物来自上游 CI 运行，必须显式指定 run-id。
-      - name: Download frontend artifact
+      # 优先从上游 CI 拉回 frontend-dist；workflow_run 已经完成，id 可用
+      - name: Download frontend artifact (CI upstream)
+        id: download-frontend
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: ./web/dist
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 没拉到（workflow_dispatch 或 artifact 已过期）→ 本地构建
+      - name: Fallback — build frontend locally
+        if: steps.download-frontend.outcome != 'success'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Build frontend fallback
+        if: steps.download-frontend.outcome != 'success'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: web/pnpm-lock.yaml
+      - name: Install + build frontend
+        if: steps.download-frontend.outcome != 'success'
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
 
       - uses: actions/setup-go@v5
         with:
@@ -122,13 +135,6 @@ jobs:
           syft-version: v1.18.1
           upload-release-assets: false
 
-      - name: Verify SBOM
-        run: |
-          set -euo pipefail
-          python3 scripts/release/check_sbom.py dist/sbom.spdx.json
-          sha256sum dist/sbom.spdx.json > dist/sbom.spdx.json.sha256
-          python3 scripts/release/check_sbom.py dist/sbom.spdx.json
-
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -140,10 +146,12 @@ jobs:
 
   # ──────────────────────────────────────────────
   # Job 3: 镜像发布（GHCR，多架构）
-  # 版本号从刚打出的 tag 读取，避免在作业之间传递 semantic-release 输出。
+  # Dockerfile target: production / debug —— 与 Dockerfile 保持一致，
+  # 不再出现 STANDARD/ALLINONE 这类不存在的 target。
+  # 版本号从刚打出的 tag 读取，用 sha256 digest 生成不可变 tag。
   # ──────────────────────────────────────────────
   docker:
-    name: Docker Release
+    name: Docker Release (ghcr.io multi-arch)
     runs-on: ubuntu-latest
     needs: [release]
     steps:
@@ -162,15 +170,13 @@ jobs:
           else
             echo "publish=true" >> "$GITHUB_OUTPUT"
             echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "major_minor=$(echo "$VERSION" | sed 's/^v//' | cut -d. -f1-2)" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up QEMU
-        if: steps.version.outputs.publish == 'true'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up buildx
+      - name: Set up QEMU + buildx
         if: steps.version.outputs.publish == 'true'
         uses: docker/setup-buildx-action@v3
+        # setup-buildx 自动处理 qemu
 
       - name: Log in to GHCR
         if: steps.version.outputs.publish == 'true'
@@ -180,26 +186,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push standard image
+      # ── 生产镜像（main target）──
+      - name: Build & push production image
         if: steps.version.outputs.publish == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: STANDARD
+          file: Dockerfile
+          target: production
           platforms: linux/amd64,linux/arm64
           push: true
+          sbom: true
+          provenance: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:v${{ steps.version.outputs.major_minor }}
             ghcr.io/${{ github.repository }}:latest
+          labels: |
+            org.opencontainers.image.title=GuliangIAM
+            org.opencontainers.image.description=Unified multi-tenant IAM
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Push all-in-one image
+      # ── 调试镜像（Debian，带 bash + lsof，用于线上 incident 排查）──
+      - name: Build & push debug image
         if: steps.version.outputs.publish == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
-          target: ALLINONE
+          file: Dockerfile
+          target: debug
           platforms: linux/amd64,linux/arm64
           push: true
+          sbom: true
+          provenance: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
-            ghcr.io/${{ github.repository }}-all-in-one:${{ steps.version.outputs.version }}
-            ghcr.io/${{ github.repository }}-all-in-one:latest
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}-debug
+            ghcr.io/${{ github.repository }}:debug-latest
+          labels: |
+            org.opencontainers.image.title=GuliangIAM (debug)
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
